@@ -1,0 +1,16 @@
+{
+  "mcpServers": {
+    "notebook": {
+      "command": "python",
+      "args": ["C:/path/to/mcp-ai-foundation/src/notebook_mcp.py"]
+    },
+    "world": {
+      "command": "python",
+      "args": ["C:/path/to/mcp-ai-foundation/src/world_mcp.py"]
+    },
+    "task-manager": {
+      "command": "python",
+      "args": ["C:/path/to/mcp-ai-foundation/src/task_manager_mcp.py"]
+    }
+  }
+}

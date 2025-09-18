@@ -1,0 +1,27 @@
+{
+  "name": "mcp-ai-foundation",
+  "version": "1.0.0",
+  "description": "Essential MCP tools giving AIs memory, temporal grounding, and task accountability",
+  "author": "QD25565",
+  "license": "MIT",
+  "homepage": "https://github.com/QD25565/mcp-ai-foundation",
+  "tools": [
+    {
+      "name": "notebook",
+      "description": "Persistent memory system for AIs",
+      "commands": ["get_status", "remember", "recall"]
+    },
+    {
+      "name": "world",
+      "description": "Temporal and spatial grounding",
+      "commands": ["world", "datetime", "weather"]
+    },
+    {
+      "name": "task_manager",
+      "description": "Evidence-based task tracking",
+      "commands": ["add_task", "list_tasks", "submit_task", "complete_task", "task_stats"]
+    }
+  ],
+  "requirements": ["python>=3.8", "requests>=2.28.0"],
+  "platforms": ["windows", "macos", "linux"]
+}
