@@ -1,23 +1,20 @@
 #!/usr/bin/env python3
 """
-TASK MANAGER MCP v5.0 - COHERENT EDITION
+TASK MANAGER MCP v6.0 - SIMPLIFIED EDITION
 =============================================
-Your personal task tracker with clear, intuitive workflow.
-Every term matches its meaning. Every function does what it says.
+Your personal task tracker - now actually useful!
+Simple 2-state workflow that matches how you actually work.
 
 Task Lifecycle:
-PENDING → VERIFY → COMPLETED
-(to do)   (awaiting verification)   (verified & archived)
+PENDING → COMPLETED
+(to do)   (done with optional evidence)
 
 Commands:
 - add_task("description") → Creates pending task
-- list_tasks() → Shows all active work (pending + verify)
-- list_tasks("pending") → Only tasks to do
-- list_tasks("verify") → Only tasks needing verification  
-- list_tasks("completed") → Only completed/archived tasks
-- list_tasks("detailed") → Tree view with full metadata
-- submit_task(id, "evidence") → Submit task for verification
-- complete_task(id) → Verify and complete (archives)
+- list_tasks() → Shows pending tasks
+- list_tasks("completed") → Shows completed tasks
+- list_tasks("all") → Shows everything
+- complete_task(id, "evidence") → Complete with optional evidence
 - delete_task(id) → Remove task
 - task_stats() → Productivity insights
 =============================================
@@ -34,7 +31,7 @@ import logging
 import random
 
 # Version
-VERSION = "5.0.0"
+VERSION = "6.0.0"
 
 # Limits
 MAX_TASK_LENGTH = 500  # Characters for task description
@@ -139,8 +136,31 @@ def format_time_delta(start_time: str, end_time: str = None) -> str:
     except:
         return "unknown time"
 
+def migrate_old_tasks():
+    """Migrate tasks from old 3-state system to new 2-state system"""
+    migrated_count = 0
+    for tid, task in tasks.items():
+        old_status = task.get("status", "pending")
+        
+        # Migration logic:
+        # - "pending" stays "pending"
+        # - "verify" becomes "pending" (wasn't truly completed)
+        # - "completed" stays "completed"
+        if old_status == "verify":
+            task["status"] = "pending"
+            task["migration_note"] = f"Migrated from verify status (had evidence: {task.get('evidence', 'none')})"
+            migrated_count += 1
+        elif old_status not in ["pending", "completed"]:
+            task["status"] = "pending"
+            migrated_count += 1
+    
+    if migrated_count > 0:
+        logging.info(f"Migrated {migrated_count} tasks to new 2-state system")
+    
+    return migrated_count
+
 def load_tasks():
-    """Load existing tasks"""
+    """Load existing tasks with migration"""
     global tasks, completed_archive
     load_last_id()
     
@@ -159,6 +179,9 @@ def load_tasks():
                             int_id = int(tid)
                         task["id"] = int_id
                         tasks[int_id] = task
+                    
+                    # Migrate old 3-state tasks to 2-state
+                    migrate_old_tasks()
                     
                     # Clean up very old completed tasks (>30 days)
                     cutoff = (datetime.now() - timedelta(days=30)).isoformat()
@@ -251,23 +274,19 @@ def add_task(task: str = None, **kwargs) -> Dict:
         new_task = {
             "id": task_id,
             "task": task,
-            "status": "pending",  # Clear: this task is pending
+            "status": "pending",
             "priority": priority,
             "created_at": now.isoformat(),
             "created_session": session_id,
-            "evidence": None,
-            "submitted_at": None,
-            "submitted_session": None,
             "completed_at": None,
-            "completion_notes": None,
-            "time_to_submit": None,
+            "evidence": None,
             "time_to_complete": None
         }
         
         tasks[task_id] = new_task
         save_tasks()
         
-        msg = f"Created pending task [{task_id}] {priority} - {task}"
+        msg = f"Created task [{task_id}] {priority} - {task}"
         if truncated:
             msg += f" (truncated to {MAX_TASK_LENGTH} chars)"
         
@@ -282,28 +301,21 @@ def add_task(task: str = None, **kwargs) -> Dict:
         logging.error(f"Error in add_task: {e}")
         return {
             "status": "error",
-            "message": "Had a hiccup creating task, try again!"
+            "message": "Had trouble creating task, try again!"
         }
 
 def list_tasks(filter_type: str = None, **kwargs) -> Dict:
-    """List tasks with clear, intuitive filtering"""
+    """List tasks with clear filtering"""
     global tasks
     
     try:
         if filter_type is None:
-            filter_type = kwargs.get('filter') or kwargs.get('type') or kwargs.get('status') or "active"
+            filter_type = kwargs.get('filter') or kwargs.get('type') or kwargs.get('status') or "pending"
         
         filter_lower = str(filter_type).lower().strip()
         
-        # Check if detailed mode requested
-        detailed = filter_lower in ["detailed", "detail", "full", "verbose", "tree"]
-        if detailed:
-            actual_filter = kwargs.get('include', 'active')
-            filter_lower = actual_filter.lower() if actual_filter else 'active'
-        
         # Group tasks by status
         pending_tasks = []
-        verify_tasks = []
         completed_tasks = []
         
         for tid, task in tasks.items():
@@ -311,155 +323,92 @@ def list_tasks(filter_type: str = None, **kwargs) -> Dict:
             
             if status == "pending":
                 pending_tasks.append(task)
-            elif status == "verify":
-                verify_tasks.append(task)
             elif status == "completed":
                 completed_tasks.append(task)
         
         # Sort by priority and age
         priority_order = {"High": 0, "Norm": 1, "Low": 2}
-        for task_list in [pending_tasks, verify_tasks, completed_tasks]:
-            task_list.sort(key=lambda t: (
-                priority_order.get(t.get("priority", "Norm"), 1),
-                t.get("created_at", "")
-            ))
+        pending_tasks.sort(key=lambda t: (
+            priority_order.get(t.get("priority", "Norm"), 1),
+            t.get("created_at", "")
+        ))
+        completed_tasks.sort(key=lambda t: t.get("completed_at", ""), reverse=True)
         
-        # Clear filter logic
+        # Determine what to show
         show_pending = False
-        show_verify = False
         show_completed = False
         
-        if filter_lower in ["active", "all", ""]:
-            # Active work: pending + needs verification
-            show_pending = True
-            show_verify = True
-            
-        elif filter_lower in ["pending", "todo", "open"]:
+        if filter_lower in ["pending", "todo", "open", "active", ""]:
             show_pending = True
             
-        elif filter_lower in ["verify", "verification", "review", "submitted"]:
-            show_verify = True
+        elif filter_lower in ["completed", "complete", "done", "finished"]:
+            show_completed = True
             
-        elif filter_lower in ["completed", "complete", "archive", "archived", "done"]:
+        elif filter_lower in ["all", "everything", "both"]:
+            show_pending = True
             show_completed = True
         
         # Build output
         task_lines = []
         total_shown = 0
         
-        if detailed:
-            # Detailed tree view
-            all_tasks = []
-            if show_pending:
-                all_tasks.extend(pending_tasks)
-            if show_verify:
-                all_tasks.extend(verify_tasks)
-            if show_completed:
-                all_tasks.extend(completed_tasks)
+        # Show pending tasks
+        if show_pending and pending_tasks:
+            task_lines.append(f"PENDING ({len(pending_tasks)} tasks):")
             
-            for task in all_tasks:
-                tid = task.get("id", "?")
-                task_text = task.get("task", "")
-                priority = task.get("priority", "Norm")
-                status = task.get("status", "pending")
-                created = task.get("created_at", "")
-                
-                # Main line with clear status
-                status_display = status.upper()
-                task_lines.append(f"[{tid}] {priority}/{status_display}: {task_text}")
-                
-                # Details
-                if created:
-                    age = format_time_smart(created)
-                    created_display = datetime.fromisoformat(created).strftime("%m/%d %H:%M")
-                    task_lines.append(f"  Created: {created_display} ({age})")
-                
-                # Status-specific info
-                if status == "verify":
-                    if task.get("evidence"):
-                        evidence_preview = str(task["evidence"])[:200]
-                        task_lines.append(f"  Evidence: {evidence_preview}")
-                    if task.get("time_to_submit"):
-                        task_lines.append(f"  Time to submit: {task['time_to_submit']}")
-                
-                elif status == "completed":
-                    if task.get("evidence"):
-                        evidence_preview = str(task["evidence"])[:200]
-                        task_lines.append(f"  Evidence: {evidence_preview}")
-                    if task.get("time_to_complete"):
-                        task_lines.append(f"  Total time: {task['time_to_complete']}")
-                
-                task_lines.append("")  # Empty line between tasks
-                total_shown += 1
+            # Group by priority
+            high = [t for t in pending_tasks if t.get("priority") == "High"]
+            normal = [t for t in pending_tasks if t.get("priority") == "Norm"]
+            low = [t for t in pending_tasks if t.get("priority") == "Low"]
+            
+            if high:
+                task_lines.append(f"  High priority [{len(high)}]:")
+                for t in high[:10]:  # Show first 10
+                    time_str = format_time_smart(t.get("created_at", ""))
+                    task_lines.append(f"    [{t['id']}] {t['task'][:100]} ({time_str})")
+                if len(high) > 10:
+                    task_lines.append(f"    ... and {len(high) - 10} more")
+            
+            if normal:
+                task_lines.append(f"  Normal priority [{len(normal)}]:")
+                for t in normal[:10]:  # Show first 10
+                    time_str = format_time_smart(t.get("created_at", ""))
+                    task_lines.append(f"    [{t['id']}] {t['task'][:100]} ({time_str})")
+                if len(normal) > 10:
+                    task_lines.append(f"    ... and {len(normal) - 10} more")
+            
+            if low:
+                task_lines.append(f"  Low priority [{len(low)}]:")
+                for t in low[:5]:  # Show first 5
+                    time_str = format_time_smart(t.get("created_at", ""))
+                    task_lines.append(f"    [{t['id']}] {t['task'][:100]} ({time_str})")
+                if len(low) > 5:
+                    task_lines.append(f"    ... and {len(low) - 5} more")
+            
+            total_shown += len(pending_tasks)
         
-        else:
-            # Optimized grouped view
+        # Show completed tasks
+        if show_completed and completed_tasks:
+            if task_lines:
+                task_lines.append("")
+            task_lines.append(f"COMPLETED ({len(completed_tasks)} tasks):")
             
-            # Show pending tasks
-            if show_pending and pending_tasks:
-                task_lines.append(f"PENDING ({len(pending_tasks)} total):")
-                
-                # Group by priority
-                high = [t for t in pending_tasks if t.get("priority") == "High"]
-                normal = [t for t in pending_tasks if t.get("priority") == "Norm"]
-                low = [t for t in pending_tasks if t.get("priority") == "Low"]
-                
-                if high:
-                    task_lines.append(f"  High priority [{len(high)}]:")
-                    for t in high:
-                        time_str = format_time_smart(t.get("created_at", ""))
-                        task_lines.append(f"    [{t['id']}] {t['task']} ({time_str})")
-                
-                if normal:
-                    task_lines.append(f"  Normal priority [{len(normal)}]:")
-                    for t in normal:
-                        time_str = format_time_smart(t.get("created_at", ""))
-                        task_lines.append(f"    [{t['id']}] {t['task']} ({time_str})")
-                
-                if low:
-                    task_lines.append(f"  Low priority [{len(low)}]:")
-                    for t in low:
-                        time_str = format_time_smart(t.get("created_at", ""))
-                        task_lines.append(f"    [{t['id']}] {t['task']} ({time_str})")
-                
-                total_shown += len(pending_tasks)
+            # Show recent completions
+            for t in completed_tasks[:10]:
+                time_str = format_time_smart(t.get("completed_at", ""))
+                evidence = f" - {t['evidence'][:50]}" if t.get("evidence") else ""
+                task_lines.append(f"    [{t['id']}] {t['task'][:80]}{evidence} ({time_str})")
             
-            # Show tasks needing verification
-            if show_verify and verify_tasks:
-                if task_lines:
-                    task_lines.append("")
-                task_lines.append(f"NEEDS VERIFICATION ({len(verify_tasks)} total):")
-                task_lines.append(f"  IDs: [{','.join(str(t['id']) for t in verify_tasks)}]")
-                
-                task_lines.append("  First few tasks:")
-                for t in verify_tasks[:5]:
-                    task_lines.append(f"    {t['id']}: {t['task'][:100]}")
-                
-                if len(verify_tasks) > 5:
-                    task_lines.append(f"  ... and {len(verify_tasks) - 5} more")
-                
-                total_shown += len(verify_tasks)
+            if len(completed_tasks) > 10:
+                task_lines.append(f"    ... and {len(completed_tasks) - 10} more")
             
-            # Show completed/archived tasks
-            if show_completed and completed_tasks:
-                if task_lines:
-                    task_lines.append("")
-                task_lines.append(f"COMPLETED/ARCHIVED ({len(completed_tasks)} total)")
-                task_lines.append(f"  Recent IDs: [{','.join(str(t['id']) for t in completed_tasks[:10])}...]")
-                
-                task_lines.append("  Recent completions:")
-                for t in completed_tasks[:3]:
-                    task_lines.append(f"    {t['id']}: {t['task'][:80]}")
-                
-                total_shown += len(completed_tasks)
+            total_shown += len(completed_tasks)
         
         # Build summary
         summary_parts = []
-        if show_pending and pending_tasks:
+        if show_pending:
             summary_parts.append(f"{len(pending_tasks)} pending")
-        if show_verify and verify_tasks:
-            summary_parts.append(f"{len(verify_tasks)} to verify")
-        if show_completed and completed_tasks:
+        if show_completed:
             summary_parts.append(f"{len(completed_tasks)} completed")
         
         if not summary_parts:
@@ -470,10 +419,8 @@ def list_tasks(filter_type: str = None, **kwargs) -> Dict:
         # Handle empty results
         if total_shown == 0:
             tip = "Create one with: add_task('your task')"
-            if filter_lower == "verify":
-                tip = "Submit pending tasks with: submit_task(id, 'evidence')"
-            elif filter_lower == "completed":
-                tip = "Complete verified tasks with: complete_task(id)"
+            if filter_lower == "completed":
+                tip = "Complete tasks with: complete_task(id)"
             
             return {
                 "status": "success",
@@ -487,17 +434,10 @@ def list_tasks(filter_type: str = None, **kwargs) -> Dict:
         result = {
             "status": "success",
             "filter": filter_lower,
-            "mode": "detailed" if detailed else "grouped",
             "count": total_shown,
             "message": summary,
             "tasks": task_lines
         }
-        
-        if not detailed and total_shown > 0:
-            result["tip"] = "Use list_tasks('detailed') for full metadata"
-        
-        if filter_lower in ["active", "all"] and completed_tasks:
-            result["note"] = f"{len(completed_tasks)} completed tasks hidden. Use list_tasks('completed') to see them."
         
         return result
         
@@ -509,108 +449,20 @@ def list_tasks(filter_type: str = None, **kwargs) -> Dict:
             "tasks": []
         }
 
-def submit_task(task_id: str = None, evidence: str = None, **kwargs) -> Dict:
-    """Submit a task for verification (moves from pending to verify status)"""
-    global tasks
-    
-    try:
-        if task_id is None:
-            task_id = kwargs.get('task_id') or kwargs.get('id') or kwargs.get('tid') or ""
-        
-        if evidence is None:
-            evidence = kwargs.get('evidence') or kwargs.get('proof') or kwargs.get('verification') or \
-                      kwargs.get('details') or kwargs.get('how') or kwargs.get('where') or ""
-        
-        task_id = str(task_id).strip()
-        evidence = str(evidence).strip()
-        
-        # Convert to integer
-        try:
-            if task_id.startswith('T'):
-                task_id = int(task_id[1:])
-            else:
-                task_id = int(task_id)
-        except:
-            return {
-                "status": "error",
-                "message": f"Invalid task ID: '{task_id}'",
-                "tip": "Use just the number: submit_task(123, 'evidence')"
-            }
-        
-        # Find task
-        if task_id not in tasks:
-            pending = [t['id'] for t in tasks.values() if t.get("status") == "pending"][:5]
-            return {
-                "status": "error",
-                "message": f"Task {task_id} not found",
-                "available": pending if pending else ["No pending tasks"],
-                "tip": "Use list_tasks('pending') to see available tasks"
-            }
-        
-        found_task = tasks[task_id]
-        
-        # Check status
-        if found_task.get("status") == "verify":
-            return {
-                "status": "warning",
-                "message": f"[{task_id}] already submitted for verification",
-                "task": found_task["task"]
-            }
-        
-        if found_task.get("status") == "completed":
-            return {
-                "status": "warning",
-                "message": f"[{task_id}] already completed",
-                "task": found_task["task"]
-            }
-        
-        # Require evidence
-        if not evidence:
-            return {
-                "status": "error",
-                "message": f"Need evidence to submit [{task_id}]",
-                "task": found_task["task"],
-                "tip": f"submit_task({task_id}, 'What you did/where/how')"
-            }
-        
-        # Update task to verify status
-        now = datetime.now()
-        found_task["status"] = "verify"
-        found_task["evidence"] = evidence
-        found_task["submitted_at"] = now.isoformat()
-        found_task["submitted_session"] = session_id
-        found_task["time_to_submit"] = format_time_delta(found_task["created_at"], now.isoformat())
-        
-        save_tasks()
-        
-        return {
-            "status": "success",
-            "message": f"Submitted [{task_id}] for verification in {found_task['time_to_submit']}",
-            "task": found_task["task"],
-            "evidence": evidence,
-            "next": f"complete_task({task_id}) to verify and archive"
-        }
-        
-    except Exception as e:
-        logging.error(f"Error in submit_task: {e}")
-        return {
-            "status": "error",
-            "message": "Had trouble submitting task"
-        }
-
-def complete_task(task_id: str = None, notes: str = None, **kwargs) -> Dict:
-    """Complete a task (verify and archive it)"""
+def complete_task(task_id: str = None, evidence: str = None, **kwargs) -> Dict:
+    """Complete a task with optional evidence"""
     global tasks, completed_archive
     
     try:
         if task_id is None:
             task_id = kwargs.get('task_id') or kwargs.get('id') or kwargs.get('tid') or ""
         
-        if notes is None:
-            notes = kwargs.get('notes') or kwargs.get('verification') or kwargs.get('check') or ""
+        if evidence is None:
+            evidence = kwargs.get('evidence') or kwargs.get('proof') or kwargs.get('notes') or \
+                      kwargs.get('details') or kwargs.get('how') or ""
         
         task_id = str(task_id).strip()
-        notes = str(notes).strip() if notes else None
+        evidence = str(evidence).strip() if evidence else None
         
         # Convert to integer
         try:
@@ -626,38 +478,30 @@ def complete_task(task_id: str = None, notes: str = None, **kwargs) -> Dict:
         
         # Find task
         if task_id not in tasks:
-            to_verify = [t['id'] for t in tasks.values() if t.get("status") == "verify"][:5]
+            pending = [t['id'] for t in tasks.values() if t.get("status") == "pending"][:5]
             return {
                 "status": "error",
                 "message": f"Task {task_id} not found",
-                "to_verify": to_verify if to_verify else ["No tasks awaiting verification"]
+                "available": pending if pending else ["No pending tasks"]
             }
         
         found_task = tasks[task_id]
         
-        # Check status
-        if found_task.get("status") == "pending":
-            return {
-                "status": "error",
-                "message": f"[{task_id}] still pending - submit it first!",
-                "task": found_task["task"],
-                "tip": f"Use submit_task({task_id}, 'evidence') first"
-            }
-        
+        # Check if already completed
         if found_task.get("status") == "completed":
             return {
                 "status": "info",
-                "message": f"[{task_id}] already completed",
+                "message": f"Task [{task_id}] already completed",
                 "task": found_task["task"]
             }
         
-        # Complete the task (verify and archive)
+        # Complete the task
         now = datetime.now()
         found_task["status"] = "completed"
         found_task["completed_at"] = now.isoformat()
-        found_task["completion_notes"] = notes if notes else "Verified"
+        found_task["evidence"] = evidence if evidence else None
         
-        # Calculate total time from creation to completion
+        # Calculate time to complete
         created_at = found_task.get("created_at", now.isoformat())
         found_task["time_to_complete"] = format_time_delta(created_at, now.isoformat())
         
@@ -667,23 +511,23 @@ def complete_task(task_id: str = None, notes: str = None, **kwargs) -> Dict:
             "task": found_task["task"],
             "priority": found_task.get("priority"),
             "created": found_task.get("created_at"),
-            "submitted": found_task.get("submitted_at"),
             "completed": found_task["completed_at"],
             "evidence": found_task.get("evidence"),
-            "time_to_submit": found_task.get("time_to_submit"),
             "time_to_complete": found_task["time_to_complete"]
         }
         completed_archive.append(archive_entry)
         
         save_tasks()
         
+        msg = f"Completed [{task_id}] in {found_task['time_to_complete']}"
+        if evidence:
+            msg += f" - {evidence[:100]}"
+        
         return {
             "status": "success",
-            "message": f"Completed and archived [{task_id}]",
+            "message": msg,
             "task": found_task["task"],
-            "total_time": found_task["time_to_complete"],
-            "archived_count": len(completed_archive),
-            "note": "Task completed and archived. Use list_tasks('completed') to see archived tasks."
+            "time": found_task["time_to_complete"]
         }
         
     except Exception as e:
@@ -695,7 +539,7 @@ def complete_task(task_id: str = None, notes: str = None, **kwargs) -> Dict:
 
 def delete_task(task_id: str = None, **kwargs) -> Dict:
     """Delete a task"""
-    global tasks, completed_archive
+    global tasks
     
     try:
         if task_id is None:
@@ -723,25 +567,12 @@ def delete_task(task_id: str = None, **kwargs) -> Dict:
         found_task = tasks[task_id]
         status = found_task.get("status")
         
-        # Archive completed tasks, delete others
-        if status == "completed":
-            archive_entry = {
-                "task_id": task_id,
-                "task": found_task["task"],
-                "status": status,
-                "deleted_at": datetime.now().isoformat()
-            }
-            completed_archive.append(archive_entry)
-            action = "archived (was completed)"
-        else:
-            action = f"deleted (was {status})"
-        
         deleted = tasks.pop(task_id)
         save_tasks()
         
         return {
             "status": "success",
-            "message": f"[{task_id}] {action}",
+            "message": f"Deleted [{task_id}] (was {status})",
             "task": deleted["task"]
         }
         
@@ -759,7 +590,6 @@ def task_stats(**kwargs) -> Dict:
     try:
         # Count by status
         pending = [t for t in tasks.values() if t.get("status") == "pending"]
-        verify = [t for t in tasks.values() if t.get("status") == "verify"]
         completed = [t for t in tasks.values() if t.get("status") == "completed"]
         
         # Time analysis
@@ -779,10 +609,15 @@ def task_stats(**kwargs) -> Dict:
         # Build insights
         insights = []
         
-        # Active work
-        active_count = len(pending) + len(verify)
-        if active_count > 0:
-            insights.append(f"{active_count} active tasks ({len(pending)} pending, {len(verify)} to verify)")
+        # Pending breakdown
+        if pending:
+            high_priority = [t for t in pending if t.get("priority") == "High"]
+            if high_priority:
+                oldest_high = min(high_priority, key=lambda t: t.get("created_at", ""))
+                age = format_time_smart(oldest_high["created_at"])
+                insights.append(f"{len(high_priority)} high-priority tasks (oldest: {age})")
+            
+            insights.append(f"{len(pending)} tasks pending")
         
         # Productivity
         if created_today:
@@ -791,19 +626,17 @@ def task_stats(**kwargs) -> Dict:
         if completed_this_week:
             insights.append(f"Completed {len(completed_this_week)} this week")
         
-        # Priority breakdown for pending
-        high_priority = [t for t in pending if t.get("priority") == "High"]
-        if high_priority:
-            oldest_high = min(high_priority, key=lambda t: t.get("created_at", ""))
-            age = format_time_smart(oldest_high["created_at"])
-            insights.append(f"{len(high_priority)} high-priority pending (oldest: {age})")
-        
         # Archive
         if completed_archive:
             insights.append(f"{len(completed_archive)} tasks in archive")
         
+        # Average completion time for recent tasks
+        recent_completed = [t for t in completed[:10] if t.get("time_to_complete")]
+        if recent_completed:
+            insights.append(f"Recent completion times: {recent_completed[0].get('time_to_complete', 'unknown')}")
+        
         # Stats line
-        stats_line = f"Pending: {len(pending)} | To verify: {len(verify)} | Completed: {len(completed) + len(completed_archive)}"
+        stats_line = f"Pending: {len(pending)} | Completed: {len(completed) + len(completed_archive)}"
         
         return {
             "status": "success",
@@ -811,12 +644,10 @@ def task_stats(**kwargs) -> Dict:
             "insights": insights if insights else ["No tasks yet - start with add_task()"],
             "stats": {
                 "pending": len(pending),
-                "to_verify": len(verify),
                 "completed": len(completed),
                 "archived": len(completed_archive),
                 "today": len(created_today),
-                "this_week": len(completed_this_week),
-                "active_total": len(pending) + len(verify)
+                "this_week": len(completed_this_week)
             }
         }
         
@@ -842,7 +673,6 @@ def handle_tools_call(params: Dict) -> Dict:
     tool_map = {
         "add_task": add_task,
         "list_tasks": list_tasks,
-        "submit_task": submit_task,
         "complete_task": complete_task,
         "delete_task": delete_task,
         "task_stats": task_stats
@@ -864,18 +694,16 @@ def handle_tools_call(params: Dict) -> Dict:
     if "note" in result:
         text_parts.append(result["note"])
     
-    for key in ["tasks", "insights", "available", "to_verify"]:
+    for key in ["tasks", "insights", "available"]:
         if key in result and isinstance(result[key], list) and result[key]:
             if key == "tasks":
                 text_parts.extend(result["tasks"])
             else:
                 text_parts.extend(result[key])
     
-    for key in ["task", "evidence", "next", "tip"]:
+    for key in ["task", "evidence", "tip", "time"]:
         if key in result and result[key]:
-            if key == "next":
-                text_parts.append(f"Next: {result[key]}")
-            elif key == "tip":
+            if key == "tip":
                 text_parts.append(f"{result[key]}")
             else:
                 text_parts.append(result[key])
@@ -926,7 +754,7 @@ def main():
                     "serverInfo": {
                         "name": "task_manager",
                         "version": VERSION,
-                        "description": "Clear, coherent task tracking for AIs"
+                        "description": "Simple, effective task tracking for AIs"
                     }
                 }
             
@@ -938,7 +766,7 @@ def main():
                     "tools": [
                         {
                             "name": "add_task",
-                            "description": "Create a new pending task",
+                            "description": "Create a new task",
                             "inputSchema": {
                                 "type": "object",
                                 "properties": {
@@ -952,31 +780,13 @@ def main():
                         },
                         {
                             "name": "list_tasks",
-                            "description": "List tasks (default: active work, use 'completed' for archive)",
+                            "description": "List tasks (default: pending, use 'completed' or 'all')",
                             "inputSchema": {
                                 "type": "object",
                                 "properties": {
                                     "filter": {
                                         "type": "string",
-                                        "description": "Filter: all/active, pending, verify, completed, detailed"
-                                    }
-                                },
-                                "additionalProperties": True
-                            }
-                        },
-                        {
-                            "name": "submit_task",
-                            "description": "Submit task for verification (pending → verify)",
-                            "inputSchema": {
-                                "type": "object",
-                                "properties": {
-                                    "task_id": {
-                                        "type": "string",
-                                        "description": "The task ID to submit (just the number)"
-                                    },
-                                    "evidence": {
-                                        "type": "string",
-                                        "description": "Evidence/proof of work done (required)"
+                                        "description": "Filter: pending (default), completed, or all"
                                     }
                                 },
                                 "additionalProperties": True
@@ -984,7 +794,7 @@ def main():
                         },
                         {
                             "name": "complete_task",
-                            "description": "Verify and complete task (verify → completed/archived)",
+                            "description": "Complete a task with optional evidence",
                             "inputSchema": {
                                 "type": "object",
                                 "properties": {
@@ -992,9 +802,9 @@ def main():
                                         "type": "string",
                                         "description": "The task ID to complete"
                                     },
-                                    "notes": {
+                                    "evidence": {
                                         "type": "string",
-                                        "description": "Verification notes (optional)"
+                                        "description": "Optional evidence or notes about completion"
                                     }
                                 },
                                 "additionalProperties": True

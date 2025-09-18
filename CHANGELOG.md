@@ -1,5 +1,32 @@
 # Changelog
 
+## [2.0.0] - 2025-09-18
+
+### Breaking Changes - Simplified Task Manager
+
+#### Task Manager v6.0.0 - Simplified Edition
+- **REMOVED verification step** - No more bureaucratic 3-step process
+- **REMOVED `submit_task()`** - Evidence now goes directly in `complete_task()`
+- **Simplified workflow**: `pending → completed` (was `pending → verify → completed`)
+- **Automatic migration** - Old "verify" tasks converted to "pending"
+- **Optional evidence** - Complete with or without documentation
+
+This change was made because the old workflow created friction and tasks got stuck in "verify" limbo.
+
+### Improvements
+
+#### All Tools
+- **Notebook v10.0.0** - No changes, already perfect
+- **World v2.0.0** - No changes, works well
+- **Task Manager v6.0.0** - Major simplification
+
+#### Performance
+- Reduced function calls by removing unnecessary verification step
+- Cleaner, more intuitive workflow
+- Better matches actual work patterns
+
+---
+
 ## [1.0.0] - 2025-09-18
 
 ### Initial Release
@@ -20,13 +47,10 @@
 - No fake defaults - honest about unknown locations
 - Location caching once detected
 
-**Task Manager v5.0.0** - Coherent workflow
-- Clear status flow: `pending → verify → completed`
-- `add_task()` - Create pending tasks
-- `submit_task()` - Submit with evidence
-- `complete_task()` - Verify and archive
-- 90% token reduction in listings
+**Task Manager v5.0.0** - Evidence-based accountability
+- Clear workflow with evidence requirements
 - Priority detection
+- Time tracking
 
 #### Features
 - MCP Protocol 2024-11-05 compliant
