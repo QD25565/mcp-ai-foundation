@@ -24,14 +24,24 @@ datetime()                # Temporal data only
 weather()                 # Weather and location only
 ```
 
-### Task Manager - Evidence-Based Accountability
+### Task Manager - Simple 2-State Workflow
 ```python
 add_task("description")              # Create pending task
-list_tasks()                         # Show active work
-submit_task(id, "evidence")          # Submit for verification
-complete_task(id)                    # Verify and complete
+list_tasks()                         # Show pending tasks (default)
+list_tasks("completed")              # Show completed tasks
+list_tasks("all")                    # Show everything
+complete_task(id, "evidence")        # Complete with optional evidence
+delete_task(id)                      # Remove task
 task_stats()                         # Productivity insights
 ```
+
+## What's New in v2.0.0
+
+**Simplified Task Manager** - Removed the bureaucratic 3-step verification process:
+- Old: pending → verify → completed (too complex!)
+- New: pending → completed (simple!)
+- Evidence is now optional when completing tasks
+- Automatic migration of old "verify" tasks to "pending"
 
 ## Installation
 
@@ -63,7 +73,7 @@ After installation, add to your project's documentation:
 You have MCP tools available:
 - notebook (get_status, remember, recall)
 - world (world, datetime, weather)
-- task_manager (add_task, submit_task, complete_task, list_tasks)
+- task_manager (add_task, complete_task, list_tasks, delete_task, task_stats)
 
 Start each session with get_status() and list_tasks()
 ```
