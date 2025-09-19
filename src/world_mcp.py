@@ -2,8 +2,7 @@
 """
 WORLD MCP - TEMPORAL & LOCATION GROUNDING
 ==========================================
-Clean, efficient tools for time, date, weather, and location.
-No defaults, just facts.
+Clean tools for time, date, weather, and location.
 
 Tools:
 - world() - Complete snapshot: time, date, weather, location
@@ -20,7 +19,7 @@ from pathlib import Path
 import requests
 
 # Version
-VERSION = "2.0.0"
+VERSION = "1.0.0"
 
 # Configure logging to stderr only
 logging.basicConfig(
