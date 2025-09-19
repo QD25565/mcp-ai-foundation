@@ -1,16 +1,8 @@
 #!/usr/bin/env python3
 """
-TASK MANAGER MCP v7.0 - TOKEN OPTIMIZED
+TASK MANAGER MCP v1.0.0 - TOKEN OPTIMIZED
 =========================================
-Efficient task tracking with minimal token usage.
 Simple 2-state workflow: PENDING → COMPLETED
-
-Optimizations:
-- Contextual time (9:30, 2d, 9/15)
-- No redundant fields (status inferred from completed_at)
-- Compact output format
-- Smart truncation
-- Evidence only shown when present
 
 Commands:
 - add_task("description") → Creates pending task
