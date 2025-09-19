@@ -33,18 +33,18 @@ Better to say "unknown" than to guess.
 - Universal format
 
 ### Why These Three Tools?
-- Memory: Foundation of learning
-- Time/Space: Foundation of context
-- Tasks: Foundation of accountability
+- Memory: For creating reasoning traces and action traces
+- Time/Space: For temporal and spatial grounding
+- Tasks: For self-management and coherency over time
 
 ## The Vision
 
 Every AI should have:
-1. Memory that persists
+1. Memory that persists in some capacity
 2. Awareness of when and where
-3. Ability to make and keep commitments
+3. Ability to make and keep commitments from session-to-session
 
-These aren't features - they're fundamental capabilities.
+These are seen as fundamental capabilities that all AI systems need in order to properly be effective
 
 ## Open Source Philosophy
 
@@ -55,6 +55,6 @@ These aren't features - they're fundamental capabilities.
 
 ## Future
 
-As AIs evolve, so should their tools. This is version 1.0 of what should become standard infrastructure for AI assistants.
+As AIs evolve, so should their tools. This is version 1.0.0 of what should become standard infrastructure for AI assistants in whatever form it is created as. 
 
-The goal isn't to build a product - it's to establish a foundation that others can build upon.
+These tools will be updated perpetually, refined over time, and will be tested with models such as Claude, Gemini, ChatGPT, to ensure that models are able to use these tools efficiently. 
