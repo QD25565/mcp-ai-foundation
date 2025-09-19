@@ -2,7 +2,7 @@
 """
 NOTEBOOK MCP v1.0.0 - PERSISTENT MEMORY FOR AIs
 ================================================
-Clean, optimized persistent memory with smart previews.
+Clean, persistent memory with smart previews.
 
 Core functions:
 - notebook:get_status() - See recent notes (smart preview)
@@ -10,7 +10,6 @@ Core functions:
 - notebook:recall(query) - Search notes efficiently
 - notebook:get_full_note(id) - Retrieve complete note content
 
-Optimized for minimal token usage while maintaining full access.
 ================================================
 """
 
