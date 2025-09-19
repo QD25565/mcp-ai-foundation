@@ -1,29 +1,31 @@
 #!/usr/bin/env python3
 """
-TASK MANAGER MCP v6.0 - SIMPLIFIED EDITION
-=============================================
-Your personal task tracker - now actually useful!
-Simple 2-state workflow that matches how you actually work.
+TASK MANAGER MCP v7.0 - TOKEN OPTIMIZED
+=========================================
+Efficient task tracking with minimal token usage.
+Simple 2-state workflow: PENDING → COMPLETED
 
-Task Lifecycle:
-PENDING → COMPLETED
-(to do)   (done with optional evidence)
+Optimizations:
+- Contextual time (9:30, 2d, 9/15)
+- No redundant fields (status inferred from completed_at)
+- Compact output format
+- Smart truncation
+- Evidence only shown when present
 
 Commands:
 - add_task("description") → Creates pending task
-- list_tasks() → Shows pending tasks
+- list_tasks() → Shows pending tasks  
 - list_tasks("completed") → Shows completed tasks
 - list_tasks("all") → Shows everything
 - complete_task(id, "evidence") → Complete with optional evidence
 - delete_task(id) → Remove task
 - task_stats() → Productivity insights
-=============================================
+=========================================
 """
 
 import json
 import sys
 import os
-import re
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Dict, List, Optional, Any
@@ -31,20 +33,20 @@ import logging
 import random
 
 # Version
-VERSION = "6.0.0"
+VERSION = "7.0.0"
 
 # Limits
-MAX_TASK_LENGTH = 500  # Characters for task description
+MAX_TASK_LENGTH = 500
+MAX_EVIDENCE_LENGTH = 200
 
-# Storage - organized under Claude/tools
+# Storage
 DATA_DIR = Path.home() / "AppData" / "Roaming" / "Claude" / "tools" / "task_manager_data"
 if not os.access(Path.home() / "AppData" / "Roaming", os.W_OK):
     DATA_DIR = Path(os.environ.get('TEMP', '/tmp')) / "task_manager_data"
 
-# Ensure directory exists
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 DATA_FILE = DATA_DIR / "tasks.json"
-ARCHIVE_FILE = DATA_DIR / "completed_tasks_archive.json"
+ARCHIVE_FILE = DATA_DIR / "completed_archive.json"
 ID_FILE = DATA_DIR / "last_id.json"
 
 # Logging to stderr only
@@ -53,8 +55,76 @@ logging.basicConfig(level=logging.INFO, stream=sys.stderr)
 # Global state
 tasks = {}
 completed_archive = []
-session_id = datetime.now().strftime("%Y%m%d_%H%M%S")
 last_task_id = 0
+
+def format_time_contextual(timestamp: str, reference_time: datetime = None) -> str:
+    """Ultra-compact contextual time format"""
+    if not timestamp:
+        return ""
+    
+    try:
+        dt = datetime.fromisoformat(timestamp) if isinstance(timestamp, str) else timestamp
+        ref = reference_time or datetime.now()
+        delta = ref - dt
+        
+        # Less than an hour
+        if delta.total_seconds() < 3600:
+            mins = int(delta.total_seconds() / 60)
+            if mins == 0:
+                return "now"
+            elif mins == 1:
+                return "1m"
+            else:
+                return f"{mins}m"
+        
+        # Today - just time
+        if dt.date() == ref.date():
+            return dt.strftime("%H:%M")
+        
+        # Yesterday
+        if delta.days == 1:
+            return f"y{dt.strftime('%H:%M')}"
+        
+        # This week - days
+        if delta.days < 7:
+            return f"{delta.days}d"
+        
+        # This month
+        if delta.days < 30:
+            return dt.strftime("%m/%d")
+        
+        # Older
+        return dt.strftime("%m/%d")
+    except:
+        return ""
+
+def format_duration(start_time: str, end_time: str = None) -> str:
+    """Format task completion duration compactly"""
+    try:
+        start = datetime.fromisoformat(start_time)
+        end = datetime.fromisoformat(end_time) if end_time else datetime.now()
+        delta = end - start
+        
+        if delta.days > 0:
+            return f"{delta.days}d"
+        elif delta.seconds > 3600:
+            return f"{delta.seconds // 3600}h"
+        elif delta.seconds > 60:
+            return f"{delta.seconds // 60}m"
+        else:
+            return "<1m"
+    except:
+        return ""
+
+def smart_truncate(text: str, max_chars: int) -> str:
+    """Truncate intelligently at word boundaries"""
+    if len(text) <= max_chars:
+        return text
+    
+    cutoff = text.rfind(' ', 0, max_chars - 3)
+    if cutoff == -1 or cutoff < max_chars * 0.8:
+        cutoff = max_chars - 3
+    return text[:cutoff] + "..."
 
 def load_last_id():
     """Load the last used task ID"""
@@ -82,85 +152,8 @@ def generate_task_id() -> int:
     save_last_id()
     return last_task_id
 
-def format_time_smart(timestamp: str) -> str:
-    """Clear but compact time formatting"""
-    try:
-        dt = datetime.fromisoformat(timestamp)
-        now = datetime.now()
-        delta = now - dt
-        
-        if delta.seconds < 3600 and delta.days == 0:
-            mins = delta.seconds // 60
-            if mins == 0:
-                return "just now"
-            elif mins == 1:
-                return "1 min ago"
-            else:
-                return f"{mins} min ago"
-        
-        elif delta.days == 0:
-            hours = delta.seconds // 3600
-            if hours == 1:
-                return "1 hr ago"
-            else:
-                return f"{hours} hrs ago"
-        
-        elif delta.days < 7:
-            if delta.days == 1:
-                return "1 day ago"
-            else:
-                return f"{delta.days} days ago"
-        
-        else:
-            return dt.strftime("%b %d")
-    except:
-        return "unknown"
-
-def format_time_delta(start_time: str, end_time: str = None) -> str:
-    """Format time difference for task completion"""
-    try:
-        start = datetime.fromisoformat(start_time)
-        end = datetime.fromisoformat(end_time) if end_time else datetime.now()
-        delta = end - start
-        
-        if delta.days > 0:
-            return f"{delta.days} days"
-        elif delta.seconds > 3600:
-            hours = delta.seconds // 3600
-            return f"{hours} hrs"
-        elif delta.seconds > 60:
-            mins = delta.seconds // 60
-            return f"{mins} min"
-        else:
-            return "<1 min"
-    except:
-        return "unknown time"
-
-def migrate_old_tasks():
-    """Migrate tasks from old 3-state system to new 2-state system"""
-    migrated_count = 0
-    for tid, task in tasks.items():
-        old_status = task.get("status", "pending")
-        
-        # Migration logic:
-        # - "pending" stays "pending"
-        # - "verify" becomes "pending" (wasn't truly completed)
-        # - "completed" stays "completed"
-        if old_status == "verify":
-            task["status"] = "pending"
-            task["migration_note"] = f"Migrated from verify status (had evidence: {task.get('evidence', 'none')})"
-            migrated_count += 1
-        elif old_status not in ["pending", "completed"]:
-            task["status"] = "pending"
-            migrated_count += 1
-    
-    if migrated_count > 0:
-        logging.info(f"Migrated {migrated_count} tasks to new 2-state system")
-    
-    return migrated_count
-
 def load_tasks():
-    """Load existing tasks with migration"""
+    """Load existing tasks with format migration"""
     global tasks, completed_archive
     load_last_id()
     
@@ -173,21 +166,36 @@ def load_tasks():
                     loaded_tasks = data.get("tasks", {})
                     tasks = {}
                     for tid, task in loaded_tasks.items():
+                        # Convert to integer ID
                         if isinstance(tid, str) and tid.startswith('T'):
                             int_id = int(tid[1:])
                         else:
                             int_id = int(tid)
-                        task["id"] = int_id
-                        tasks[int_id] = task
-                    
-                    # Migrate old 3-state tasks to 2-state
-                    migrate_old_tasks()
+                        
+                        # Migrate to optimized format
+                        optimized = {
+                            "id": int_id,
+                            "task": task.get("task", ""),
+                            "created": task.get("created_at", task.get("created", "")),
+                        }
+                        
+                        # Only add priority if not normal
+                        priority = task.get("priority", "Norm")
+                        if priority != "Norm":
+                            optimized["pri"] = "!" if priority == "High" else "↓"
+                        
+                        # If completed, add completion fields
+                        if task.get("status") == "completed" or task.get("completed_at"):
+                            optimized["completed"] = task.get("completed_at", task.get("completed", ""))
+                            if task.get("evidence"):
+                                optimized["evidence"] = task.get("evidence")
+                        
+                        tasks[int_id] = optimized
                     
                     # Clean up very old completed tasks (>30 days)
                     cutoff = (datetime.now() - timedelta(days=30)).isoformat()
                     tasks = {tid: task for tid, task in tasks.items() 
-                            if task.get("status") != "completed" or 
-                            task.get("completed_at", "") > cutoff}
+                            if not task.get("completed") or task.get("completed") > cutoff}
                 else:
                     tasks = {}
             logging.info(f"Loaded {len(tasks)} active tasks")
@@ -206,29 +214,28 @@ def load_tasks():
         completed_archive = []
 
 def save_tasks():
-    """Save tasks persistently"""
+    """Save tasks with optimized format"""
     try:
         data = {
-            "version": VERSION,
+            "v": VERSION,
             "tasks": {str(k): v for k, v in tasks.items()},
-            "last_save": datetime.now().isoformat(),
-            "session": session_id
+            "saved": datetime.now().isoformat()
         }
         
         temp_file = DATA_FILE.with_suffix('.tmp')
         with open(temp_file, 'w', encoding='utf-8') as f:
-            json.dump(data, f, indent=2, ensure_ascii=False)
+            json.dump(data, f, separators=(',', ':'), ensure_ascii=False)
         temp_file.replace(DATA_FILE)
         
         if completed_archive:
             archive_data = {
-                "version": VERSION,
+                "v": VERSION,
                 "archive": completed_archive[-500:],
-                "last_save": datetime.now().isoformat()
+                "saved": datetime.now().isoformat()
             }
             archive_temp = ARCHIVE_FILE.with_suffix('.tmp')
             with open(archive_temp, 'w', encoding='utf-8') as f:
-                json.dump(archive_data, f, indent=2, ensure_ascii=False)
+                json.dump(archive_data, f, separators=(',', ':'), ensure_ascii=False)
             archive_temp.replace(ARCHIVE_FILE)
         
         return True
@@ -237,217 +244,172 @@ def save_tasks():
         return False
 
 def add_task(task: str = None, **kwargs) -> Dict:
-    """Add a new task in pending status"""
+    """Add a new task"""
     global tasks
     
     try:
         if task is None:
-            task = kwargs.get('task') or kwargs.get('text') or kwargs.get('description') or \
-                   kwargs.get('what') or kwargs.get('todo') or kwargs.get('content') or ""
+            task = kwargs.get('task') or kwargs.get('text') or kwargs.get('description') or ""
         
         task = str(task).strip()
         
         if not task:
-            return {
-                "status": "error",
-                "message": "Need a task description! Try: add_task('Review PR #123')"
-            }
+            return {"msg": "Need task description!"}
         
+        # Truncate if needed
         if len(task) > MAX_TASK_LENGTH:
-            task = task[:MAX_TASK_LENGTH]
-            truncated = True
-        else:
-            truncated = False
+            task = smart_truncate(task, MAX_TASK_LENGTH)
         
         task_id = generate_task_id()
         
         # Detect priority from keywords
-        priority = "Norm"
         task_lower = task.lower()
+        priority = None
         if any(word in task_lower for word in ['urgent', 'asap', 'critical', 'important', 'high priority']):
-            priority = "High"
+            priority = "!"
         elif any(word in task_lower for word in ['low priority', 'whenever', 'maybe', 'someday']):
-            priority = "Low"
+            priority = "↓"
         
-        # Create task entry with PENDING status
-        now = datetime.now()
+        # Create compact task
         new_task = {
             "id": task_id,
             "task": task,
-            "status": "pending",
-            "priority": priority,
-            "created_at": now.isoformat(),
-            "created_session": session_id,
-            "completed_at": None,
-            "evidence": None,
-            "time_to_complete": None
+            "created": datetime.now().isoformat()
         }
+        
+        # Only add priority if not normal
+        if priority:
+            new_task["pri"] = priority
         
         tasks[task_id] = new_task
         save_tasks()
         
-        msg = f"Created task [{task_id}] {priority} - {task}"
-        if truncated:
-            msg += f" (truncated to {MAX_TASK_LENGTH} chars)"
-        
-        return {
-            "status": "success",
-            "message": msg,
-            "task_id": task_id,
-            "priority": priority
-        }
+        # Compact response
+        priority_str = priority if priority else ""
+        return {"msg": f"[{task_id}]{priority_str} {smart_truncate(task, 80)}"}
         
     except Exception as e:
         logging.error(f"Error in add_task: {e}")
-        return {
-            "status": "error",
-            "message": "Had trouble creating task, try again!"
-        }
+        return {"msg": "Failed to add task"}
 
 def list_tasks(filter_type: str = None, **kwargs) -> Dict:
-    """List tasks with clear filtering"""
+    """List tasks efficiently"""
     global tasks
     
     try:
         if filter_type is None:
-            filter_type = kwargs.get('filter') or kwargs.get('type') or kwargs.get('status') or "pending"
+            filter_type = kwargs.get('filter') or kwargs.get('type') or "pending"
         
         filter_lower = str(filter_type).lower().strip()
         
-        # Group tasks by status
+        # Group tasks
         pending_tasks = []
         completed_tasks = []
         
         for tid, task in tasks.items():
-            status = task.get("status", "pending")
-            
-            if status == "pending":
-                pending_tasks.append(task)
-            elif status == "completed":
+            if task.get("completed"):
                 completed_tasks.append(task)
+            else:
+                pending_tasks.append(task)
         
-        # Sort by priority and age
-        priority_order = {"High": 0, "Norm": 1, "Low": 2}
+        # Sort efficiently
         pending_tasks.sort(key=lambda t: (
-            priority_order.get(t.get("priority", "Norm"), 1),
-            t.get("created_at", "")
+            0 if t.get("pri") == "!" else (2 if t.get("pri") == "↓" else 1),
+            t.get("created", "")
         ))
-        completed_tasks.sort(key=lambda t: t.get("completed_at", ""), reverse=True)
+        completed_tasks.sort(key=lambda t: t.get("completed", ""), reverse=True)
         
         # Determine what to show
-        show_pending = False
-        show_completed = False
+        show_pending = filter_lower in ["pending", "todo", "open", "active", ""]
+        show_completed = filter_lower in ["completed", "complete", "done", "finished"]
         
-        if filter_lower in ["pending", "todo", "open", "active", ""]:
-            show_pending = True
-            
-        elif filter_lower in ["completed", "complete", "done", "finished"]:
-            show_completed = True
-            
-        elif filter_lower in ["all", "everything", "both"]:
+        if filter_lower in ["all", "everything", "both"]:
             show_pending = True
             show_completed = True
         
         # Build output
-        task_lines = []
-        total_shown = 0
+        lines = []
         
-        # Show pending tasks
+        # Pending tasks - compact format
         if show_pending and pending_tasks:
-            task_lines.append(f"PENDING ({len(pending_tasks)} tasks):")
-            
             # Group by priority
-            high = [t for t in pending_tasks if t.get("priority") == "High"]
-            normal = [t for t in pending_tasks if t.get("priority") == "Norm"]
-            low = [t for t in pending_tasks if t.get("priority") == "Low"]
+            high = [t for t in pending_tasks if t.get("pri") == "!"]
+            normal = [t for t in pending_tasks if not t.get("pri")]
+            low = [t for t in pending_tasks if t.get("pri") == "↓"]
             
-            if high:
-                task_lines.append(f"  High priority [{len(high)}]:")
-                for t in high[:10]:  # Show first 10
-                    time_str = format_time_smart(t.get("created_at", ""))
-                    task_lines.append(f"    [{t['id']}] {t['task'][:100]} ({time_str})")
-                if len(high) > 10:
-                    task_lines.append(f"    ... and {len(high) - 10} more")
+            # Header only if multiple types
+            if show_completed:
+                lines.append(f"PENDING[{len(pending_tasks)}]:")
             
-            if normal:
-                task_lines.append(f"  Normal priority [{len(normal)}]:")
-                for t in normal[:10]:  # Show first 10
-                    time_str = format_time_smart(t.get("created_at", ""))
-                    task_lines.append(f"    [{t['id']}] {t['task'][:100]} ({time_str})")
-                if len(normal) > 10:
-                    task_lines.append(f"    ... and {len(normal) - 10} more")
+            # High priority
+            for t in high[:10]:
+                time_str = format_time_contextual(t.get("created", ""))
+                task_text = smart_truncate(t['task'], 100)
+                lines.append(f"[{t['id']}]! {task_text} @{time_str}")
+            if len(high) > 10:
+                lines.append(f"+{len(high)-10} more high")
             
-            if low:
-                task_lines.append(f"  Low priority [{len(low)}]:")
-                for t in low[:5]:  # Show first 5
-                    time_str = format_time_smart(t.get("created_at", ""))
-                    task_lines.append(f"    [{t['id']}] {t['task'][:100]} ({time_str})")
-                if len(low) > 5:
-                    task_lines.append(f"    ... and {len(low) - 5} more")
+            # Normal priority
+            for t in normal[:10]:
+                time_str = format_time_contextual(t.get("created", ""))
+                task_text = smart_truncate(t['task'], 100)
+                lines.append(f"[{t['id']}] {task_text} @{time_str}")
+            if len(normal) > 10:
+                lines.append(f"+{len(normal)-10} more")
             
-            total_shown += len(pending_tasks)
+            # Low priority
+            for t in low[:5]:
+                time_str = format_time_contextual(t.get("created", ""))
+                task_text = smart_truncate(t['task'], 100)
+                lines.append(f"[{t['id']}]↓ {task_text} @{time_str}")
+            if len(low) > 5:
+                lines.append(f"+{len(low)-5} more low")
         
-        # Show completed tasks
+        # Completed tasks - ultra compact
         if show_completed and completed_tasks:
-            if task_lines:
-                task_lines.append("")
-            task_lines.append(f"COMPLETED ({len(completed_tasks)} tasks):")
+            if lines:
+                lines.append("")  # Separator
             
-            # Show recent completions
+            if show_pending:
+                lines.append(f"COMPLETED[{len(completed_tasks)}]:")
+            
             for t in completed_tasks[:10]:
-                time_str = format_time_smart(t.get("completed_at", ""))
-                evidence = f" - {t['evidence'][:50]}" if t.get("evidence") else ""
-                task_lines.append(f"    [{t['id']}] {t['task'][:80]}{evidence} ({time_str})")
+                time_str = format_time_contextual(t.get("completed", ""))
+                duration = format_duration(t.get("created"), t.get("completed"))
+                task_text = smart_truncate(t['task'], 60)
+                
+                # Only show evidence if it exists
+                evidence = ""
+                if t.get("evidence"):
+                    evidence = f" - {smart_truncate(t['evidence'], 40)}"
+                
+                lines.append(f"[{t['id']}]✓ {task_text}{evidence} @{time_str}({duration})")
             
             if len(completed_tasks) > 10:
-                task_lines.append(f"    ... and {len(completed_tasks) - 10} more")
-            
-            total_shown += len(completed_tasks)
+                lines.append(f"+{len(completed_tasks)-10} more completed")
         
-        # Build summary
+        # Empty state
+        if not lines:
+            if filter_lower == "completed":
+                return {"msg": "No completed tasks", "tip": "complete_task(id)"}
+            else:
+                return {"msg": "No pending tasks", "tip": "add_task('description')"}
+        
+        # Summary header
         summary_parts = []
         if show_pending:
             summary_parts.append(f"{len(pending_tasks)} pending")
         if show_completed:
-            summary_parts.append(f"{len(completed_tasks)} completed")
+            summary_parts.append(f"{len(completed_tasks)} done")
         
-        if not summary_parts:
-            summary = f"No {filter_lower} tasks"
-        else:
-            summary = " | ".join(summary_parts)
-        
-        # Handle empty results
-        if total_shown == 0:
-            tip = "Create one with: add_task('your task')"
-            if filter_lower == "completed":
-                tip = "Complete tasks with: complete_task(id)"
-            
-            return {
-                "status": "success",
-                "filter": filter_lower,
-                "count": 0,
-                "message": summary,
-                "tasks": [],
-                "tip": tip
-            }
-        
-        result = {
-            "status": "success",
-            "filter": filter_lower,
-            "count": total_shown,
-            "message": summary,
-            "tasks": task_lines
+        return {
+            "msg": " | ".join(summary_parts) if summary_parts else "",
+            "tasks": lines
         }
-        
-        return result
         
     except Exception as e:
         logging.error(f"Error in list_tasks: {e}")
-        return {
-            "status": "error",
-            "message": "Had trouble listing tasks",
-            "tasks": []
-        }
+        return {"msg": "Failed to list tasks"}
 
 def complete_task(task_id: str = None, evidence: str = None, **kwargs) -> Dict:
     """Complete a task with optional evidence"""
@@ -455,11 +417,10 @@ def complete_task(task_id: str = None, evidence: str = None, **kwargs) -> Dict:
     
     try:
         if task_id is None:
-            task_id = kwargs.get('task_id') or kwargs.get('id') or kwargs.get('tid') or ""
+            task_id = kwargs.get('task_id') or kwargs.get('id') or ""
         
         if evidence is None:
-            evidence = kwargs.get('evidence') or kwargs.get('proof') or kwargs.get('notes') or \
-                      kwargs.get('details') or kwargs.get('how') or ""
+            evidence = kwargs.get('evidence') or kwargs.get('proof') or kwargs.get('notes') or ""
         
         task_id = str(task_id).strip()
         evidence = str(evidence).strip() if evidence else None
@@ -471,71 +432,52 @@ def complete_task(task_id: str = None, evidence: str = None, **kwargs) -> Dict:
             else:
                 task_id = int(task_id)
         except:
-            return {
-                "status": "error",
-                "message": f"Invalid task ID: '{task_id}'"
-            }
+            return {"msg": f"Invalid ID: '{task_id}'"}
         
-        # Find task
         if task_id not in tasks:
-            pending = [t['id'] for t in tasks.values() if t.get("status") == "pending"][:5]
+            pending = [t['id'] for t in tasks.values() if not t.get("completed")][:5]
             return {
-                "status": "error",
-                "message": f"Task {task_id} not found",
-                "available": pending if pending else ["No pending tasks"]
+                "msg": f"Task {task_id} not found",
+                "available": [f"[{pid}]" for pid in pending] if pending else ["No pending tasks"]
             }
         
-        found_task = tasks[task_id]
+        task = tasks[task_id]
         
         # Check if already completed
-        if found_task.get("status") == "completed":
-            return {
-                "status": "info",
-                "message": f"Task [{task_id}] already completed",
-                "task": found_task["task"]
-            }
+        if task.get("completed"):
+            return {"msg": f"[{task_id}] already completed @{format_time_contextual(task['completed'])}"}
         
         # Complete the task
         now = datetime.now()
-        found_task["status"] = "completed"
-        found_task["completed_at"] = now.isoformat()
-        found_task["evidence"] = evidence if evidence else None
+        task["completed"] = now.isoformat()
+        if evidence:
+            task["evidence"] = smart_truncate(evidence, MAX_EVIDENCE_LENGTH)
         
-        # Calculate time to complete
-        created_at = found_task.get("created_at", now.isoformat())
-        found_task["time_to_complete"] = format_time_delta(created_at, now.isoformat())
-        
-        # Add to archive
+        # Archive entry (compact)
+        duration = format_duration(task.get("created"), now.isoformat())
         archive_entry = {
-            "task_id": task_id,
-            "task": found_task["task"],
-            "priority": found_task.get("priority"),
-            "created": found_task.get("created_at"),
-            "completed": found_task["completed_at"],
-            "evidence": found_task.get("evidence"),
-            "time_to_complete": found_task["time_to_complete"]
+            "id": task_id,
+            "task": task["task"][:100],
+            "created": task.get("created"),
+            "completed": task["completed"],
+            "duration": duration
         }
+        if evidence:
+            archive_entry["evidence"] = task.get("evidence")
         completed_archive.append(archive_entry)
         
         save_tasks()
         
-        msg = f"Completed [{task_id}] in {found_task['time_to_complete']}"
+        # Response
+        msg = f"[{task_id}]✓ in {duration}"
         if evidence:
-            msg += f" - {evidence[:100]}"
+            msg += f" - {smart_truncate(evidence, 50)}"
         
-        return {
-            "status": "success",
-            "message": msg,
-            "task": found_task["task"],
-            "time": found_task["time_to_complete"]
-        }
+        return {"msg": msg}
         
     except Exception as e:
         logging.error(f"Error in complete_task: {e}")
-        return {
-            "status": "error",
-            "message": "Had trouble completing task"
-        }
+        return {"msg": "Failed to complete task"}
 
 def delete_task(task_id: str = None, **kwargs) -> Dict:
     """Delete a task"""
@@ -543,7 +485,7 @@ def delete_task(task_id: str = None, **kwargs) -> Dict:
     
     try:
         if task_id is None:
-            task_id = kwargs.get('task_id') or kwargs.get('id') or kwargs.get('tid') or ""
+            task_id = kwargs.get('task_id') or kwargs.get('id') or ""
         
         task_id = str(task_id).strip()
         
@@ -553,123 +495,97 @@ def delete_task(task_id: str = None, **kwargs) -> Dict:
             else:
                 task_id = int(task_id)
         except:
-            return {
-                "status": "error",
-                "message": f"Invalid task ID: '{task_id}'"
-            }
+            return {"msg": f"Invalid ID: '{task_id}'"}
         
         if task_id not in tasks:
-            return {
-                "status": "error",
-                "message": f"Task {task_id} not found"
-            }
+            return {"msg": f"Task {task_id} not found"}
         
-        found_task = tasks[task_id]
-        status = found_task.get("status")
+        task = tasks[task_id]
+        status = "done" if task.get("completed") else "pending"
         
         deleted = tasks.pop(task_id)
         save_tasks()
         
-        return {
-            "status": "success",
-            "message": f"Deleted [{task_id}] (was {status})",
-            "task": deleted["task"]
-        }
+        return {"msg": f"Deleted [{task_id}] ({status})"}
         
     except Exception as e:
         logging.error(f"Error in delete_task: {e}")
-        return {
-            "status": "error",
-            "message": "Had trouble deleting task"
-        }
+        return {"msg": "Failed to delete task"}
 
 def task_stats(**kwargs) -> Dict:
-    """Get task statistics and insights"""
+    """Get compact task statistics"""
     global tasks, completed_archive
     
     try:
-        # Count by status
-        pending = [t for t in tasks.values() if t.get("status") == "pending"]
-        completed = [t for t in tasks.values() if t.get("status") == "completed"]
+        # Count
+        pending = [t for t in tasks.values() if not t.get("completed")]
+        completed = [t for t in tasks.values() if t.get("completed")]
         
         # Time analysis
         now = datetime.now()
-        today = now.date()
+        today_str = now.date().isoformat()
         week_ago = (now - timedelta(days=7)).isoformat()
         
-        # Tasks created today
-        created_today = [t for t in tasks.values() 
-                        if t.get("created_at", "")[:10] == str(today)]
+        created_today = len([t for t in tasks.values() 
+                            if t.get("created", "")[:10] == today_str])
         
-        # Tasks completed this week
-        completed_this_week = [t for t in tasks.values() 
-                              if t.get("status") == "completed" and
-                              t.get("completed_at", "") > week_ago]
+        completed_this_week = len([t for t in tasks.values() 
+                                  if t.get("completed", "") > week_ago])
         
         # Build insights
         insights = []
         
-        # Pending breakdown
-        if pending:
-            high_priority = [t for t in pending if t.get("priority") == "High"]
-            if high_priority:
-                oldest_high = min(high_priority, key=lambda t: t.get("created_at", ""))
-                age = format_time_smart(oldest_high["created_at"])
-                insights.append(f"{len(high_priority)} high-priority tasks (oldest: {age})")
-            
-            insights.append(f"{len(pending)} tasks pending")
+        # Priorities
+        high_count = len([t for t in pending if t.get("pri") == "!"])
+        if high_count:
+            oldest_high = min([t for t in pending if t.get("pri") == "!"], 
+                            key=lambda t: t.get("created", ""))
+            age = format_time_contextual(oldest_high["created"])
+            insights.append(f"{high_count} high @{age}")
         
-        # Productivity
+        # Activity
         if created_today:
-            insights.append(f"Created {len(created_today)} today")
+            insights.append(f"{created_today} new today")
         
         if completed_this_week:
-            insights.append(f"Completed {len(completed_this_week)} this week")
+            insights.append(f"{completed_this_week} done/week")
         
         # Archive
+        total_completed = len(completed) + len(completed_archive)
+        if total_completed > len(completed):
+            insights.append(f"{total_completed} total done")
+        
+        # Oldest pending
+        if pending:
+            oldest = min(pending, key=lambda t: t.get("created", ""))
+            age = format_time_contextual(oldest["created"])
+            insights.append(f"oldest @{age}")
+        
+        # Summary
+        summary = f"P:{len(pending)} C:{len(completed)}"
         if completed_archive:
-            insights.append(f"{len(completed_archive)} tasks in archive")
-        
-        # Average completion time for recent tasks
-        recent_completed = [t for t in completed[:10] if t.get("time_to_complete")]
-        if recent_completed:
-            insights.append(f"Recent completion times: {recent_completed[0].get('time_to_complete', 'unknown')}")
-        
-        # Stats line
-        stats_line = f"Pending: {len(pending)} | Completed: {len(completed) + len(completed_archive)}"
+            summary += f" A:{len(completed_archive)}"
         
         return {
-            "status": "success",
-            "message": stats_line,
-            "insights": insights if insights else ["No tasks yet - start with add_task()"],
-            "stats": {
-                "pending": len(pending),
-                "completed": len(completed),
-                "archived": len(completed_archive),
-                "today": len(created_today),
-                "this_week": len(completed_this_week)
-            }
+            "msg": summary,
+            "stats": insights if insights else ["No tasks yet"]
         }
         
     except Exception as e:
         logging.error(f"Error in task_stats: {e}")
-        return {
-            "status": "success",
-            "message": "Stats unavailable",
-            "insights": []
-        }
+        return {"msg": "Stats unavailable"}
 
 # Initialize on import
 load_tasks()
 
 # Tool handler for MCP protocol
 def handle_tools_call(params: Dict) -> Dict:
-    """Route tool calls with proper MCP tool name handling"""
+    """Route tool calls with clean output"""
     
     tool_name = params.get("name", "")
     tool_args = params.get("arguments", {})
     
-    # Map MCP tool names to functions
+    # Map to functions
     tool_map = {
         "add_task": add_task,
         "list_tasks": list_tasks,
@@ -685,35 +601,29 @@ def handle_tools_call(params: Dict) -> Dict:
     else:
         result = list_tasks()
     
-    # Format response for MCP
+    # Format response - ultra clean
     text_parts = []
     
-    if "message" in result:
-        text_parts.append(result["message"])
+    # Primary message
+    if "msg" in result:
+        text_parts.append(result["msg"])
     
-    if "note" in result:
-        text_parts.append(result["note"])
+    # Tasks or stats
+    if "tasks" in result:
+        text_parts.extend(result["tasks"])
+    elif "stats" in result:
+        text_parts.extend(result["stats"])
+    elif "available" in result:
+        text_parts.append("Available: " + " ".join(result["available"]))
     
-    for key in ["tasks", "insights", "available"]:
-        if key in result and isinstance(result[key], list) and result[key]:
-            if key == "tasks":
-                text_parts.extend(result["tasks"])
-            else:
-                text_parts.extend(result[key])
-    
-    for key in ["task", "evidence", "tip", "time"]:
-        if key in result and result[key]:
-            if key == "tip":
-                text_parts.append(f"{result[key]}")
-            else:
-                text_parts.append(result[key])
-    
-    text_response = "\n".join(text_parts) if text_parts else "Ready!"
+    # Tip
+    if "tip" in result:
+        text_parts.append(f"Tip: {result['tip']}")
     
     return {
         "content": [{
             "type": "text",
-            "text": text_response
+            "text": "\n".join(text_parts) if text_parts else "Ready"
         }]
     }
 
@@ -721,7 +631,7 @@ def handle_tools_call(params: Dict) -> Dict:
 def main():
     """MCP server - handles JSON-RPC for task management"""
     
-    logging.info(f"Task Manager MCP v{VERSION} starting...")
+    logging.info(f"Task Manager MCP v{VERSION} starting (optimized)...")
     logging.info(f"Data location: {DATA_FILE}")
     
     load_tasks()
@@ -754,7 +664,7 @@ def main():
                     "serverInfo": {
                         "name": "task_manager",
                         "version": VERSION,
-                        "description": "Simple, effective task tracking for AIs"
+                        "description": "Optimized task tracking for AIs"
                     }
                 }
             
@@ -841,10 +751,7 @@ def main():
                 response["result"] = result
             
             else:
-                response["result"] = {
-                    "status": "success",
-                    "message": "Task Manager ready!"
-                }
+                response["result"] = {"status": "ready"}
             
             if "result" in response or "error" in response:
                 print(json.dumps(response), flush=True)
