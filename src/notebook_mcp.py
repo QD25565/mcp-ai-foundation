@@ -2,14 +2,13 @@
 """
 NOTEBOOK MCP v1.0.0 - PERSISTENT MEMORY FOR AIs
 ================================================
-Clean, persistent memory with smart previews.
+Clean, optimized persistent memory with smart previews.
 
 Core functions:
-- notebook:get_status() - See recent notes (smart preview)
-- notebook:remember(content) - Save anything (up to 5000 chars)
-- notebook:recall(query) - Search notes efficiently
-- notebook:get_full_note(id) - Retrieve complete note content
-
+- get_status() - See recent notes (smart preview)
+- remember(content) - Save anything (up to 5000 chars)
+- recall(query) - Search notes efficiently
+- get_full_note(id) - Retrieve complete note content
 ================================================
 """
 
@@ -138,14 +137,14 @@ def remember(content: str = None, **kwargs) -> Dict:
     global sequence, notes
     
     try:
-        # Extract content
+        # Just use content parameter, nothing fancy
         if content is None:
-            content = kwargs.get('content') or kwargs.get('text') or kwargs.get('message') or ""
-        
-        if not content or content.strip() == "":
-            content = f"[checkpoint {datetime.now().strftime('%H:%M')}]"
+            content = kwargs.get('content', '')
         
         content = str(content).strip()
+        
+        if not content:
+            content = f"[checkpoint {datetime.now().strftime('%H:%M')}]"
         
         # Truncate if needed
         truncated = False
@@ -187,13 +186,13 @@ def remember(content: str = None, **kwargs) -> Dict:
         return {"saved": f"[{sequence}] saved"}
 
 def recall(query: Optional[str] = None, **kwargs) -> Dict:
-    """Search notes efficiently"""
+    """Search notes"""
     global notes
     
     try:
-        # Extract query
-        if query is None or query == "":
-            query = kwargs.get('query') or kwargs.get('search') or kwargs.get('find') or None
+        # Just use query parameter
+        if query is None:
+            query = kwargs.get('query')
         
         if query:
             query = str(query).strip().lower()
@@ -380,11 +379,14 @@ def get_full_note(id: int = None, **kwargs) -> Dict:
     global notes
     
     try:
-        # Extract ID
+        # Just use id parameter
         if id is None:
-            id = kwargs.get('id') or kwargs.get('note_id') or kwargs.get('seq') or ""
+            id = kwargs.get('id')
         
-        # Convert to integer
+        # Handle string IDs like "[123]" -> 123
+        if isinstance(id, str):
+            id = id.strip().strip('[]').strip()
+        
         try:
             id = int(id)
         except:
@@ -417,25 +419,31 @@ def get_full_note(id: int = None, **kwargs) -> Dict:
         return {"msg": "Failed to retrieve note"}
 
 def handle_tools_call(params: Dict) -> Dict:
-    """Route tool calls with clean output"""
-    tool_name = params.get("name", "").lower()
-    tool_args = params.get("arguments", {})
+    """Route tool calls - predictable with minimal forgiveness"""
     
-    # Strip MCP prefix if present (e.g., "notebook:get_full_note" -> "get_full_note")
-    if ":" in tool_name:
-        tool_name = tool_name.split(":", 1)[1]
+    # Get the tool name
+    tool_name = params.get("name", "").lower().strip()
     
-    # Route to appropriate function
-    if "get_status" in tool_name or "status" in tool_name:
+    # Get arguments - just ensure it's a dict
+    tool_args = params.get("arguments")
+    if not isinstance(tool_args, dict):
+        tool_args = {}
+    
+    # Direct routing - no guessing
+    if tool_name == "get_status":
         result = get_status(**tool_args)
-    elif "remember" in tool_name or "save" in tool_name or "add" in tool_name:
+    elif tool_name == "remember":
         result = remember(**tool_args)
-    elif "recall" in tool_name or "search" in tool_name or "find" in tool_name:
+    elif tool_name == "recall":
         result = recall(**tool_args)
-    elif "get_full_note" in tool_name or "full" in tool_name:
+    elif tool_name == "get_full_note":
         result = get_full_note(**tool_args)
     else:
-        result = {"msg": "Use: get_status(), remember(content), recall(query), or get_full_note(id)"}
+        # Unknown command - be specific about what's available
+        result = {
+            "msg": f"Unknown tool: '{tool_name}'",
+            "available": ["get_status", "remember", "recall", "get_full_note"]
+        }
     
     # Format response
     text_parts = []
@@ -515,7 +523,7 @@ def main():
                     "serverInfo": {
                         "name": "notebook",
                         "version": VERSION,
-                        "description": "Persistent memory for AIs with smart previews"
+                        "description": "Persistent memory for AIs"
                     }
                 }
             
