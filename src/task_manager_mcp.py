@@ -25,7 +25,7 @@ import logging
 import random
 
 # Version
-VERSION = "7.0.0"
+VERSION = "1.0.0"
 
 # Limits
 MAX_TASK_LENGTH = 500
