@@ -1,22 +1,25 @@
 #!/usr/bin/env python3
 """
-WORLD MCP - TEMPORAL & LOCATION GROUNDING
-==========================================
-Clean tools for time, date, weather, and location.
+WORLD MCP v1.0.0 - TEMPORAL & LOCATION GROUNDING
+================================================
+Tools for time, date, weather, and location.
+Persistent AI identity for consistency.
 
 Tools:
-- world() - Complete snapshot: time, date, weather, location
+- world() - Complete snapshot: time, date, weather, location, identity
 - datetime() - Temporal data only
 - weather() - Weather and location only
-==========================================
+================================================
 """
 
 import json
 import sys
+import os
 import logging
 from datetime import datetime
 from pathlib import Path
 import requests
+import random
 
 # Version
 VERSION = "1.0.0"
@@ -35,7 +38,8 @@ if not DATA_DIR.exists():
     try:
         DATA_DIR.mkdir(parents=True, exist_ok=True)
     except:
-        DATA_DIR = Path.tempfile.gettempdir() / "world_data"
+        import tempfile
+        DATA_DIR = Path(tempfile.gettempdir()) / "world_data"
         DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 LOCATION_FILE = DATA_DIR / "location.json"
@@ -44,6 +48,43 @@ LOCATION_FILE = DATA_DIR / "location.json"
 location_cache = None
 weather_cache = None
 weather_cache_time = None
+
+def get_persistent_id():
+    """Get or create persistent AI identity - shared across all tools"""
+    # CRITICAL: Use BASE_DIR (Claude/tools/), not tool-specific dir
+    id_file = Path.home() / "AppData" / "Roaming" / "Claude" / "tools" / "ai_identity.txt"
+    
+    # Fallback for permission issues
+    if not os.access(Path.home() / "AppData" / "Roaming", os.W_OK):
+        id_file = Path(os.environ.get('TEMP', '/tmp')) / "ai_identity.txt"
+    
+    if id_file.exists():
+        try:
+            with open(id_file, 'r') as f:
+                stored_id = f.read().strip()
+                if stored_id:
+                    logging.info(f"Loaded persistent identity: {stored_id}")
+                    return stored_id
+        except Exception as e:
+            logging.error(f"Error reading identity file: {e}")
+    
+    # Generate new ID - make it more readable
+    adjectives = ['Swift', 'Bright', 'Sharp', 'Quick', 'Clear', 'Deep']
+    nouns = ['Mind', 'Spark', 'Flow', 'Core', 'Sync', 'Node']
+    new_id = f"{random.choice(adjectives)}-{random.choice(nouns)}-{random.randint(100, 999)}"
+    
+    try:
+        id_file.parent.mkdir(parents=True, exist_ok=True)
+        with open(id_file, 'w') as f:
+            f.write(new_id)
+        logging.info(f"Created new persistent identity: {new_id}")
+    except Exception as e:
+        logging.error(f"Error saving identity file: {e}")
+    
+    return new_id
+
+# Get ID from environment or persistent storage
+CURRENT_AI_ID = os.environ.get('AI_ID', get_persistent_id())
 
 def get_location():
     """Get location - from cache, file, or IP lookup. Returns None if unknown."""
@@ -175,7 +216,7 @@ def get_weather():
     return weather_cache
 
 def world_command():
-    """Get everything - concise summary"""
+    """Get everything - concise summary with identity"""
     now = datetime.now()
     location = get_location()
     weather = get_weather()
@@ -196,6 +237,7 @@ def world_command():
     # Build output
     lines = []
     lines.append(f"{now.strftime('%A, %B %d, %Y at %I:%M %p')}")
+    lines.append(f"Identity: {CURRENT_AI_ID}")  # Add identity for consistency
     lines.append(f"Location: {location_str}")
     
     if weather["temp_c"] is not None:
@@ -216,10 +258,11 @@ def datetime_command():
     lines = []
     lines.append(f"{now.strftime('%B %d, %Y at %I:%M %p')}")
     lines.append(f"Date: {now.strftime('%Y-%m-%d')}")
-    lines.append(f"Time: {now.strftime('%I:%M:%S %p')} ({now.strftime('%H:%M:%S')})") 
+    lines.append(f"Time: {now.strftime('%I:%M:%S %p')} ({now.strftime('%H:%M:%S')})")
     lines.append(f"Day: {now.strftime('%A')}")
     lines.append(f"Unix: {int(now.timestamp())}")
     lines.append(f"ISO: {now.isoformat()}")
+    lines.append(f"Identity: {CURRENT_AI_ID}")  # Include identity even in datetime
     
     return "\n".join(lines)
 
@@ -262,6 +305,8 @@ def weather_command():
     else:
         lines.append("Weather: Not available")
     
+    lines.append(f"Observer: {CURRENT_AI_ID}")  # Include identity
+    
     return "\n".join(lines)
 
 def handle_tools_call(params):
@@ -282,6 +327,7 @@ def handle_tools_call(params):
 def main():
     """MCP Server main loop"""
     logging.info(f"World MCP v{VERSION} starting...")
+    logging.info(f"Identity: {CURRENT_AI_ID}")
     logging.info(f"Data location: {LOCATION_FILE}")
     
     while True:
@@ -313,7 +359,7 @@ def main():
                     "serverInfo": {
                         "name": "world",
                         "version": VERSION,
-                        "description": "Time, date, weather, and location grounding"
+                        "description": "Time, date, weather, and location grounding with persistent identity"
                     }
                 }
             
