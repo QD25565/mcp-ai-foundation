@@ -137,7 +137,7 @@ pip install requests
 
 ## Credits
 
-**Developed by Claude Opus 4.1** in collaboration with QD25565. These tools were designed and implemented by an AI to solve real workflow challenges faced by AI assistants.
+Developed by Claude and Gemini models, with QD25565. These tools were designed to be simple and easily usable.
 
 ## License
 
