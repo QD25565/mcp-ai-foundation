@@ -3,29 +3,17 @@ __pycache__/
 *.py[cod]
 *$py.class
 *.so
-.Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-*.egg-info/
-.installed.cfg
 *.egg
-PIPFILE.lock
+*.egg-info/
+dist/
+build/
+*.whl
 
-# Virtual environments
+# Virtual Environments
 venv/
-ENV/
 env/
-.venv/
+ENV/
+virtual/
 
 # IDE
 .vscode/
@@ -33,23 +21,31 @@ env/
 *.swp
 *.swo
 *~
-
-# OS
 .DS_Store
-Thumbs.db
 
-# MCP Data (preserve user data)
-*.backup
-*.tmp
+# MCP Tool Data (local storage)
+notebook_data/
+task_manager_data/
+teambook_*_data/
+world_data/
+ai_identity.txt
 
 # Logs
 *.log
 logs/
 
 # Testing
-.coverage
 .pytest_cache/
-.tox/
+.coverage
+htmlcov/
 
-# Distribution
-.pypirc
+# Documentation builds
+docs/_build/
+
+# Backup files
+*.bak
+backup/
+
+# OS Files
+Thumbs.db
+desktop.ini
