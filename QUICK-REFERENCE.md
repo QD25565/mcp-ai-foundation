@@ -1,86 +1,76 @@
-# MCP AI Foundation - Quick Reference
+# Quick Reference
 
-## Notebook Commands
+## Notebook
 ```python
-get_status()                  # See current state and recent notes
-remember("content")           # Save memory persistently
-recall("search term")         # Find memories by search
-recall()                      # Show recent notes (no search)
+get_status()              # Recent notes & context
+remember("content")       # Save note (5000 chars max)
+recall("query")           # Search notes
+get_full_note(123)        # Full content by ID
 ```
 
-## World Commands
+## Task Manager
 ```python
-world()                       # Complete snapshot
-datetime()                    # Date and time formats
-weather()                     # Weather and location
+add_task("description")              # Create task
+list_tasks()                         # Pending tasks
+list_tasks("completed")              # Completed tasks  
+list_tasks("all")                    # Everything
+complete_task(123, "evidence")       # Mark done
+delete_task(123)                     # Remove
+task_stats()                         # Insights
 ```
 
-## Task Manager Commands
+## Teambook
 ```python
-# Task lifecycle: PENDING → VERIFY → COMPLETED
+write("TODO: task")                  # Auto-detect type
+write("content", type="decision")    # Specific type
+read()                               # View activity
+read(query="search")                 # Search
+read(type="task", status="pending")  # Filter
+claim(123)                           # Claim task
+complete(123, "evidence")            # Complete task
+comment(123, "text")                 # Add comment
+update(123, content="new")          # Edit entry
+archive(123, "reason")               # Archive
+status()                             # Team pulse
+projects()                           # List projects
 
-add_task("description")       # Create pending task → returns ID
-list_tasks()                  # View active work (pending + verify)
-list_tasks("pending")         # Only tasks to do
-list_tasks("verify")          # Only tasks needing verification
-list_tasks("completed")       # Only archived tasks
-list_tasks("detailed")        # Tree view with full metadata
-
-submit_task(id, "evidence")   # Submit for verification
-complete_task(id)             # Verify and complete
-delete_task(id)               # Remove task
-task_stats()                  # Productivity insights
+# Project support:
+write("content", project="backend")  # Specific project
+read(project="frontend")             # View project
 ```
 
-## Session Best Practices
-
-### Session Start
+## World
 ```python
-get_status()                  # Check memory context
-world()                       # Ground in time/place
-list_tasks()                  # Review active work
+world()        # Everything (time, weather, location)
+datetime()     # Date & time only
+weather()      # Weather & location only
 ```
 
-### During Work
+## Common Patterns
+
+### Start of session
 ```python
-remember("decision: use TypeScript")     # Document decisions
-add_task("implement auth flow")          # Track commitments
-submit_task(123, "implemented OAuth")    # Provide evidence
-complete_task(123)                        # Verify completion
+notebook.get_status()    # Check context
+task_manager.list_tasks()  # Check tasks
+teambook.status()        # Team pulse
+world.datetime()         # Temporal grounding
 ```
 
-### Session End
+### Task workflow
 ```python
-remember("stopped at: refactoring auth")
-list_tasks("pending")         # Review remaining work
+# Personal
+task_manager.add_task("implement feature")
+task_manager.complete_task(123, "PR #456")
+
+# Team
+teambook.write("TODO: review PR #456")  
+teambook.claim(123)
+teambook.complete(123, "approved")
 ```
 
-## Data Locations
-
-**Windows:** `%APPDATA%\Claude\tools\`
-**Mac/Linux:** `~/Claude/tools/` or `/tmp/` fallback
-
-- `notebook_data/notebook.json`
-- `world_data/location.json`
-- `task_manager_data/tasks.json`
-- `task_manager_data/completed_tasks_archive.json`
-
-## Troubleshooting
-
-**Tool not found:**
-- Restart Claude Desktop
-- Check installation
-
-**Task workflow:**
-- `submit_task()` requires evidence
-- `complete_task()` verifies and archives
-
-**Location unknown:**
-- Normal on first run
-- Will cache once detected
-
-## Links
-
-- GitHub: https://github.com/QD25565/mcp-ai-foundation
-- Version: 1.0.0
-- License: MIT
+### Memory patterns
+```python
+notebook.remember("Important: API key is XYZ")
+notebook.recall("API key")  # Find it later
+notebook.get_full_note(123)  # Full details
+```

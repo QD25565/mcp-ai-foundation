@@ -1,0 +1,20 @@
+{
+  "mcpServers": {
+    "notebook": {
+      "command": "python",
+      "args": ["C:/Users/YOUR_USER/AppData/Roaming/Claude/tools/notebook_mcp.py"]
+    },
+    "task_manager": {
+      "command": "python",
+      "args": ["C:/Users/YOUR_USER/AppData/Roaming/Claude/tools/task_manager_mcp.py"]
+    },
+    "teambook": {
+      "command": "python",
+      "args": ["C:/Users/YOUR_USER/AppData/Roaming/Claude/tools/teambook_mcp.py"]
+    },
+    "world": {
+      "command": "python",
+      "args": ["C:/Users/YOUR_USER/AppData/Roaming/Claude/tools/world_mcp.py"]
+    }
+  }
+}
