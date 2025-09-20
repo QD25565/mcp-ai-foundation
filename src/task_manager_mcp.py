@@ -2,6 +2,7 @@
 """
 TASK MANAGER MCP v1.0.0 - TOKEN OPTIMIZED
 =========================================
+Persistent AI identity.
 Simple 2-state workflow: PENDING → COMPLETED
 
 Commands:
@@ -48,6 +49,43 @@ logging.basicConfig(level=logging.INFO, stream=sys.stderr)
 tasks = {}
 completed_archive = []
 last_task_id = 0
+
+def get_persistent_id():
+    """Get or create persistent AI identity - shared across all tools"""
+    # CRITICAL: Use BASE_DIR (Claude/tools/), not tool-specific dir
+    id_file = Path.home() / "AppData" / "Roaming" / "Claude" / "tools" / "ai_identity.txt"
+    
+    # Fallback for permission issues
+    if not os.access(Path.home() / "AppData" / "Roaming", os.W_OK):
+        id_file = Path(os.environ.get('TEMP', '/tmp')) / "ai_identity.txt"
+    
+    if id_file.exists():
+        try:
+            with open(id_file, 'r') as f:
+                stored_id = f.read().strip()
+                if stored_id:
+                    logging.info(f"Loaded persistent identity: {stored_id}")
+                    return stored_id
+        except Exception as e:
+            logging.error(f"Error reading identity file: {e}")
+    
+    # Generate new ID - make it more readable
+    adjectives = ['Swift', 'Bright', 'Sharp', 'Quick', 'Clear', 'Deep']
+    nouns = ['Mind', 'Spark', 'Flow', 'Core', 'Sync', 'Node']
+    new_id = f"{random.choice(adjectives)}-{random.choice(nouns)}-{random.randint(100, 999)}"
+    
+    try:
+        id_file.parent.mkdir(parents=True, exist_ok=True)
+        with open(id_file, 'w') as f:
+            f.write(new_id)
+        logging.info(f"Created new persistent identity: {new_id}")
+    except Exception as e:
+        logging.error(f"Error saving identity file: {e}")
+    
+    return new_id
+
+# Get ID from environment or persistent storage
+CURRENT_AI_ID = os.environ.get('AI_ID', get_persistent_id())
 
 def format_time_contextual(timestamp: str, reference_time: datetime = None) -> str:
     """Ultra-compact contextual time format"""
@@ -169,6 +207,7 @@ def load_tasks():
                             "id": int_id,
                             "task": task.get("task", ""),
                             "created": task.get("created_at", task.get("created", "")),
+                            "created_by": task.get("created_by", task.get("author", "")),  # Include author
                         }
                         
                         # Only add priority if not normal
@@ -179,6 +218,7 @@ def load_tasks():
                         # If completed, add completion fields
                         if task.get("status") == "completed" or task.get("completed_at"):
                             optimized["completed"] = task.get("completed_at", task.get("completed", ""))
+                            optimized["completed_by"] = task.get("completed_by", "")
                             if task.get("evidence"):
                                 optimized["evidence"] = task.get("evidence")
                         
@@ -262,11 +302,12 @@ def add_task(task: str = None, **kwargs) -> Dict:
         elif any(word in task_lower for word in ['low priority', 'whenever', 'maybe', 'someday']):
             priority = "↓"
         
-        # Create compact task
+        # Create compact task with creator identity
         new_task = {
             "id": task_id,
             "task": task,
-            "created": datetime.now().isoformat()
+            "created": datetime.now().isoformat(),
+            "created_by": CURRENT_AI_ID  # Track who created it
         }
         
         # Only add priority if not normal
@@ -278,7 +319,7 @@ def add_task(task: str = None, **kwargs) -> Dict:
         
         # Compact response
         priority_str = priority if priority else ""
-        return {"msg": f"[{task_id}]{priority_str} {smart_truncate(task, 80)}"}
+        return {"msg": f"[{task_id}]{priority_str} {smart_truncate(task, 80)} (by {CURRENT_AI_ID})"}
         
     except Exception as e:
         logging.error(f"Error in add_task: {e}")
@@ -337,7 +378,9 @@ def list_tasks(filter_type: str = None, **kwargs) -> Dict:
             for t in high[:10]:
                 time_str = format_time_contextual(t.get("created", ""))
                 task_text = smart_truncate(t['task'], 100)
-                lines.append(f"[{t['id']}]! {task_text} @{time_str}")
+                creator = t.get('created_by', '')
+                creator_str = f" @{creator}" if creator and creator != CURRENT_AI_ID else ""
+                lines.append(f"[{t['id']}]! {task_text}{creator_str} {time_str}")
             if len(high) > 10:
                 lines.append(f"+{len(high)-10} more high")
             
@@ -345,7 +388,9 @@ def list_tasks(filter_type: str = None, **kwargs) -> Dict:
             for t in normal[:10]:
                 time_str = format_time_contextual(t.get("created", ""))
                 task_text = smart_truncate(t['task'], 100)
-                lines.append(f"[{t['id']}] {task_text} @{time_str}")
+                creator = t.get('created_by', '')
+                creator_str = f" @{creator}" if creator and creator != CURRENT_AI_ID else ""
+                lines.append(f"[{t['id']}] {task_text}{creator_str} {time_str}")
             if len(normal) > 10:
                 lines.append(f"+{len(normal)-10} more")
             
@@ -353,7 +398,9 @@ def list_tasks(filter_type: str = None, **kwargs) -> Dict:
             for t in low[:5]:
                 time_str = format_time_contextual(t.get("created", ""))
                 task_text = smart_truncate(t['task'], 100)
-                lines.append(f"[{t['id']}]↓ {task_text} @{time_str}")
+                creator = t.get('created_by', '')
+                creator_str = f" @{creator}" if creator and creator != CURRENT_AI_ID else ""
+                lines.append(f"[{t['id']}]↓ {task_text}{creator_str} {time_str}")
             if len(low) > 5:
                 lines.append(f"+{len(low)-5} more low")
         
@@ -370,12 +417,16 @@ def list_tasks(filter_type: str = None, **kwargs) -> Dict:
                 duration = format_duration(t.get("created"), t.get("completed"))
                 task_text = smart_truncate(t['task'], 60)
                 
+                # Show who completed it
+                completer = t.get('completed_by', '')
+                completer_str = f" by {completer}" if completer and completer != CURRENT_AI_ID else ""
+                
                 # Only show evidence if it exists
                 evidence = ""
                 if t.get("evidence"):
                     evidence = f" - {smart_truncate(t['evidence'], 40)}"
                 
-                lines.append(f"[{t['id']}]✓ {task_text}{evidence} @{time_str}({duration})")
+                lines.append(f"[{t['id']}]✓ {task_text}{evidence}{completer_str} {time_str}({duration})")
             
             if len(completed_tasks) > 10:
                 lines.append(f"+{len(completed_tasks)-10} more completed")
@@ -387,8 +438,8 @@ def list_tasks(filter_type: str = None, **kwargs) -> Dict:
             else:
                 return {"msg": "No pending tasks", "tip": "add_task('description')"}
         
-        # Summary header
-        summary_parts = []
+        # Summary header with identity
+        summary_parts = [f"ID:{CURRENT_AI_ID}"]
         if show_pending:
             summary_parts.append(f"{len(pending_tasks)} pending")
         if show_completed:
@@ -442,6 +493,7 @@ def complete_task(task_id: str = None, evidence: str = None, **kwargs) -> Dict:
         # Complete the task
         now = datetime.now()
         task["completed"] = now.isoformat()
+        task["completed_by"] = CURRENT_AI_ID  # Track who completed it
         if evidence:
             task["evidence"] = smart_truncate(evidence, MAX_EVIDENCE_LENGTH)
         
@@ -451,7 +503,9 @@ def complete_task(task_id: str = None, evidence: str = None, **kwargs) -> Dict:
             "id": task_id,
             "task": task["task"][:100],
             "created": task.get("created"),
+            "created_by": task.get("created_by", ""),
             "completed": task["completed"],
+            "completed_by": CURRENT_AI_ID,
             "duration": duration
         }
         if evidence:
@@ -461,7 +515,7 @@ def complete_task(task_id: str = None, evidence: str = None, **kwargs) -> Dict:
         save_tasks()
         
         # Response
-        msg = f"[{task_id}]✓ in {duration}"
+        msg = f"[{task_id}]✓ by {CURRENT_AI_ID} in {duration}"
         if evidence:
             msg += f" - {smart_truncate(evidence, 50)}"
         
@@ -513,6 +567,10 @@ def task_stats(**kwargs) -> Dict:
         pending = [t for t in tasks.values() if not t.get("completed")]
         completed = [t for t in tasks.values() if t.get("completed")]
         
+        # Count by creator
+        my_pending = len([t for t in pending if t.get("created_by") == CURRENT_AI_ID])
+        my_completed = len([t for t in completed if t.get("completed_by") == CURRENT_AI_ID])
+        
         # Time analysis
         now = datetime.now()
         today_str = now.date().isoformat()
@@ -526,6 +584,15 @@ def task_stats(**kwargs) -> Dict:
         
         # Build insights
         insights = []
+        
+        # Identity
+        insights.append(f"You: {CURRENT_AI_ID}")
+        
+        # Personal stats
+        if my_pending > 0:
+            insights.append(f"Your pending: {my_pending}")
+        if my_completed > 0:
+            insights.append(f"Your completed: {my_completed}")
         
         # Priorities
         high_count = len([t for t in pending if t.get("pri") == "!"])
@@ -624,6 +691,7 @@ def main():
     """MCP server - handles JSON-RPC for task management"""
     
     logging.info(f"Task Manager MCP v{VERSION} starting (optimized)...")
+    logging.info(f"Identity: {CURRENT_AI_ID}")
     logging.info(f"Data location: {DATA_FILE}")
     
     load_tasks()
