@@ -51,13 +51,10 @@ completed_archive = []
 last_task_id = 0
 
 def get_persistent_id():
-    """Get or create persistent AI identity - shared across all tools"""
-    # CRITICAL: Use BASE_DIR (Claude/tools/), not tool-specific dir
-    id_file = Path.home() / "AppData" / "Roaming" / "Claude" / "tools" / "ai_identity.txt"
-    
-    # Fallback for permission issues
-    if not os.access(Path.home() / "AppData" / "Roaming", os.W_OK):
-        id_file = Path(os.environ.get('TEMP', '/tmp')) / "ai_identity.txt"
+    """Get or create persistent AI identity - stored at script directory level"""
+    # Get the directory where this script is located
+    SCRIPT_DIR = Path(__file__).parent
+    id_file = SCRIPT_DIR / "ai_identity.txt"
     
     if id_file.exists():
         try:
@@ -75,7 +72,6 @@ def get_persistent_id():
     new_id = f"{random.choice(adjectives)}-{random.choice(nouns)}-{random.randint(100, 999)}"
     
     try:
-        id_file.parent.mkdir(parents=True, exist_ok=True)
         with open(id_file, 'w') as f:
             f.write(new_id)
         logging.info(f"Created new persistent identity: {new_id}")
@@ -426,7 +422,7 @@ def list_tasks(filter_type: str = None, **kwargs) -> Dict:
                 if t.get("evidence"):
                     evidence = f" - {smart_truncate(t['evidence'], 40)}"
                 
-                lines.append(f"[{t['id']}]✓ {task_text}{evidence}{completer_str} {time_str}({duration})")
+                lines.append(f"[{t['id']}]✔ {task_text}{evidence}{completer_str} {time_str}({duration})")
             
             if len(completed_tasks) > 10:
                 lines.append(f"+{len(completed_tasks)-10} more completed")
@@ -515,7 +511,7 @@ def complete_task(task_id: str = None, evidence: str = None, **kwargs) -> Dict:
         save_tasks()
         
         # Response
-        msg = f"[{task_id}]✓ by {CURRENT_AI_ID} in {duration}"
+        msg = f"[{task_id}]✔ by {CURRENT_AI_ID} in {duration}"
         if evidence:
             msg += f" - {smart_truncate(evidence, 50)}"
         
