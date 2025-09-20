@@ -1,6 +1,6 @@
 # MCP AI Foundation
 
-Token-optimized Model Context Protocol (MCP) tools for AI assistants. These tools provide persistent memory, task management, and temporal grounding while minimizing token usage through smart truncation and efficient data structures.
+Model Context Protocol (MCP) tools for AI assistants. These tools provide persistent memory, task management, and temporal grounding while minimizing token usage through smart truncation and efficient data structures.
 
 [![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
 [![MCP Compatible](https://img.shields.io/badge/MCP-2024--11--05-green.svg)](https://github.com/modelcontextprotocol)
