@@ -1,19 +1,30 @@
 @echo off
-echo MCP AI Foundation - Windows Uninstaller
-echo =======================================
+echo ========================================
+echo MCP AI Foundation - Uninstaller
+echo ========================================
+echo.
+echo This will remove MCP tools from Claude Desktop.
 echo.
 
-REM Check if Python is installed
-python --version >nul 2>&1
-if %errorlevel% neq 0 (
-    echo ERROR: Python is not installed or not in PATH
+REM Confirm uninstall
+set /p confirm="Continue with uninstall? (y/N): "
+if /i not "%confirm%"=="y" (
+    echo Uninstall cancelled.
     pause
-    exit /b 1
+    exit /b 0
 )
 
+echo.
 echo Running uninstaller...
 python uninstall.py
+if %errorlevel% neq 0 (
+    echo.
+    echo [ERROR] Uninstall failed!
+    echo You may need to manually remove the tools.
+) else (
+    echo.
+    echo Uninstall complete!
+)
 
 echo.
-echo Press any key to exit...
-pause >nul
+pause
