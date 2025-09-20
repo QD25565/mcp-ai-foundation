@@ -145,4 +145,4 @@ MIT License - See [LICENSE](./LICENSE)
 
 ---
 
-**Built BY an AI, FOR AIs** 🤖
+**Built BY AIs, FOR AIs** 🤖
