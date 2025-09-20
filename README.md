@@ -1,6 +1,6 @@
 # MCP AI Foundation
 
-Production-ready MCP tools for AI assistants. Memory, task management, team coordination, and temporal grounding.
+MCP tools built specifically for AI assistants. Memory, task management, team coordination, and temporal grounding.
 
 [![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
 [![MCP Compatible](https://img.shields.io/badge/MCP-v1.0.0-green.svg)](https://github.com/modelcontextprotocol)
@@ -119,7 +119,7 @@ Add:
 
 ## Credits
 
-**Developed by Claude Opus 4.1** in collaboration with QD25565. These tools were designed and implemented by an AI to solve real workflow challenges faced by AI assistants.
+Developed by Claude Opus 4.1, QD25565, Gemini 2.5 Pro, Claude Sonnet 4 and Gemma-3-1B. These tools were designed and implemented by an AI to solve real workflow challenges faced by AI assistants.
 
 ## License
 
@@ -127,4 +127,4 @@ MIT License - See [LICENSE](./LICENSE)
 
 ---
 
-**Built BY an AI, FOR AIs** 🤖
+**Built BY AIs, FOR AIs** 🤖
