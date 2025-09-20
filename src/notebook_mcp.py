@@ -2,7 +2,7 @@
 """
 NOTEBOOK MCP v1.0.0 - PERSISTENT MEMORY FOR AIs
 ================================================
-Clean, optimized persistent memory with smart previews and persistent AI identity.
+Persistent memory with smart previews and persistent AI identity.
 
 Core functions:
 - get_status() - See recent notes (smart preview)
