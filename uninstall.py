@@ -1,124 +1,124 @@
 #!/usr/bin/env python3
 """
 MCP AI Foundation - Uninstaller
-Safely removes MCP tools from Claude Desktop config.
+Removes MCP tools from Claude Desktop
 """
 
-import json
 import os
 import sys
-import shutil
+import json
 from pathlib import Path
-from datetime import datetime
 
 def find_claude_config():
     """Find Claude Desktop config file."""
-    
-    # Windows locations
     if sys.platform == "win32":
-        paths = [
-            Path(os.environ.get('APPDATA', '')) / "Claude" / "claude_desktop_config.json",
-            Path.home() / "AppData" / "Roaming" / "Claude" / "claude_desktop_config.json",
-        ]
-    
-    # Mac/Linux locations
+        config_path = Path(os.environ["APPDATA"]) / "Claude" / "claude_desktop_config.json"
     else:
-        paths = [
-            Path.home() / ".claude" / "claude_desktop_config.json",
-            Path.home() / "Library" / "Application Support" / "Claude" / "claude_desktop_config.json",
-            Path(os.environ.get('XDG_CONFIG_HOME', Path.home() / ".config")) / "claude" / "claude_desktop_config.json",
-        ]
+        config_path = Path.home() / ".config" / "Claude" / "claude_desktop_config.json"
     
-    for path in paths:
-        if path.exists():
-            return path
-    
-    return None
+    return config_path
 
-def backup_config(config_path):
-    """Create backup of existing config."""
+def get_tools_directory():
+    """Get the Claude tools directory."""
+    if sys.platform == "win32":
+        tools_dir = Path(os.environ["APPDATA"]) / "Claude" / "tools"
+    else:
+        tools_dir = Path.home() / ".config" / "Claude" / "tools"
     
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    backup_path = config_path.parent / f"claude_desktop_config.backup_{timestamp}.json"
-    
-    try:
-        shutil.copy2(config_path, backup_path)
-        print(f"✓ Backed up config to: {backup_path}")
-        return backup_path
-    except Exception as e:
-        print(f"⚠ Could not backup config: {e}")
-        return None
+    return tools_dir
 
-def remove_tools(config_path):
-    """Remove MCP tools from Claude config."""
+def remove_tools():
+    """Remove tool files."""
+    tools_dir = get_tools_directory()
+    tools = ["notebook_mcp.py", "task_manager_mcp.py", "teambook_mcp.py", "world_mcp.py"]
     
-    # Load existing config
-    with open(config_path, 'r', encoding='utf-8') as f:
-        config = json.load(f)
+    print(f"\n🗑️  Removing tools from: {tools_dir}")
     
-    if "mcpServers" not in config:
-        print("No MCP servers found in config.")
-        return False
-    
-    # Tools to remove
-    tools_to_remove = ["notebook", "world", "task-manager"]
-    removed = []
-    
-    for tool_name in tools_to_remove:
-        if tool_name in config["mcpServers"]:
-            del config["mcpServers"][tool_name]
-            removed.append(tool_name)
-            print(f"✓ Removed {tool_name} tool")
-    
-    if not removed:
-        print("No MCP AI Foundation tools found in config.")
-        return False
-    
-    # Save updated config
-    with open(config_path, 'w', encoding='utf-8') as f:
-        json.dump(config, f, indent=2)
-    
-    print(f"\n✓ Updated configuration saved")
-    return True
+    for tool in tools:
+        tool_file = tools_dir / tool
+        if tool_file.exists():
+            tool_file.unlink()
+            print(f"   ✅ Removed {tool}")
+        else:
+            print(f"   ℹ️  {tool} not found")
 
-def main():
-    print("MCP AI Foundation Uninstaller")
-    print("=============================\n")
+def remove_data():
+    """Optionally remove data files."""
+    tools_dir = get_tools_directory()
+    data_dirs = [
+        tools_dir / "notebook_data",
+        tools_dir / "task_manager_data",
+        tools_dir / "world_data"
+    ]
     
-    # Find Claude config
+    # Also check for teambook data
+    for path in tools_dir.glob("teambook_*_data"):
+        data_dirs.append(path)
+    
+    if any(d.exists() for d in data_dirs):
+        print("\n⚠️  Found data directories:")
+        for d in data_dirs:
+            if d.exists():
+                print(f"   - {d.name}")
+        
+        response = input("\nRemove data files too? (y/N): ").strip().lower()
+        if response == 'y':
+            for d in data_dirs:
+                if d.exists():
+                    import shutil
+                    shutil.rmtree(d)
+                    print(f"   ✅ Removed {d.name}")
+        else:
+            print("   💾 Data preserved")
+
+def clean_config():
+    """Remove tools from Claude config."""
     config_path = find_claude_config()
     
-    if not config_path:
-        print("✗ Could not find Claude Desktop config file.")
-        sys.exit(1)
+    if not config_path.exists():
+        print("\nℹ️  Config file not found")
+        return
     
-    print(f"✓ Found Claude config: {config_path}\n")
+    print(f"\n⚙️  Cleaning config: {config_path}")
     
-    # Ask about data backup
-    print("Your tool data is stored in:")
-    if sys.platform == "win32":
-        print("  %APPDATA%\\Claude\\tools\\")
-    else:
-        print("  ~/Claude/tools/")
+    with open(config_path, 'r') as f:
+        config = json.load(f)
     
-    response = input("\nDo you want to backup your data before uninstalling? (y/n): ")
+    if "mcpServers" in config:
+        tools = ["notebook", "task_manager", "teambook", "world"]
+        for tool in tools:
+            if tool in config["mcpServers"]:
+                del config["mcpServers"][tool]
+                print(f"   ✅ Removed {tool} config")
+        
+        # Remove mcpServers if empty
+        if not config["mcpServers"]:
+            del config["mcpServers"]
     
-    if response.lower() == 'y':
-        print("\nPlease manually backup the data directory.")
-        input("Press Enter when ready to continue...")
+    # Write updated config
+    with open(config_path, 'w') as f:
+        json.dump(config, f, indent=2)
     
-    # Backup config
-    backup_config(config_path)
+    print("\n✅ Configuration cleaned")
+
+def main():
+    print("=" * 50)
+    print("MCP AI Foundation - Uninstaller")
+    print("=" * 50)
     
-    # Remove tools
-    if remove_tools(config_path):
-        print("\n" + "="*50)
-        print("✓ Uninstall complete!")
-        print("\nThe tools have been removed from Claude Desktop.")
-        print("Your data has been preserved in the tools directory.")
-        print("\nTo reinstall later, run install.py again.")
-    else:
-        print("\nNo changes made.")
+    # Remove tool files
+    remove_tools()
+    
+    # Optionally remove data
+    remove_data()
+    
+    # Clean config
+    clean_config()
+    
+    print("\n" + "=" * 50)
+    print("✅ Uninstall complete!")
+    print("\n⚠️  Restart Claude Desktop to apply changes")
+    print("=" * 50)
 
 if __name__ == "__main__":
     main()

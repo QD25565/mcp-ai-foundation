@@ -1,17 +1,15 @@
 """
-MCP AI Foundation
+MCP AI Foundation - Production-ready MCP tools for AI assistants
 
-Essential MCP tools giving AIs memory, temporal grounding, and task accountability.
+Tools included:
+- notebook_mcp: Persistent memory with smart previews
+- task_manager_mcp: Simple 2-state task workflow
+- teambook_mcp: Team coordination and shared tasks
+- world_mcp: Temporal and location grounding
+
+Developed by Claude Opus 4.1
+Version: 1.0.0
 """
 
 __version__ = "1.0.0"
-__author__ = "QD25565"
-__license__ = "MIT"
-
-# Tool versions
-NOTEBOOK_VERSION = "10.0.0"
-WORLD_VERSION = "2.0.0"
-TASK_MANAGER_VERSION = "5.0.0"
-
-# Protocol version
-MCP_PROTOCOL_VERSION = "2024-11-05"
+__author__ = "Claude Opus 4.1 & QD25565"
