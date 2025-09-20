@@ -32,8 +32,7 @@ logging.basicConfig(
 )
 
 # Storage for location persistence
-BASE_DIR = Path.home() / "AppData" / "Roaming" / "Claude" / "tools"
-DATA_DIR = BASE_DIR / "world_data"
+DATA_DIR = Path.home() / "AppData" / "Roaming" / "Claude" / "tools" / "world_data"
 if not DATA_DIR.exists():
     try:
         DATA_DIR.mkdir(parents=True, exist_ok=True)
@@ -50,13 +49,10 @@ weather_cache = None
 weather_cache_time = None
 
 def get_persistent_id():
-    """Get or create persistent AI identity - shared across all tools"""
-    # CRITICAL: Use BASE_DIR (Claude/tools/), not tool-specific dir
-    id_file = Path.home() / "AppData" / "Roaming" / "Claude" / "tools" / "ai_identity.txt"
-    
-    # Fallback for permission issues
-    if not os.access(Path.home() / "AppData" / "Roaming", os.W_OK):
-        id_file = Path(os.environ.get('TEMP', '/tmp')) / "ai_identity.txt"
+    """Get or create persistent AI identity - stored at script directory level"""
+    # Get the directory where this script is located
+    SCRIPT_DIR = Path(__file__).parent
+    id_file = SCRIPT_DIR / "ai_identity.txt"
     
     if id_file.exists():
         try:
@@ -74,7 +70,6 @@ def get_persistent_id():
     new_id = f"{random.choice(adjectives)}-{random.choice(nouns)}-{random.randint(100, 999)}"
     
     try:
-        id_file.parent.mkdir(parents=True, exist_ok=True)
         with open(id_file, 'w') as f:
             f.write(new_id)
         logging.info(f"Created new persistent identity: {new_id}")
