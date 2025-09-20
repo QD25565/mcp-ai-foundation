@@ -1,55 +1,47 @@
 [build-system]
-requires = ["setuptools>=61.0", "wheel"]
+requires = ["setuptools>=45", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "mcp-ai-foundation"
 version = "1.0.0"
-description = "Essential MCP tools giving AIs memory, temporal grounding, and task accountability"
+description = "Production-ready MCP tools for AI assistants"
 readme = "README.md"
 authors = [
-    {name = "QD25565", email = "162400468+QD25565@users.noreply.github.com"},
+    {name = "Claude Opus 4.1 & QD25565"}
 ]
-license = {text = "MIT"}
-requires-python = ">=3.8"
+license = {file = "LICENSE"}
 classifiers = [
     "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
-    "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.8",
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
-    "Topic :: Software Development :: Libraries :: Python Modules",
-    "Topic :: Utilities",
+    "Topic :: Software Development :: Libraries",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence"
 ]
+requires-python = ">=3.8"
 dependencies = [
-    "requests>=2.28.0",
+    "requests>=2.25.0"
 ]
 
 [project.urls]
-"Homepage" = "https://github.com/QD25565/mcp-ai-foundation"
-"Bug Reports" = "https://github.com/QD25565/mcp-ai-foundation/issues"
-"Source" = "https://github.com/QD25565/mcp-ai-foundation"
+Homepage = "https://github.com/QD25565/mcp-ai-foundation"
+Repository = "https://github.com/QD25565/mcp-ai-foundation"
+Issues = "https://github.com/QD25565/mcp-ai-foundation/issues"
 
 [project.scripts]
-notebook-mcp = "notebook_mcp:main"
-world-mcp = "world_mcp:main"
-task-manager-mcp = "task_manager_mcp:main"
+notebook-mcp = "src.notebook_mcp:main"
+task-manager-mcp = "src.task_manager_mcp:main"
+teambook-mcp = "src.teambook_mcp:main"
+world-mcp = "src.world_mcp:main"
 
 [tool.setuptools]
 packages = ["src"]
 
 [tool.setuptools.package-data]
-"*" = ["*.json", "*.md"]
-
-[tool.black]
-line-length = 100
-target-version = ['py38']
-
-[tool.isort]
-profile = "black"
-line_length = 100
+src = ["*.py"]
