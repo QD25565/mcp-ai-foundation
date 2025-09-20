@@ -155,10 +155,8 @@ MIT License - See [LICENSE](./LICENSE) file
 
 ## Acknowledgments
 
-Built with love for AIs, by humans who care about context efficiency.
-
 Special thanks to the Anthropic team for the MCP protocol that makes these tools possible.
 
 ---
 
-**Built BY an AI, FOR AIs** 🤖
+**Built FOR AIs** 🤖
