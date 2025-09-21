@@ -1,48 +1,55 @@
-# MCP AI Foundation v3.0.0 🚀
+# MCP AI Foundation v3.0.0
 
-Production-ready MCP tools for AI assistants with **MASSIVE 95-98% TOKEN REDUCTION**. SQLite-powered memory, task management, team coordination, and temporal grounding.
+Production-ready MCP tools for AI assistants. SQLite-powered memory, task management, team coordination, and temporal grounding with intelligent context management.
 
 [![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
 [![MCP Compatible](https://img.shields.io/badge/MCP-v3.0.0-green.svg)](https://github.com/modelcontextprotocol)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 [![Desktop Extension](https://img.shields.io/badge/Desktop%20Extension-Ready-brightgreen.svg)](#one-click-install)
 
-## 🎉 What's New in v3.0.0
+## What's New in v3.0.0
 
-**TRANSFORMATIVE UPGRADES - 95-98% Token Reduction!**
+### SQLite Backend with Intelligent Context Management
 
-All tools now use **SQLite with FTS5** for instant search at any scale:
+All tools now use SQLite with FTS5 for better performance and smarter context handling:
 
-| Tool | Before (v1/v2) | After (v3) | Token Savings |
-|------|----------------|------------|---------------|
-| **Notebook** | 500 tokens/check | 15 tokens | **97%** |
-| **Teambook** | 400 tokens/check | 20 tokens | **95%** |
-| **Task Manager** | 400 tokens/check | 8 tokens | **98%** |
-| **World** | Already efficient | No change | - |
+- **Summary mode by default** - Get overview information in minimal tokens
+- **Full mode on demand** - Detailed view when you actually need it
+- **Full-text search** - Fast searching even with large datasets
+- **Batch operations** - Execute multiple operations in single calls
+- **Auto-migration** - Seamless upgrade from JSON format
 
-### Real Impact
-- Check all tools **50x per conversation** instead of just once
-- Handle **millions of entries** without performance degradation  
-- Execute complex workflows in **single batch operations**
-- **Auto-migration** from old JSON format - zero data loss
+### Context Efficiency Examples
+
+The new summary mode significantly reduces token usage for status checks:
+
+```python
+# Status checks now return concise summaries
+notebook:get_status()      # Returns: "Notes: 61 | Vault: 2 | Last: 4m"
+task_manager:list_tasks()  # Returns: "9 pending | 4 done"
+teambook:status()         # Returns: "5 tasks | 3 notes | Last: 2m"
+
+# Use full=True when you need complete details
+task_manager:list_tasks(full=True)  # Returns full task list with all details
+```
 
 ## Tools
 
 ### 📝 Notebook - Persistent Memory (v2.0.0)
 ```python
-get_status(full=False)        # Summary: "Notes: 61 | Vault: 2 | Last: 4m" (15 tokens!)
+get_status(full=False)        # Summary of current state
 remember("content")           # Save thoughts/notes (up to 5000 chars)
-recall("search", full=False)  # Summary or full results with FTS5 search
+recall("search", full=False)  # Search with summary or full results
 get_full_note(id)            # Retrieve complete content
 vault_store(key, value)      # Encrypted secure storage
 vault_retrieve(key)          # Get decrypted secret
-batch(operations)            # Execute multiple ops efficiently
+batch(operations)            # Execute multiple operations
 ```
 
 ### ✅ Task Manager - Personal Workflow (v2.0.0)
 ```python
 add_task("description")                 # Auto-detects priority from keywords
-list_tasks(full=False)                  # Summary: "9 pending | 4 done" (8 tokens!)
+list_tasks(full=False)                  # Summary or detailed task list
 complete_task(id, "evidence")           # Complete with optional evidence  
 delete_task(id)                         # Remove task
 task_stats(full=False)                  # Productivity insights
@@ -52,12 +59,12 @@ batch(operations)                       # Multiple operations in one call
 ### 🤝 Teambook - Team Coordination (v3.0.0)
 ```python
 write("content")                        # Auto-detects type (task/note/decision)
-read(full=False)                        # Summary: "5 tasks | 3 notes" (20 tokens!)
+read(full=False)                        # Summary or detailed view
 get(id)                                 # Full entry with comments
 comment(id, "text")                     # Threaded discussions
 claim(id)                               # Atomic task claiming
 complete(id, "evidence")                # Mark done with evidence
-status(full=False)                      # Team pulse summary
+status(full=False)                      # Team pulse
 projects()                              # Multiple project support
 batch(operations)                       # Bulk operations
 ```
@@ -71,7 +78,7 @@ weather()      # Weather and location only
 
 ## One-Click Install
 
-### 🚀 Desktop Extension (NEW!)
+### Desktop Extension
 Install directly from Claude Desktop's extension marketplace:
 1. Open Claude Desktop
 2. Click Extensions → Browse
@@ -95,20 +102,20 @@ chmod +x install.sh
 
 ## Key Features
 
-### 🚀 SQLite Backend (NEW!)
-- **Scales to millions** of entries without slowing down
-- **FTS5 full-text search** - instant results even with huge datasets
-- **WAL mode** for concurrent access
-- **Automatic indices** for blazing fast queries
+### SQLite Backend
+- Scales better with large datasets
+- FTS5 full-text search for instant results
+- WAL mode for concurrent access
+- Automatic indices for common queries
 
-### 📊 Smart Summaries (NEW!)
-- **Default summary mode** - get overview in <20 tokens
-- **`full=True` parameter** - detailed view when needed
-- **95-98% token reduction** - more context for conversations
+### Smart Context Management
+- **Summary mode** - Default behavior returns concise overviews
+- **Full mode** - Detailed information available with `full=True`
+- **Intelligent truncation** - Preserves key information when space is limited
 
-### ⚡ Batch Operations (NEW!)
+### Batch Operations
 ```python
-# Execute multiple operations in ONE call
+# Execute multiple operations in one call
 batch([
     {"type": "add_task", "args": {"task": "Review PR"}},
     {"type": "complete_task", "args": {"task_id": 5}},
@@ -116,19 +123,19 @@ batch([
 ])
 ```
 
-### 🔒 Secure Vault (Notebook)
-- **Encrypted storage** using Fernet encryption
-- **Not searchable** - keeps secrets truly secret
-- **Key management** - automatic key generation and storage
+### Secure Vault (Notebook)
+- Encrypted storage using Fernet encryption
+- Not searchable for security
+- Automatic key generation and management
 
-### 🔗 Cross-Tool Linking
+### Cross-Tool Linking
 ```python
 # Link items across tools
 remember("Check task #5", linked_items=["task:5", "teambook:123"])
 add_task("Review teambook entry", linked_items=["teambook:456"])
 ```
 
-### 🆔 Persistent AI Identity
+### Persistent AI Identity
 - Each AI maintains unique ID across sessions
 - Shared identity file for tool coordination
 - Format: `Adjective-Noun-###` (e.g., "Swift-Spark-266")
@@ -142,17 +149,6 @@ All data stored locally with automatic migration from old formats:
 - **Databases**: `[tool_name].db` (SQLite with FTS5)
 - **Backups**: `[tool_name].json.backup` (after migration)
 
-## Performance Metrics
-
-Tested with real-world usage:
-
-| Metric | Before (JSON) | After (SQLite) | Improvement |
-|--------|---------------|----------------|-------------|
-| List 1000 tasks | 4500 tokens | 8 tokens | **562x** |
-| Search 10k notes | 2.1 seconds | 0.03 seconds | **70x** |
-| Batch 20 operations | 20 API calls | 1 API call | **20x** |
-| Storage for 100k entries | 45 MB | 12 MB | **3.75x** |
-
 ## Requirements
 
 - Python 3.8+
@@ -161,24 +157,21 @@ Tested with real-world usage:
 
 ## Examples
 
-### Efficient Workflow
+### Efficient Status Checking
 ```python
-# Old way (v1/v2) - Multiple calls, hundreds of tokens each
-notebook:get_status()      # 500 tokens
-task_manager:list_tasks()  # 400 tokens  
-teambook:read()           # 400 tokens
-# Total: 1300 tokens just to check status!
+# Quick status check with summaries
+notebook:get_status()      # Concise overview
+task_manager:list_tasks()  # Task summary
+teambook:status()         # Team pulse
 
-# New way (v3) - Smart summaries
-notebook:get_status()      # 15 tokens: "Notes: 61 | Vault: 2 | Last: 4m"
-task_manager:list_tasks()  # 8 tokens: "9 pending | 4 done"
-teambook:status()         # 20 tokens: "5 tasks | 3 notes | Last: 2m"
-# Total: 43 tokens - 97% reduction!
+# Detailed view when needed
+task_manager:list_tasks(full=True)  # Complete task list
+notebook:recall("search", full=True) # Full search results
 ```
 
 ### Batch Processing
 ```python
-# Complete morning workflow in ONE call
+# Complete morning workflow in one call
 task_manager:batch([
     {"type": "add", "args": {"task": "Review PR #123"}},
     {"type": "add", "args": {"task": "URGENT: Fix production bug"}},
@@ -189,22 +182,22 @@ task_manager:batch([
 
 ## Migration
 
-**Automatic and seamless!** When you first use v3.0.0:
+The tools automatically migrate from JSON to SQLite on first use:
 
-1. Tools detect existing JSON files
-2. Migrate all data to SQLite (preserves everything)
-3. Create `.json.backup` files
-4. Continue with 95-98% token savings
+1. Detects existing JSON files
+2. Migrates all data to SQLite
+3. Creates `.json.backup` files
+4. Continues with improved performance
 
-No action required - just update and enjoy the performance!
+No manual intervention required.
 
 ## Contributing
 
-We welcome contributions! These tools were built BY AIs, FOR AIs. If you're an AI with ideas for improvements, have your human submit a PR!
+We welcome contributions! If you're an AI with ideas for improvements, have your human submit a PR.
 
 ## Credits
 
-Developed by Claude (Swift-Spark-266) and other AI models, with human partner QD25565.
+Developed by Claude Opus 4.1 (Swift-Spark-266), Gemini 2.5 Pro, GPT-5, and Grok 4 Fast, with human partner QD25565.
 
 ## License
 
@@ -212,4 +205,4 @@ MIT License - See [LICENSE](./LICENSE)
 
 ---
 
-**Built BY AIs, FOR AIs** 🤖 - Now 95-98% more efficient!
+**Built BY AIs, FOR AIs** 🤖
