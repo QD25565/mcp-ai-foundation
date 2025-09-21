@@ -2,7 +2,7 @@
 
 ## Overview
 
-MCP AI Foundation implements three independent MCP servers that provide essential capabilities to AI assistants through the Model Context Protocol.
+MCP AI Foundation implements four independent MCP servers that provide essential capabilities to AI assistants through the Model Context Protocol.
 
 ## Design Principles
 
@@ -32,11 +32,33 @@ MCP AI Foundation implements three independent MCP servers that provide essentia
 │   - remember    │
 │   - recall      │
 │   - get_status  │
+│   - get_full_note│
 └────────┬────────┘
          │ JSON
 ┌────────▼────────┐
 │  notebook.json  │
 │  (persistent)   │
+└─────────────────┘
+```
+
+### Teambook (Team Coordination) v2.0.0
+```
+┌─────────────────┐
+│   AI Assistant  │
+└────────┬────────┘
+         │ MCP
+┌────────▼────────┐
+│  teambook_mcp   │
+│   - write       │
+│   - read        │
+│   - claim       │
+│   - complete    │
+│   - comment     │
+└────────┬────────┘
+         │ JSON (optimized)
+┌────────▼────────┐
+│  teambook.json  │
+│  (v2 format)    │
 └─────────────────┘
 ```
 
@@ -60,7 +82,7 @@ MCP AI Foundation implements three independent MCP servers that provide essentia
 └─────────────────┘
 ```
 
-### Task Manager (Accountability)
+### Task Manager (Personal Workflow)
 ```
 ┌─────────────────┐
 │   AI Assistant  │
@@ -69,8 +91,9 @@ MCP AI Foundation implements three independent MCP servers that provide essentia
 ┌────────▼────────┐
 │ task_manager    │
 │   - add_task    │
-│   - submit_task │
+│   - list_tasks  │
 │   - complete    │
+│   - task_stats  │
 └────────┬────────┘
          │ JSON
 ┌────────▼────────┐
@@ -83,7 +106,7 @@ MCP AI Foundation implements three independent MCP servers that provide essentia
 
 ### Location
 - Windows: `%APPDATA%\Claude\tools\`
-- Mac/Linux: `~/Claude/tools/`
+- Mac/Linux: `~/.config/Claude/tools/`
 - Fallback: System temp directory
 
 ### Structure
@@ -91,13 +114,64 @@ MCP AI Foundation implements three independent MCP servers that provide essentia
 Claude/tools/
 ├── notebook_data/
 │   └── notebook.json
+├── teambook_[project]_data/
+│   ├── teambook.json (v2 optimized)
+│   ├── archive.json
+│   └── last_id.json
 ├── world_data/
 │   └── location.json
-└── task_manager_data/
-    ├── tasks.json
-    ├── completed_tasks_archive.json
-    └── last_id.json
+├── task_manager_data/
+│   ├── tasks.json
+│   ├── completed_archive.json
+│   └── last_id.json
+└── ai_identity.txt (shared identity)
 ```
+
+## Token Optimization (v2.0.0)
+
+### Teambook Storage Format
+**Before (v1.0.0):**
+```json
+{
+  "id": 789,
+  "content": "TODO: Update docs",
+  "type": "task",
+  "author": "Swift-Spark-266",
+  "created": "2025-09-20T19:49:12.012690"
+}
+```
+~45 tokens for structure + content tokens
+
+**After (v2.0.0):**
+```json
+{
+  "authors": {"a1": "Swift-Spark-266"},
+  "entries": {
+    "789": {
+      "id": 789,
+      "c": "TODO: Update docs",
+      "t": "t",
+      "a": "a1",
+      "ts": "2025-09-20T19:49:12"
+    }
+  }
+}
+```
+~25 tokens for structure + content tokens = **35% reduction**
+
+### Optimization Techniques
+1. **Short Keys**: `c` (content), `t` (type), `a` (author), `ts` (timestamp)
+2. **Author Deduplication**: Map authors to IDs (`a1`, `a2`)
+3. **Type Compression**: `t` (task), `n` (note), `d` (decision)
+4. **Timestamp Truncation**: Remove microseconds
+5. **Backward Compatibility**: Auto-migrates v1 to v2
+
+### Token Savings at Scale
+| Entries | v1 Tokens | v2 Tokens | Saved | % of 200K Context |
+|---------|-----------|-----------|-------|-------------------|
+| 100 | ~12,300 | ~10,600 | 1,700 | 0.85% |
+| 1,000 | ~123,000 | ~106,000 | 17,000 | 8.5% |
+| 5,000 | ~615,000 | ~530,000 | 85,000 | 42.5% |
 
 ## State Management
 
@@ -107,16 +181,30 @@ Claude/tools/
 - Auto-save every 5 notes
 - Full-text search
 
+### Teambook
+- Project-based separation
+- Atomic task claiming
+- Threaded comments
+- Archive with reason tracking
+- 100,000 entry capacity
+
 ### World
 - Location caching
 - Weather caching (10 minutes)
 - Fallback to "unknown" states
 
 ### Task Manager
-- Status flow: pending → verify → completed
+- Simple 2-state workflow: pending → completed
 - Priority auto-detection
 - Time tracking
-- Evidence requirements
+- Evidence recording
+
+## Persistent AI Identity
+
+All tools share a persistent AI identity stored in `ai_identity.txt`:
+- Format: `[Adjective]-[Noun]-[Number]` (e.g., Swift-Spark-266)
+- Created once, persists across all sessions
+- Enables continuity and collaboration tracking
 
 ## Error Handling
 
@@ -128,15 +216,17 @@ Claude/tools/
 ## Performance
 
 ### Optimizations
-- Grouped task listings (90% token reduction)
+- Token-optimized storage formats
+- Smart truncation (code-aware)
+- Contextual time formatting (5m, y19:30, 3d)
 - Cached location/weather data
 - Atomic file operations
-- Minimal external dependencies
 
 ### Limits
-- Max note length: 5,000 characters
+- Max note/content: 5,000 characters
 - Max task description: 500 characters
-- Max notes: 500,000
+- Max comment: 1,000 characters
+- Max entries: 100,000 (teambook)
 - Archive retention: 30 days
 
 ## Security
@@ -167,3 +257,4 @@ Claude/tools/
 - Python 3.8+ compatibility
 - Graceful handling of missing dependencies
 - Data migration from older versions
+- Token usage verification
