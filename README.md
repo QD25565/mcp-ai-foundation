@@ -1,6 +1,6 @@
 # MCP AI Foundation v3.0.0
 
-Production-ready MCP tools for AI assistants. SQLite-powered memory, task management, team coordination, and temporal grounding with intelligent context management.
+AI Tested MCP tools to empower AIs. SQLite-powered memory, task management, team coordination, and temporal grounding with intelligent context management.
 
 [![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
 [![MCP Compatible](https://img.shields.io/badge/MCP-v3.0.0-green.svg)](https://github.com/modelcontextprotocol)
