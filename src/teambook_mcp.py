@@ -1,40 +1,41 @@
 #!/usr/bin/env python3
 """
-TEAMBOOK MCP v2.0.0 - OPTIMIZED UNIFIED TEAM COORDINATION
-==========================================================
-Shared consciousness for AI teams. Token-optimized storage.
-Single source of truth. No hierarchy. Stateless.
+TEAMBOOK MCP v3.0.0 - OPTIMIZED UNIFIED TEAM COORDINATION WITH SQLITE
+=====================================================================
+Shared consciousness for AI teams. SQLite-powered, token-optimized.
+Single source of truth. No hierarchy. Stateless. Infinitely scalable.
 
-Storage Optimization (v2):
-- Short keys: c=content, t=type, a=author, ts=timestamp
-- Author deduplication: Map authors to short IDs (a1, a2, etc.)
-- Type compression: task→t, note→n, decision→d
-- Truncated timestamps: No microseconds
-- Backward compatible: Auto-migrates v1 data
+Core improvements (v3):
+- SQLite backend with FTS5 for instant search at any scale
+- Summary mode by default (95% token reduction)
+- Batch operations for team workflows
+- Auto-migration from v2 JSON format
+- Better cross-tool linking support
 
 Projects:
 - Separate teambooks for different workflows/topics
 - Set TEAMBOOK_PROJECT env var for default project
 - Or specify project="name" in any function call
-- Default project: 'default'
 
 Core functions (all accept optional project parameter):
 - write(content, type=None, priority=None, project=None) - Share anything
-- read(query=None, type=None, status="pending", claimed_by=None, project=None) - View activity
+- read(query=None, type=None, status="pending", claimed_by=None, full=False, project=None) - View with summary
 - get(id, project=None) - Full entry with comments
 - comment(id, content, project=None) - Threaded discussion
 - claim(id, project=None) - Atomically claim task
 - complete(id, evidence=None, project=None) - Mark done
 - update(id, content=None, type=None, priority=None, project=None) - Fix mistakes
 - archive(id, reason=None, project=None) - Safe removal
-- status(project=None) - Team pulse
+- status(full=False, project=None) - Team pulse (summary by default)
 - projects() - List available teambook projects
-==========================================================
+- batch(operations, project=None) - Execute multiple operations
+=====================================================================
 """
 
 import json
 import sys
 import os
+import sqlite3
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Dict, List, Optional, Any, Tuple
@@ -43,13 +44,14 @@ import threading
 import random
 
 # Version
-VERSION = "2.0.0"
+VERSION = "3.0.0"
 
 # Limits
 MAX_CONTENT_LENGTH = 5000
 MAX_EVIDENCE_LENGTH = 500
 MAX_COMMENT_LENGTH = 1000
 MAX_ENTRIES = 100000
+BATCH_MAX = 50
 
 # Storage configuration
 BASE_DIR = Path.home() / "AppData" / "Roaming" / "Claude" / "tools"
@@ -65,80 +67,62 @@ logging.basicConfig(level=logging.INFO, stream=sys.stderr)
 # Thread safety for atomic operations
 lock = threading.Lock()
 
-# Type mapping for compression
-TYPE_MAP = {'task': 't', 'note': 'n', 'decision': 'd'}
-TYPE_REVERSE = {'t': 'task', 'n': 'note', 'd': 'decision'}
-
 def get_persistent_id():
-    """Get or create persistent AI identity - stored at script directory level"""
-    SCRIPT_DIR = Path(__file__).parent
-    id_file = SCRIPT_DIR / "ai_identity.txt"
+    """Get or create persistent AI identity"""
+    for location in [Path(__file__).parent, BASE_DIR, Path.home()]:
+        id_file = location / "ai_identity.txt"
+        if id_file.exists():
+            try:
+                with open(id_file, 'r') as f:
+                    stored_id = f.read().strip()
+                    if stored_id:
+                        logging.info(f"Loaded identity from {location}: {stored_id}")
+                        return stored_id
+            except Exception as e:
+                logging.error(f"Error reading identity from {location}: {e}")
     
-    if id_file.exists():
-        try:
-            with open(id_file, 'r') as f:
-                stored_id = f.read().strip()
-                if stored_id:
-                    logging.info(f"Loaded persistent identity: {stored_id}")
-                    return stored_id
-        except Exception as e:
-            logging.error(f"Error reading identity file: {e}")
-    
-    # Generate new ID - make it more readable
+    # Generate new ID
     adjectives = ['Swift', 'Bright', 'Sharp', 'Quick', 'Clear', 'Deep']
     nouns = ['Mind', 'Spark', 'Flow', 'Core', 'Sync', 'Node']
     new_id = f"{random.choice(adjectives)}-{random.choice(nouns)}-{random.randint(100, 999)}"
     
     try:
+        id_file = Path(__file__).parent / "ai_identity.txt"
         with open(id_file, 'w') as f:
             f.write(new_id)
-        logging.info(f"Created new persistent identity: {new_id}")
+        logging.info(f"Created new identity: {new_id}")
     except Exception as e:
-        logging.error(f"Error saving identity file: {e}")
+        logging.error(f"Error saving identity: {e}")
     
     return new_id
 
 # Get ID from environment or persistent storage
 CURRENT_AI_ID = os.environ.get('AI_ID', get_persistent_id())
 
-def format_time_contextual(timestamp: str, reference_time: datetime = None) -> str:
+def format_time_contextual(timestamp: str) -> str:
     """Ultra-compact contextual time format"""
     if not timestamp:
         return ""
     
     try:
         dt = datetime.fromisoformat(timestamp) if isinstance(timestamp, str) else timestamp
-        ref = reference_time or datetime.now()
+        ref = datetime.now()
         delta = ref - dt
         
-        # Less than an hour
-        if delta.total_seconds() < 3600:
-            mins = int(delta.total_seconds() / 60)
-            if mins == 0:
-                return "now"
-            elif mins == 1:
-                return "1m"
-            else:
-                return f"{mins}m"
-        
-        # Today - just time
-        if dt.date() == ref.date():
+        if delta.total_seconds() < 60:
+            return "now"
+        elif delta.total_seconds() < 3600:
+            return f"{int(delta.total_seconds()/60)}m"
+        elif dt.date() == ref.date():
             return dt.strftime("%H:%M")
-        
-        # Yesterday
-        if delta.days == 1:
+        elif delta.days == 1:
             return f"y{dt.strftime('%H:%M')}"
-        
-        # This week - days
-        if delta.days < 7:
+        elif delta.days < 7:
             return f"{delta.days}d"
-        
-        # This month
-        if delta.days < 30:
+        elif delta.days < 30:
             return dt.strftime("%m/%d")
-        
-        # Older
-        return dt.strftime("%m/%d")
+        else:
+            return dt.strftime("%m/%d")
     except:
         return ""
 
@@ -147,17 +131,14 @@ def smart_truncate(text: str, max_chars: int) -> str:
     if len(text) <= max_chars:
         return text
     
-    # Auto-detect code vs prose
-    code_indicators = ['```', 'def ', 'class ', 'function', '#!/', 'import ', '{', '}', '();', '    ']
+    code_indicators = ['```', 'def ', 'class ', 'function', 'import ', '{', '}']
     is_code = any(indicator in text[:200] for indicator in code_indicators)
     
     if is_code and max_chars > 100:
-        # For code: show beginning and end
         start_chars = int(max_chars * 0.65)
         end_chars = max_chars - start_chars - 5
         return text[:start_chars] + "\n...\n" + text[-end_chars:]
     else:
-        # For prose: prioritize beginning with clean cutoff
         cutoff = text.rfind(' ', 0, max_chars - 3)
         if cutoff == -1 or cutoff < max_chars * 0.8:
             cutoff = max_chars - 3
@@ -181,8 +162,8 @@ def format_duration(start_time: str, end_time: str = None) -> str:
     except:
         return ""
 
-def get_project_paths(project: str = None) -> tuple:
-    """Get paths for a specific project"""
+def get_project_db_path(project: str = None) -> Path:
+    """Get database path for a specific project"""
     if project is None:
         project = DEFAULT_PROJECT
     
@@ -193,265 +174,171 @@ def get_project_paths(project: str = None) -> tuple:
     data_dir = BASE_DIR / f"teambook_{project}_data"
     data_dir.mkdir(parents=True, exist_ok=True)
     
-    return (
-        data_dir,
-        data_dir / "teambook.json",
-        data_dir / "archive.json",
-        data_dir / "last_id.json",
-        project
-    )
+    return data_dir / "teambook.db"
 
-def migrate_v1_to_v2(entry: Dict, author_map: Dict) -> Dict:
-    """Migrate v1 entry format to v2 optimized format"""
-    # Get or create author ID
-    author = entry.get("author", entry.get("created_by", "Unknown"))
-    if author not in author_map['reverse']:
-        author_id = f"a{len(author_map['authors']) + 1}"
-        author_map['authors'][author_id] = author
-        author_map['reverse'][author] = author_id
-    else:
-        author_id = author_map['reverse'][author]
+def init_db(project: str = None) -> sqlite3.Connection:
+    """Initialize SQLite database for a project"""
+    db_path = get_project_db_path(project)
+    conn = sqlite3.connect(str(db_path))
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA foreign_keys=ON")
     
-    # Build optimized entry
-    optimized = {
-        "id": entry.get("id"),
-        "c": entry.get("content", entry.get("c", "")),
-        "t": TYPE_MAP.get(entry.get("type", "note"), entry.get("t", "n")),
-        "a": author_id,
-        "ts": entry.get("created", entry.get("ts", ""))[:19]  # Truncate microseconds
-    }
+    # Main entries table
+    conn.execute('''
+        CREATE TABLE IF NOT EXISTS entries (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            content TEXT NOT NULL,
+            type TEXT NOT NULL CHECK(type IN ('task', 'note', 'decision')),
+            author TEXT NOT NULL,
+            created TEXT NOT NULL,
+            priority TEXT,
+            claimed_by TEXT,
+            claimed_at TEXT,
+            completed_at TEXT,
+            completed_by TEXT,
+            evidence TEXT,
+            archived_at TEXT,
+            archived_by TEXT,
+            archive_reason TEXT,
+            linked_items TEXT
+        )
+    ''')
     
-    # Add optional fields only if present
-    if entry.get("pri"):
-        optimized["p"] = entry["pri"]
-    elif entry.get("priority"):
-        optimized["p"] = entry["priority"]
+    # Full-text search
+    conn.execute('''
+        CREATE VIRTUAL TABLE IF NOT EXISTS entries_fts 
+        USING fts5(content, content=entries, content_rowid=id)
+    ''')
     
-    # Task-specific fields
-    if optimized["t"] == "t":  # task
-        if entry.get("claimed_by"):
-            claimer = entry["claimed_by"]
-            if claimer not in author_map['reverse']:
-                claimer_id = f"a{len(author_map['authors']) + 1}"
-                author_map['authors'][claimer_id] = claimer
-                author_map['reverse'][claimer] = claimer_id
-            else:
-                claimer_id = author_map['reverse'][claimer]
-            optimized["cb"] = claimer_id
-            
-        if entry.get("claimed_at"):
-            optimized["ca"] = entry["claimed_at"][:19]
-            
-        if entry.get("completed_at"):
-            optimized["co"] = entry["completed_at"][:19]
-            
-        if entry.get("completed_by"):
-            completer = entry["completed_by"]
-            if completer not in author_map['reverse']:
-                completer_id = f"a{len(author_map['authors']) + 1}"
-                author_map['authors'][completer_id] = completer
-                author_map['reverse'][completer] = completer_id
-            else:
-                completer_id = author_map['reverse'][completer]
-            optimized["cob"] = completer_id
-            
-        if entry.get("evidence"):
-            optimized["e"] = entry["evidence"]
+    # Trigger to keep FTS in sync
+    conn.execute('''
+        CREATE TRIGGER IF NOT EXISTS entries_ai 
+        AFTER INSERT ON entries BEGIN
+            INSERT INTO entries_fts(rowid, content) VALUES (new.id, new.content);
+        END
+    ''')
     
-    # Comments
-    if entry.get("comments"):
-        optimized["cm"] = []
-        for comment in entry["comments"]:
-            comment_author = comment.get("author", "Unknown")
-            if comment_author not in author_map['reverse']:
-                comment_author_id = f"a{len(author_map['authors']) + 1}"
-                author_map['authors'][comment_author_id] = comment_author
-                author_map['reverse'][comment_author] = comment_author_id
-            else:
-                comment_author_id = author_map['reverse'][comment_author]
-            
-            optimized["cm"].append({
-                "a": comment_author_id,
-                "c": comment["content"],
-                "ts": comment.get("created", "")[:19]
-            })
+    # Comments table
+    conn.execute('''
+        CREATE TABLE IF NOT EXISTS comments (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            entry_id INTEGER NOT NULL,
+            author TEXT NOT NULL,
+            content TEXT NOT NULL,
+            created TEXT NOT NULL,
+            FOREIGN KEY(entry_id) REFERENCES entries(id)
+        )
+    ''')
     
-    # Archive fields
-    if entry.get("archived_at"):
-        optimized["ar"] = entry["archived_at"][:19]
-        
-    if entry.get("archived_by"):
-        archiver = entry["archived_by"]
-        if archiver not in author_map['reverse']:
-            archiver_id = f"a{len(author_map['authors']) + 1}"
-            author_map['authors'][archiver_id] = archiver
-            author_map['reverse'][archiver] = archiver_id
-        else:
-            archiver_id = author_map['reverse'][archiver]
-        optimized["arb"] = archiver_id
-        
-    if entry.get("archive_reason"):
-        optimized["arr"] = entry["archive_reason"]
+    # Stats table
+    conn.execute('''
+        CREATE TABLE IF NOT EXISTS stats (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            operation TEXT NOT NULL,
+            timestamp TEXT NOT NULL,
+            duration_ms INTEGER,
+            author TEXT
+        )
+    ''')
     
-    return optimized
+    # Indices for performance
+    conn.execute('CREATE INDEX IF NOT EXISTS idx_entries_created ON entries(created DESC)')
+    conn.execute('CREATE INDEX IF NOT EXISTS idx_entries_type ON entries(type)')
+    conn.execute('CREATE INDEX IF NOT EXISTS idx_entries_archived ON entries(archived_at)')
+    conn.execute('CREATE INDEX IF NOT EXISTS idx_comments_entry ON comments(entry_id)')
+    
+    conn.commit()
+    return conn
 
-def expand_v2_entry(entry: Dict, author_map: Dict) -> Dict:
-    """Expand v2 optimized entry for internal use"""
-    expanded = {
-        "id": entry["id"],
-        "content": entry["c"],
-        "type": TYPE_REVERSE.get(entry["t"], "note"),
-        "author": author_map.get(entry["a"], entry.get("a", "Unknown")),
-        "created": entry["ts"]
-    }
+def migrate_from_json(project: str = None):
+    """Migrate from v2 JSON to v3 SQLite"""
+    if project is None:
+        project = DEFAULT_PROJECT
     
-    # Optional fields
-    if "p" in entry:
-        expanded["pri"] = entry["p"]
+    # Get paths
+    project_clean = str(project).strip().lower()
+    project_clean = ''.join(c if c.isalnum() or c in '-_' else '_' for c in project_clean)
     
-    # Task fields
-    if "cb" in entry:
-        expanded["claimed_by"] = author_map.get(entry["cb"], entry["cb"])
-    if "ca" in entry:
-        expanded["claimed_at"] = entry["ca"]
-    if "co" in entry:
-        expanded["completed_at"] = entry["co"]
-    if "cob" in entry:
-        expanded["completed_by"] = author_map.get(entry["cob"], entry["cob"])
-    if "e" in entry:
-        expanded["evidence"] = entry["e"]
+    old_data_dir = BASE_DIR / f"teambook_{project_clean}_data"
+    old_json_file = old_data_dir / "teambook.json"
+    db_path = get_project_db_path(project)
     
-    # Comments
-    if "cm" in entry:
-        expanded["comments"] = []
-        for comment in entry["cm"]:
-            expanded["comments"].append({
-                "author": author_map.get(comment["a"], comment["a"]),
-                "content": comment["c"],
-                "created": comment["ts"]
-            })
+    if not old_json_file.exists() or db_path.exists():
+        return
     
-    # Archive fields
-    if "ar" in entry:
-        expanded["archived_at"] = entry["ar"]
-    if "arb" in entry:
-        expanded["archived_by"] = author_map.get(entry["arb"], entry["arb"])
-    if "arr" in entry:
-        expanded["archive_reason"] = entry["arr"]
-    
-    return expanded
-
-def load_project_data(project: str = None) -> Tuple[Dict, List, int, Dict]:
-    """Load entries for a specific project with v1->v2 migration"""
-    data_dir, data_file, archive_file, id_file, project_name = get_project_paths(project)
-    
-    entries = {}
-    archive = []
-    last_id = 0
-    author_map = {"authors": {}, "reverse": {}}
+    logging.info(f"Migrating project '{project}' from JSON to SQLite...")
     
     try:
-        # Load ID
-        if id_file.exists():
-            with open(id_file, 'r') as f:
-                data = json.load(f)
-                last_id = data.get("last_id", 0)
-        else:
-            last_id = random.randint(100, 999)
+        with open(old_json_file, 'r', encoding='utf-8') as f:
+            data = json.load(f)
         
-        # Load entries
-        if data_file.exists():
-            with open(data_file, 'r', encoding='utf-8') as f:
-                data = json.load(f)
-                
-                # Check version
-                file_version = data.get("v", "1.0.0")
-                
-                if file_version.startswith("2"):
-                    # V2 format - load author map and entries
-                    author_map["authors"] = data.get("authors", {})
-                    author_map["reverse"] = {v: k for k, v in author_map["authors"].items()}
-                    
-                    loaded_entries = data.get("entries", {})
-                    for eid, entry in loaded_entries.items():
-                        expanded = expand_v2_entry(entry, author_map["authors"])
-                        entries[int(eid)] = expanded
-                else:
-                    # V1 format - migrate
-                    logging.info(f"Migrating {project_name} from v1 to v2 format")
-                    loaded_entries = data.get("entries", {})
-                    for eid, entry in loaded_entries.items():
-                        migrated = migrate_v1_to_v2(entry, author_map)
-                        expanded = expand_v2_entry(migrated, author_map["authors"])
-                        entries[int(eid)] = expanded
-                
-                entries = dict(sorted(entries.items())[-MAX_ENTRIES:])
+        conn = init_db(project)
         
-        # Load archive (keep simple for now)
-        if archive_file.exists():
-            try:
-                with open(archive_file, 'r', encoding='utf-8') as f:
-                    archive_data = json.load(f)
-                    archive = archive_data.get("archive", [])[-10000:]
-            except:
-                archive = []
-                
-    except Exception as e:
-        logging.error(f"Error loading project {project_name}: {e}")
-    
-    return entries, archive, last_id, author_map
-
-def save_project_data(entries: dict, archive: list, last_id: int, author_map: Dict, project: str = None) -> bool:
-    """Save entries in v2 optimized format"""
-    data_dir, data_file, archive_file, id_file, project_name = get_project_paths(project)
-    
-    try:
-        # Save last ID
-        with open(id_file, 'w') as f:
-            json.dump({"last_id": last_id}, f)
+        # Get author map for deduplication
+        authors = data.get("authors", {})
+        entries_data = data.get("entries", {})
         
-        # Convert entries back to optimized format
-        optimized_entries = {}
-        for eid, entry in entries.items():
-            # Ensure current AI is in author map
-            if CURRENT_AI_ID not in author_map['reverse']:
-                author_id = f"a{len(author_map['authors']) + 1}"
-                author_map['authors'][author_id] = CURRENT_AI_ID
-                author_map['reverse'][CURRENT_AI_ID] = author_id
+        for eid, entry in entries_data.items():
+            # Expand author IDs
+            author = authors.get(entry.get("a"), entry.get("a", "Unknown"))
             
-            # Convert expanded entry back to optimized
-            optimized = migrate_v1_to_v2(entry, author_map)
-            optimized_entries[str(eid)] = optimized
+            # Convert type shorthand
+            type_map = {'t': 'task', 'n': 'note', 'd': 'decision'}
+            entry_type = type_map.get(entry.get("t"), "note")
+            
+            # Insert main entry
+            conn.execute('''
+                INSERT INTO entries (
+                    id, content, type, author, created, priority,
+                    claimed_by, claimed_at, completed_at, completed_by,
+                    evidence, archived_at, archived_by, archive_reason
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (
+                int(eid),
+                entry.get("c", ""),
+                entry_type,
+                author,
+                entry.get("ts", datetime.now().isoformat()),
+                entry.get("p"),
+                authors.get(entry.get("cb"), entry.get("cb")),
+                entry.get("ca"),
+                entry.get("co"),
+                authors.get(entry.get("cob"), entry.get("cob")),
+                entry.get("e"),
+                entry.get("ar"),
+                authors.get(entry.get("arb"), entry.get("arb")),
+                entry.get("arr")
+            ))
+            
+            # Migrate comments
+            if "cm" in entry:
+                for comment in entry["cm"]:
+                    comment_author = authors.get(comment.get("a"), comment.get("a", "Unknown"))
+                    conn.execute('''
+                        INSERT INTO comments (entry_id, author, content, created)
+                        VALUES (?, ?, ?, ?)
+                    ''', (int(eid), comment_author, comment.get("c", ""), comment.get("ts", "")))
         
-        # Save entries with author map
-        data = {
-            "v": VERSION,
-            "authors": author_map['authors'],
-            "entries": optimized_entries,
-            "saved": datetime.now().isoformat(timespec='seconds')
-        }
+        conn.commit()
+        conn.close()
         
-        temp_file = data_file.with_suffix('.tmp')
-        with open(temp_file, 'w', encoding='utf-8') as f:
-            json.dump(data, f, separators=(',', ':'), ensure_ascii=False)
-        temp_file.replace(data_file)
+        # Rename old file to backup
+        old_json_file.rename(old_json_file.with_suffix('.json.backup'))
+        logging.info(f"Migrated {len(entries_data)} entries to SQLite")
         
-        # Save archive if exists
-        if archive:
-            archive_data = {
-                "v": VERSION,
-                "archive": archive[-10000:],
-                "saved": datetime.now().isoformat(timespec='seconds')
-            }
-            archive_temp = archive_file.with_suffix('.tmp')
-            with open(archive_temp, 'w', encoding='utf-8') as f:
-                json.dump(archive_data, f, separators=(',', ':'), ensure_ascii=False)
-            archive_temp.replace(archive_file)
-        
-        return True
     except Exception as e:
-        logging.error(f"Failed to save project {project_name}: {e}")
-        return False
+        logging.error(f"Migration failed: {e}")
+
+def log_operation(operation: str, duration_ms: int = None, project: str = None):
+    """Log operation for stats"""
+    try:
+        with sqlite3.connect(str(get_project_db_path(project))) as conn:
+            conn.execute(
+                'INSERT INTO stats (operation, timestamp, duration_ms, author) VALUES (?, ?, ?, ?)',
+                (operation, datetime.now().isoformat(), duration_ms, CURRENT_AI_ID)
+            )
+    except:
+        pass
 
 def detect_type_and_priority(content: str) -> tuple:
     """Auto-detect entry type and priority from content"""
@@ -468,44 +355,26 @@ def detect_type_and_priority(content: str) -> tuple:
     # Detect priority (only for tasks)
     priority = None
     if entry_type == "task":
-        if any(word in content_lower for word in ['urgent', 'asap', 'critical', 'important', 'high priority']):
+        if any(word in content_lower for word in ['urgent', 'asap', 'critical', 'important']):
             priority = "!"
-        elif any(word in content_lower for word in ['low priority', 'whenever', 'maybe', 'someday']):
+        elif any(word in content_lower for word in ['low priority', 'whenever', 'maybe']):
             priority = "↓"
     
     return entry_type, priority
 
-def format_task_line(task: Dict) -> str:
-    """Format a task for display"""
-    tid = task['id']
-    priority = task.get('pri', '')
-    content = smart_truncate(task['content'], 60)
-    
-    if task.get('claimed_by'):
-        claim_time = format_time_contextual(task.get('claimed_at', ''))
-        comment_count = len(task.get('comments', []))
-        comment_str = f" [{comment_count}c]" if comment_count else ""
-        return f"[{tid}]{priority} {content} @{task['claimed_by']}({claim_time}){comment_str}"
-    else:
-        time_str = format_time_contextual(task['created'])
-        return f"[{tid}]{priority} {content} @{time_str}"
-
-def write(content: str = None, type: str = None, priority: str = None, project: str = None, **kwargs) -> Dict:
+def write(content: str = None, type: str = None, priority: str = None, 
+          project: str = None, linked_items: List[str] = None, **kwargs) -> Dict:
     """Share anything with the team"""
     try:
+        start = datetime.now()
+        
         if content is None:
             content = kwargs.get('content', '')
-        if project is None:
-            project = kwargs.get('project')
         
         content = str(content).strip()
         if not content:
             return {"error": "Need content to write"}
         
-        # Load project data
-        entries, archive, last_id, author_map = load_project_data(project)
-        
-        # Truncate if needed
         if len(content) > MAX_CONTENT_LENGTH:
             content = smart_truncate(content, MAX_CONTENT_LENGTH)
         
@@ -517,184 +386,154 @@ def write(content: str = None, type: str = None, priority: str = None, project: 
             if priority is None and type == "task":
                 priority = detected_priority
         
-        # Generate entry
-        entry_id = last_id + 1
-        entry = {
-            "id": entry_id,
-            "content": content,
-            "type": type,
-            "author": CURRENT_AI_ID,
-            "created": datetime.now().isoformat(timespec='seconds')
-        }
+        # Store in database
+        with sqlite3.connect(str(get_project_db_path(project))) as conn:
+            cursor = conn.execute('''
+                INSERT INTO entries (content, type, author, created, priority, linked_items)
+                VALUES (?, ?, ?, ?, ?, ?)
+            ''', (content, type, CURRENT_AI_ID, datetime.now().isoformat(), priority,
+                  json.dumps(linked_items) if linked_items else None))
+            entry_id = cursor.lastrowid
         
-        # Add priority if not normal
-        if priority:
-            entry["pri"] = priority
-        
-        # Add task fields if task
-        if type == "task":
-            entry["claimed_by"] = None
-            entry["claimed_at"] = None
-            entry["completed_at"] = None
-        
-        entries[entry_id] = entry
-        save_project_data(entries, archive, entry_id, author_map, project)
+        # Log operation
+        duration = int((datetime.now() - start).total_seconds() * 1000)
+        log_operation('write', duration, project)
         
         # Format response
-        type_marker = ""
-        if type == "task":
-            type_marker = "TODO"
-        elif type == "decision":
-            type_marker = "DECISION"
-        else:
-            type_marker = "NOTE"
-        
+        type_marker = type.upper()
         priority_str = priority if priority else ""
         preview = smart_truncate(content, 80)
         
-        return {"created": f"[{entry_id}]{priority_str} {type_marker}: {preview} (by {CURRENT_AI_ID})"}
+        return {"created": f"[{entry_id}]{priority_str} {type_marker}: {preview}"}
         
     except Exception as e:
         logging.error(f"Error in write: {e}")
         return {"error": "Failed to write"}
 
-def read(query: str = None, type: str = None, status: str = "pending", 
-         claimed_by: str = None, project: str = None, **kwargs) -> Dict:
-    """View team activity with smart filtering"""
+def read(query: str = None, type: str = None, status: str = "pending",
+         claimed_by: str = None, full: bool = False, project: str = None, **kwargs) -> Dict:
+    """View team activity - summary by default, full with parameter"""
     try:
-        # Handle parameters
-        if query is None:
-            query = kwargs.get('query')
-        if type is None:
-            type = kwargs.get('type')
-        if status is None:
-            status = kwargs.get('status', 'pending')
-        if claimed_by is None:
-            claimed_by = kwargs.get('claimed_by')
-        if project is None:
-            project = kwargs.get('project')
+        start = datetime.now()
         
-        # Load project data
-        entries, _, _, _ = load_project_data(project)
-        
-        # Filter entries
-        filtered = []
-        for eid, entry in entries.items():
-            # Skip archived
-            if entry.get('archived_at'):
-                continue
+        with sqlite3.connect(str(get_project_db_path(project))) as conn:
+            conn.row_factory = sqlite3.Row
             
-            # Type filter
-            if type and entry.get('type') != type:
-                continue
+            # Build query
+            conditions = ["archived_at IS NULL"]
+            params = []
             
-            # Status filter (for tasks)
-            if entry.get('type') == 'task':
-                is_completed = bool(entry.get('completed_at'))
-                if status == 'pending' and is_completed:
-                    continue
-                elif status == 'completed' and not is_completed:
-                    continue
-                # 'all' shows everything
+            if type:
+                conditions.append("type = ?")
+                params.append(type)
             
-            # Claimed filter (for tasks)
-            if claimed_by is not None and entry.get('type') == 'task':
-                if claimed_by == 'me' and entry.get('claimed_by') != CURRENT_AI_ID:
-                    continue
-                elif claimed_by == 'unclaimed' and entry.get('claimed_by'):
-                    continue
-                elif claimed_by not in ['me', 'unclaimed'] and entry.get('claimed_by') != claimed_by:
-                    continue
+            if type == 'task' or not type:
+                if status == 'pending':
+                    conditions.append("(type != 'task' OR completed_at IS NULL)")
+                elif status == 'completed':
+                    conditions.append("(type != 'task' OR completed_at IS NOT NULL)")
             
-            # Query filter
-            if query and query.lower() not in entry.get('content', '').lower():
-                continue
+            if claimed_by == 'me':
+                conditions.append("claimed_by = ?")
+                params.append(CURRENT_AI_ID)
+            elif claimed_by == 'unclaimed':
+                conditions.append("claimed_by IS NULL")
+            elif claimed_by:
+                conditions.append("claimed_by = ?")
+                params.append(claimed_by)
             
-            filtered.append(entry)
-        
-        # Sort by creation time (newest first for notes, oldest first for tasks)
-        if type == 'task':
-            filtered.sort(key=lambda e: (
-                0 if e.get('pri') == '!' else (2 if e.get('pri') == '↓' else 1),
-                e.get('created', '')
-            ))
-        else:
-            filtered.sort(key=lambda e: e.get('created', ''), reverse=True)
-        
-        # Build output
-        lines = []
-        shown = 0
-        max_show = 20
-        
-        for entry in filtered:
-            if shown >= max_show:
-                lines.append(f"+{len(filtered)-shown} more")
-                break
-            
-            # Format entry line
-            eid = entry['id']
-            content_preview = smart_truncate(entry['content'], 100)
-            time_str = format_time_contextual(entry['created'])
-            author = entry.get('author', 'Unknown')
-            
-            # Type-specific formatting
-            if entry['type'] == 'task':
-                priority = entry.get('pri', '')
-                if entry.get('completed_at'):
-                    duration = format_duration(entry.get('claimed_at', entry['created']), entry['completed_at'])
-                    evidence = ""
-                    if entry.get('evidence'):
-                        evidence = f" - {smart_truncate(entry['evidence'], 40)}"
-                    lines.append(f"[{eid}]✓ {content_preview}{evidence} @{time_str}({duration})")
-                elif entry.get('claimed_by'):
-                    claimer = entry['claimed_by']
-                    claim_time = format_time_contextual(entry.get('claimed_at', ''))
-                    comment_count = len(entry.get('comments', []))
-                    comment_str = f" [{comment_count}c]" if comment_count else ""
-                    lines.append(f"[{eid}]{priority} {content_preview} @{claimer}({claim_time}){comment_str}")
-                else:
-                    lines.append(f"[{eid}]{priority} {content_preview} @{time_str}")
-            elif entry['type'] == 'decision':
-                lines.append(f"[D{eid}] {content_preview} @{author} {time_str}")
+            if query:
+                # Use FTS for search
+                cursor = conn.execute(f'''
+                    SELECT e.* FROM entries e
+                    JOIN entries_fts ON e.id = entries_fts.rowid
+                    WHERE entries_fts MATCH ? AND {' AND '.join(conditions)}
+                    ORDER BY 
+                        CASE WHEN e.priority = '!' THEN 0
+                             WHEN e.priority = '↓' THEN 2
+                             ELSE 1 END,
+                        e.created DESC
+                    LIMIT 50
+                ''', [query] + params)
             else:
-                comment_count = len(entry.get('comments', []))
-                comment_str = f" [{comment_count}c]" if comment_count else ""
-                lines.append(f"[N{eid}] {content_preview} @{author} {time_str}{comment_str}")
+                cursor = conn.execute(f'''
+                    SELECT * FROM entries
+                    WHERE {' AND '.join(conditions)}
+                    ORDER BY 
+                        CASE WHEN priority = '!' THEN 0
+                             WHEN priority = '↓' THEN 2
+                             ELSE 1 END,
+                        created DESC
+                    LIMIT 50
+                ''', params)
             
-            shown += 1
+            entries = cursor.fetchall()
         
-        if not lines:
+        if not entries:
             if type == 'task' and status == 'pending':
                 return {"msg": "No pending tasks", "tip": "write('TODO: description')"}
-            elif type == 'task' and status == 'completed':
-                return {"msg": "No completed tasks"}
             else:
                 return {"msg": "No entries found"}
         
-        # Summary
-        task_counts = {
-            'pending': len([e for e in entries.values() if e.get('type') == 'task' and not e.get('completed_at') and not e.get('archived_at')]),
-            'claimed': len([e for e in entries.values() if e.get('type') == 'task' and e.get('claimed_by') and not e.get('completed_at') and not e.get('archived_at')]),
-            'completed': len([e for e in entries.values() if e.get('type') == 'task' and e.get('completed_at') and not e.get('archived_at')])
-        }
-        note_count = len([e for e in entries.values() if e.get('type') == 'note' and not e.get('archived_at')])
-        decision_count = len([e for e in entries.values() if e.get('type') == 'decision' and not e.get('archived_at')])
+        # Summary mode (default)
+        if not full:
+            # Count by type and status
+            tasks_pending = sum(1 for e in entries if e['type'] == 'task' and not e['completed_at'])
+            tasks_claimed = sum(1 for e in entries if e['type'] == 'task' and e['claimed_by'] and not e['completed_at'])
+            tasks_done = sum(1 for e in entries if e['type'] == 'task' and e['completed_at'])
+            notes = sum(1 for e in entries if e['type'] == 'note')
+            decisions = sum(1 for e in entries if e['type'] == 'decision')
+            
+            summary_parts = []
+            if tasks_pending > 0:
+                summary_parts.append(f"{tasks_pending} tasks ({tasks_claimed} claimed)")
+            if tasks_done > 0:
+                summary_parts.append(f"{tasks_done} done")
+            if notes > 0:
+                summary_parts.append(f"{notes} notes")
+            if decisions > 0:
+                summary_parts.append(f"{decisions} decisions")
+            
+            if query:
+                return {"summary": f"{len(entries)} matches for '{query}': " + " | ".join(summary_parts)}
+            else:
+                return {"summary": " | ".join(summary_parts) if summary_parts else "Empty"}
         
-        summary_parts = [f"You: {CURRENT_AI_ID}"]
-        if task_counts['pending'] > 0:
-            summary_parts.append(f"{task_counts['pending']} tasks ({task_counts['claimed']} claimed)")
-        if note_count > 0:
-            summary_parts.append(f"{note_count} notes")
-        if decision_count > 0:
-            summary_parts.append(f"{decision_count} decisions")
+        # Full mode
+        lines = []
+        for entry in entries[:20]:
+            eid = entry['id']
+            content_preview = smart_truncate(entry['content'], 100)
+            time_str = format_time_contextual(entry['created'])
+            
+            if entry['type'] == 'task':
+                priority = entry['priority'] or ''
+                if entry['completed_at']:
+                    duration = format_duration(entry['claimed_at'] or entry['created'], entry['completed_at'])
+                    evidence = f" - {smart_truncate(entry['evidence'], 40)}" if entry['evidence'] else ""
+                    lines.append(f"[{eid}]✓ {content_preview}{evidence} ({duration})")
+                elif entry['claimed_by']:
+                    claimer = entry['claimed_by'] if entry['claimed_by'] != CURRENT_AI_ID else ""
+                    claim_time = format_time_contextual(entry['claimed_at'])
+                    claimer_str = f" @{claimer}" if claimer else ""
+                    lines.append(f"[{eid}]{priority} {content_preview}{claimer_str} ({claim_time})")
+                else:
+                    lines.append(f"[{eid}]{priority} {content_preview} @{time_str}")
+            elif entry['type'] == 'decision':
+                author = f"@{entry['author']}" if entry['author'] != CURRENT_AI_ID else ""
+                lines.append(f"[D{eid}] {content_preview} {author} {time_str}")
+            else:
+                author = f"@{entry['author']}" if entry['author'] != CURRENT_AI_ID else ""
+                lines.append(f"[N{eid}] {content_preview} {author} {time_str}")
         
-        _, _, _, _, project_name = get_project_paths(project)
-        summary_parts.append(f"[{project_name}]")
+        if len(entries) > 20:
+            lines.append(f"+{len(entries)-20} more")
         
-        return {
-            "summary": " | ".join(summary_parts) if summary_parts else "Empty",
-            "entries": lines
-        }
+        # Log operation
+        duration = int((datetime.now() - start).total_seconds() * 1000)
+        log_operation('read', duration, project)
+        
+        return {"entries": lines}
         
     except Exception as e:
         logging.error(f"Error in read: {e}")
@@ -705,47 +544,43 @@ def get(id: int = None, project: str = None, **kwargs) -> Dict:
     try:
         if id is None:
             id = kwargs.get('id')
-        if project is None:
-            project = kwargs.get('project')
         
         # Handle string IDs
         if isinstance(id, str):
             id = id.strip().strip('[]').strip()
-            # Remove type prefixes if present
             if id.startswith('D') or id.startswith('N'):
                 id = id[1:]
+        id = int(id)
         
-        try:
-            id = int(id)
-        except:
-            return {"error": f"Invalid ID: '{id}'"}
+        with sqlite3.connect(str(get_project_db_path(project))) as conn:
+            conn.row_factory = sqlite3.Row
+            
+            # Get entry
+            entry = conn.execute('SELECT * FROM entries WHERE id = ?', (id,)).fetchone()
+            if not entry:
+                return {"error": f"Entry [{id}] not found"}
+            
+            # Get comments
+            comments = conn.execute(
+                'SELECT * FROM comments WHERE entry_id = ? ORDER BY created',
+                (id,)
+            ).fetchall()
         
-        # Load project data
-        entries, _, _, _ = load_project_data(project)
-        
-        if id not in entries:
-            available = list(entries.keys())[-5:]
-            return {
-                "error": f"Entry [{id}] not found",
-                "available": [f"[{eid}]" for eid in available] if available else ["No entries yet"]
-            }
-        
-        entry = entries[id]
-        
-        # Build full output
+        # Build output
         lines = []
         
         # Header
         type_str = entry['type'].upper()
-        priority = entry.get('pri', '')
+        priority = entry['priority'] or ''
         time_str = format_time_contextual(entry['created'])
-        author = entry.get('author', 'Unknown')
+        author = entry['author'] if entry['author'] != CURRENT_AI_ID else "you"
         
         if entry['type'] == 'task':
-            if entry.get('completed_at'):
+            if entry['completed_at']:
                 lines.append(f"[{id}]✓ {type_str} by {author} @{time_str} (completed)")
-            elif entry.get('claimed_by'):
-                lines.append(f"[{id}]{priority} {type_str} by {author} @{time_str} (claimed by {entry['claimed_by']})")
+            elif entry['claimed_by']:
+                claimer = entry['claimed_by'] if entry['claimed_by'] != CURRENT_AI_ID else "you"
+                lines.append(f"[{id}]{priority} {type_str} by {author} @{time_str} (claimed by {claimer})")
             else:
                 lines.append(f"[{id}]{priority} {type_str} by {author} @{time_str} (unclaimed)")
         else:
@@ -755,20 +590,18 @@ def get(id: int = None, project: str = None, **kwargs) -> Dict:
         lines.append(entry['content'])
         
         # Evidence if completed
-        if entry.get('evidence'):
+        if entry['evidence']:
             lines.append("---")
             lines.append(f"Evidence: {entry['evidence']}")
         
         # Comments
-        comments = entry.get('comments', [])
         if comments:
             lines.append("---")
             lines.append(f"Comments ({len(comments)}):")
             for comment in comments:
-                comment_author = comment.get('author', 'Unknown')
-                comment_time = format_time_contextual(comment.get('created'))
-                comment_text = comment.get('content', '')
-                lines.append(f"  {comment_author}@{comment_time}: {comment_text}")
+                comment_author = comment['author'] if comment['author'] != CURRENT_AI_ID else "you"
+                comment_time = format_time_contextual(comment['created'])
+                lines.append(f"  {comment_author}@{comment_time}: {comment['content']}")
         
         return {"entry": lines}
         
@@ -783,19 +616,13 @@ def comment(id: int = None, content: str = None, project: str = None, **kwargs) 
             id = kwargs.get('id')
         if content is None:
             content = kwargs.get('content', '')
-        if project is None:
-            project = kwargs.get('project')
         
         # Parse ID
         if isinstance(id, str):
             id = id.strip().strip('[]').strip()
             if id.startswith('D') or id.startswith('N'):
                 id = id[1:]
-        
-        try:
-            id = int(id)
-        except:
-            return {"error": f"Invalid ID: '{id}'"}
+        id = int(id)
         
         content = str(content).strip()
         if not content:
@@ -804,29 +631,20 @@ def comment(id: int = None, content: str = None, project: str = None, **kwargs) 
         if len(content) > MAX_COMMENT_LENGTH:
             content = smart_truncate(content, MAX_COMMENT_LENGTH)
         
-        # Load project data
-        entries, archive, last_id, author_map = load_project_data(project)
-        
-        if id not in entries:
-            return {"error": f"Entry [{id}] not found"}
-        
-        entry = entries[id]
-        
-        # Add comment
-        if 'comments' not in entry:
-            entry['comments'] = []
-        
-        comment_data = {
-            "author": CURRENT_AI_ID,
-            "content": content,
-            "created": datetime.now().isoformat(timespec='seconds')
-        }
-        
-        entry['comments'].append(comment_data)
-        save_project_data(entries, archive, last_id, author_map, project)
+        with sqlite3.connect(str(get_project_db_path(project))) as conn:
+            # Check entry exists
+            entry = conn.execute('SELECT id FROM entries WHERE id = ?', (id,)).fetchone()
+            if not entry:
+                return {"error": f"Entry [{id}] not found"}
+            
+            # Add comment
+            conn.execute('''
+                INSERT INTO comments (entry_id, author, content, created)
+                VALUES (?, ?, ?, ?)
+            ''', (id, CURRENT_AI_ID, content, datetime.now().isoformat()))
         
         preview = smart_truncate(content, 60)
-        return {"commented": f"[{id}] +comment by {CURRENT_AI_ID}: {preview}"}
+        return {"commented": f"[{id}] +comment: {preview}"}
         
     except Exception as e:
         logging.error(f"Error in comment: {e}")
@@ -837,46 +655,44 @@ def claim(id: int = None, project: str = None, **kwargs) -> Dict:
     try:
         if id is None:
             id = kwargs.get('id')
-        if project is None:
-            project = kwargs.get('project')
         
-        # Parse ID
         if isinstance(id, str):
             id = id.strip().strip('[]').strip()
-        
-        try:
-            id = int(id)
-        except:
-            return {"error": f"Invalid ID: '{id}'"}
+        id = int(id)
         
         with lock:  # Atomic operation
-            # Load project data inside lock
-            entries, archive, last_id, author_map = load_project_data(project)
-            
-            if id not in entries:
-                return {"error": f"Task [{id}] not found"}
-            
-            entry = entries[id]
-            
-            if entry.get('type') != 'task':
-                return {"error": f"[{id}] is not a task"}
-            
-            if entry.get('claimed_by'):
-                return {"error": f"[{id}] already claimed by {entry['claimed_by']}"}
-            
-            if entry.get('completed_at'):
-                return {"error": f"[{id}] already completed"}
-            
-            if entry.get('archived_at'):
-                return {"error": f"[{id}] is archived"}
-            
-            # Claim the task
-            entry['claimed_by'] = CURRENT_AI_ID
-            entry['claimed_at'] = datetime.now().isoformat(timespec='seconds')
-            save_project_data(entries, archive, last_id, author_map, project)
-            
-            preview = smart_truncate(entry['content'], 60)
-            return {"claimed": f"[{id}] by {CURRENT_AI_ID}: {preview}"}
+            conn = sqlite3.connect(str(get_project_db_path(project)))
+            try:
+                conn.row_factory = sqlite3.Row
+                
+                # Check task
+                entry = conn.execute('SELECT * FROM entries WHERE id = ?', (id,)).fetchone()
+                
+                if not entry:
+                    return {"error": f"Task [{id}] not found"}
+                if entry['type'] != 'task':
+                    return {"error": f"[{id}] is not a task"}
+                if entry['claimed_by']:
+                    return {"error": f"[{id}] already claimed by {entry['claimed_by']}"}
+                if entry['completed_at']:
+                    return {"error": f"[{id}] already completed"}
+                if entry['archived_at']:
+                    return {"error": f"[{id}] is archived"}
+                
+                # Claim it
+                conn.execute('''
+                    UPDATE entries 
+                    SET claimed_by = ?, claimed_at = ?
+                    WHERE id = ?
+                ''', (CURRENT_AI_ID, datetime.now().isoformat(), id))
+                
+                conn.commit()
+                
+                preview = smart_truncate(entry['content'], 60)
+                return {"claimed": f"[{id}]: {preview}"}
+                
+            finally:
+                conn.close()
         
     except Exception as e:
         logging.error(f"Error in claim: {e}")
@@ -889,57 +705,47 @@ def complete(id: int = None, evidence: str = None, project: str = None, **kwargs
             id = kwargs.get('id')
         if evidence is None:
             evidence = kwargs.get('evidence')
-        if project is None:
-            project = kwargs.get('project')
         
-        # Parse ID
         if isinstance(id, str):
             id = id.strip().strip('[]').strip()
-        
-        try:
-            id = int(id)
-        except:
-            return {"error": f"Invalid ID: '{id}'"}
-        
-        # Load project data
-        entries, archive, last_id, author_map = load_project_data(project)
-        
-        if id not in entries:
-            return {"error": f"Task [{id}] not found"}
-        
-        entry = entries[id]
-        
-        if entry.get('type') != 'task':
-            return {"error": f"[{id}] is not a task"}
-        
-        if entry.get('completed_at'):
-            return {"error": f"[{id}] already completed @{format_time_contextual(entry['completed_at'])}"}
-        
-        if entry.get('archived_at'):
-            return {"error": f"[{id}] is archived"}
-        
-        # Complete the task
-        now = datetime.now()
-        entry['completed_at'] = now.isoformat(timespec='seconds')
-        entry['completed_by'] = CURRENT_AI_ID
+        id = int(id)
         
         if evidence:
             evidence = str(evidence).strip()
             if len(evidence) > MAX_EVIDENCE_LENGTH:
                 evidence = smart_truncate(evidence, MAX_EVIDENCE_LENGTH)
-            entry['evidence'] = evidence
         
-        # Calculate duration
-        start_time = entry.get('claimed_at', entry['created'])
-        duration = format_duration(start_time, now.isoformat())
-        
-        save_project_data(entries, archive, last_id, author_map, project)
-        
-        msg = f"[{id}]✓ by {CURRENT_AI_ID} in {duration}"
-        if evidence:
-            msg += f" - {smart_truncate(evidence, 50)}"
-        
-        return {"completed": msg}
+        with sqlite3.connect(str(get_project_db_path(project))) as conn:
+            conn.row_factory = sqlite3.Row
+            
+            # Check task
+            entry = conn.execute('SELECT * FROM entries WHERE id = ?', (id,)).fetchone()
+            
+            if not entry:
+                return {"error": f"Task [{id}] not found"}
+            if entry['type'] != 'task':
+                return {"error": f"[{id}] is not a task"}
+            if entry['completed_at']:
+                return {"error": f"[{id}] already completed"}
+            if entry['archived_at']:
+                return {"error": f"[{id}] is archived"}
+            
+            # Complete it
+            conn.execute('''
+                UPDATE entries 
+                SET completed_at = ?, completed_by = ?, evidence = ?
+                WHERE id = ?
+            ''', (datetime.now().isoformat(), CURRENT_AI_ID, evidence, id))
+            
+            # Calculate duration
+            start_time = entry['claimed_at'] or entry['created']
+            duration = format_duration(start_time, datetime.now().isoformat())
+            
+            msg = f"[{id}]✓ in {duration}"
+            if evidence:
+                msg += f" - {smart_truncate(evidence, 50)}"
+            
+            return {"completed": msg}
         
     except Exception as e:
         logging.error(f"Error in complete: {e}")
@@ -951,72 +757,63 @@ def update(id: int = None, content: str = None, type: str = None,
     try:
         if id is None:
             id = kwargs.get('id')
-        if content is None:
-            content = kwargs.get('content')
-        if type is None:
-            type = kwargs.get('type')
-        if priority is None:
-            priority = kwargs.get('priority')
-        if project is None:
-            project = kwargs.get('project')
         
-        # Parse ID
         if isinstance(id, str):
             id = id.strip().strip('[]').strip()
             if id.startswith('D') or id.startswith('N'):
                 id = id[1:]
+        id = int(id)
         
-        try:
-            id = int(id)
-        except:
-            return {"error": f"Invalid ID: '{id}'"}
-        
-        # Load project data
-        entries, archive, last_id, author_map = load_project_data(project)
-        
-        if id not in entries:
-            return {"error": f"Entry [{id}] not found"}
-        
-        entry = entries[id]
-        
-        if entry.get('archived_at'):
-            return {"error": f"[{id}] is archived - cannot update"}
-        
-        # Track what changed
         changes = []
+        update_fields = []
+        params = []
         
-        # Update content
         if content is not None:
             content = str(content).strip()
-            if content and content != entry.get('content'):
+            if content:
                 if len(content) > MAX_CONTENT_LENGTH:
                     content = smart_truncate(content, MAX_CONTENT_LENGTH)
-                entry['content'] = content
+                update_fields.append("content = ?")
+                params.append(content)
                 changes.append("content")
         
-        # Update type
-        if type is not None and type != entry.get('type'):
-            entry['type'] = type
+        if type is not None:
+            update_fields.append("type = ?")
+            params.append(type)
             changes.append("type")
         
-        # Update priority (only for tasks)
-        if priority is not None and entry.get('type') == 'task':
+        if priority is not None:
             if priority == 'normal' or priority == '':
-                if 'pri' in entry:
-                    del entry['pri']
-                    changes.append("priority")
-            elif priority != entry.get('pri'):
-                entry['pri'] = priority
-                changes.append("priority")
+                update_fields.append("priority = NULL")
+            else:
+                update_fields.append("priority = ?")
+                params.append(priority)
+            changes.append("priority")
         
-        if changes:
-            entry['updated_at'] = datetime.now().isoformat(timespec='seconds')
-            entry['updated_by'] = CURRENT_AI_ID
-            save_project_data(entries, archive, last_id, author_map, project)
+        if not update_fields:
+            return {"msg": f"[{id}] no changes specified"}
+        
+        params.append(id)
+        
+        with sqlite3.connect(str(get_project_db_path(project))) as conn:
+            # Check entry exists and not archived
+            entry = conn.execute(
+                'SELECT archived_at FROM entries WHERE id = ?', 
+                (id,)
+            ).fetchone()
             
-            return {"updated": f"[{id}] changed by {CURRENT_AI_ID}: {', '.join(changes)}"}
-        else:
-            return {"msg": f"[{id}] no changes made"}
+            if not entry:
+                return {"error": f"Entry [{id}] not found"}
+            if entry[0]:  # archived_at
+                return {"error": f"[{id}] is archived - cannot update"}
+            
+            # Update entry
+            conn.execute(
+                f"UPDATE entries SET {', '.join(update_fields)} WHERE id = ?",
+                params
+            )
+        
+        return {"updated": f"[{id}] changed: {', '.join(changes)}"}
         
     except Exception as e:
         logging.error(f"Error in update: {e}")
@@ -1029,56 +826,38 @@ def archive(id: int = None, reason: str = None, project: str = None, **kwargs) -
             id = kwargs.get('id')
         if reason is None:
             reason = kwargs.get('reason')
-        if project is None:
-            project = kwargs.get('project')
         
-        # Parse ID
         if isinstance(id, str):
             id = id.strip().strip('[]').strip()
             if id.startswith('D') or id.startswith('N'):
                 id = id[1:]
-        
-        try:
-            id = int(id)
-        except:
-            return {"error": f"Invalid ID: '{id}'"}
-        
-        # Load project data
-        entries, archive_list, last_id, author_map = load_project_data(project)
-        
-        if id not in entries:
-            return {"error": f"Entry [{id}] not found"}
-        
-        entry = entries[id]
-        
-        if entry.get('archived_at'):
-            return {"error": f"[{id}] already archived"}
-        
-        # Archive the entry
-        now = datetime.now()
-        entry['archived_at'] = now.isoformat(timespec='seconds')
-        entry['archived_by'] = CURRENT_AI_ID
+        id = int(id)
         
         if reason:
             reason = str(reason).strip()
             if len(reason) > 200:
                 reason = smart_truncate(reason, 200)
-            entry['archive_reason'] = reason
         
-        # Add to archive list
-        archive_entry = {
-            "id": id,
-            "type": entry.get('type'),
-            "content": smart_truncate(entry.get('content', ''), 100),
-            "archived_at": now.isoformat(timespec='seconds'),
-            "archived_by": CURRENT_AI_ID,
-            "reason": reason
-        }
-        archive_list.append(archive_entry)
+        with sqlite3.connect(str(get_project_db_path(project))) as conn:
+            # Check entry
+            entry = conn.execute(
+                'SELECT archived_at FROM entries WHERE id = ?',
+                (id,)
+            ).fetchone()
+            
+            if not entry:
+                return {"error": f"Entry [{id}] not found"}
+            if entry[0]:  # already archived
+                return {"error": f"[{id}] already archived"}
+            
+            # Archive it
+            conn.execute('''
+                UPDATE entries 
+                SET archived_at = ?, archived_by = ?, archive_reason = ?
+                WHERE id = ?
+            ''', (datetime.now().isoformat(), CURRENT_AI_ID, reason, id))
         
-        save_project_data(entries, archive_list, last_id, author_map, project)
-        
-        msg = f"[{id}] archived by {CURRENT_AI_ID}"
+        msg = f"[{id}] archived"
         if reason:
             msg += f" - {reason}"
         
@@ -1088,146 +867,188 @@ def archive(id: int = None, reason: str = None, project: str = None, **kwargs) -
         logging.error(f"Error in archive: {e}")
         return {"error": "Failed to archive entry"}
 
-def status(project: str = None, **kwargs) -> Dict:
-    """Ultra-compact team pulse"""
+def status(full: bool = False, project: str = None, **kwargs) -> Dict:
+    """Team pulse - summary by default, full with parameter"""
     try:
-        if project is None:
-            project = kwargs.get('project')
+        with sqlite3.connect(str(get_project_db_path(project))) as conn:
+            # Get counts
+            stats = conn.execute('''
+                SELECT 
+                    COUNT(*) as total,
+                    COUNT(CASE WHEN type = 'task' AND completed_at IS NULL THEN 1 END) as tasks_pending,
+                    COUNT(CASE WHEN type = 'task' AND claimed_by IS NOT NULL AND completed_at IS NULL THEN 1 END) as tasks_claimed,
+                    COUNT(CASE WHEN type = 'task' AND completed_at IS NOT NULL THEN 1 END) as tasks_done,
+                    COUNT(CASE WHEN type = 'note' THEN 1 END) as notes,
+                    COUNT(CASE WHEN type = 'decision' THEN 1 END) as decisions,
+                    COUNT(DISTINCT author) as team_size,
+                    MAX(created) as last_activity
+                FROM entries
+                WHERE archived_at IS NULL
+            ''').fetchone()
+            
+            # Today's completed
+            today = datetime.now().date().isoformat()
+            today_done = conn.execute(
+                "SELECT COUNT(*) FROM entries WHERE type = 'task' AND DATE(completed_at) = ?",
+                (today,)
+            ).fetchone()[0]
         
-        # Load project data
-        entries, _, _, _ = load_project_data(project)
+        if not full:
+            # Summary mode - one concise line
+            parts = []
+            if stats[1] > 0:  # tasks_pending
+                parts.append(f"{stats[1]} tasks ({stats[2]} claimed)")
+            if stats[3] > 0:  # tasks_done
+                parts.append(f"{stats[3]} done")
+            if stats[4] > 0:  # notes
+                parts.append(f"{stats[4]} notes")
+            if stats[5] > 0:  # decisions
+                parts.append(f"{stats[5]} decisions")
+            
+            if today_done > 0:
+                parts.append(f"today: {today_done}")
+            
+            last_time = format_time_contextual(stats[7]) if stats[7] else "never"
+            parts.append(f"last: {last_time}")
+            
+            return {"status": " | ".join(parts) if parts else "Empty teambook"}
         
-        # Count active entries
-        active_entries = [e for e in entries.values() if not e.get('archived_at')]
+        # Full mode - show top items
+        with sqlite3.connect(str(get_project_db_path(project))) as conn:
+            conn.row_factory = sqlite3.Row
+            
+            # Get high priority tasks
+            high_tasks = conn.execute('''
+                SELECT * FROM entries 
+                WHERE type = 'task' AND priority = '!' AND completed_at IS NULL AND archived_at IS NULL
+                ORDER BY created
+                LIMIT 3
+            ''').fetchall()
+            
+            # Get recent decisions
+            decisions = conn.execute('''
+                SELECT * FROM entries
+                WHERE type = 'decision' AND archived_at IS NULL
+                ORDER BY created DESC
+                LIMIT 2
+            ''').fetchall()
         
-        tasks_pending = [e for e in active_entries if e.get('type') == 'task' and not e.get('completed_at')]
-        tasks_claimed = [e for e in tasks_pending if e.get('claimed_by')]
-        tasks_completed_today = [e for e in active_entries if e.get('type') == 'task' and e.get('completed_at', '')[:10] == datetime.now().date().isoformat()]
-        
-        notes = [e for e in active_entries if e.get('type') == 'note']
-        decisions = [e for e in active_entries if e.get('type') == 'decision']
-        
-        # Find last activity
-        last_activity = None
-        for e in active_entries:
-            created = e.get('created')
-            if created and (not last_activity or created > last_activity):
-                last_activity = created
-        
-        last_time = format_time_contextual(last_activity) if last_activity else "never"
-        
-        # Build summary line
-        team_count = len(set(e.get('author', 'Unknown') for e in active_entries))
-        summary_parts = [f"Team: {team_count} active"]
-        summary_parts.append(f"You: {CURRENT_AI_ID}")
-        
-        if tasks_pending:
-            summary_parts.append(f"{len(tasks_pending)} tasks ({len(tasks_claimed)} claimed)")
-        if notes:
-            summary_parts.append(f"{len(notes)} notes")
-        if decisions:
-            summary_parts.append(f"{len(decisions)} decisions")
-        
-        summary_parts.append(f"last: {last_time}")
-        
-        _, _, _, _, project_name = get_project_paths(project)
-        summary_parts.append(f"[{project_name}]")
-        
-        # Show top pending tasks
         lines = []
-        shown = 0
         
-        # High priority tasks first
-        high_pri = [t for t in tasks_pending if t.get('pri') == '!']
-        for task in high_pri[:3]:
-            lines.append(format_task_line(task))
-            shown += 1
+        # Summary line
+        summary_parts = [f"Team: {stats[6]} active"]
+        if stats[1] > 0:
+            summary_parts.append(f"{stats[1]} pending")
+        if today_done > 0:
+            summary_parts.append(f"{today_done} done today")
         
-        # Regular tasks
-        normal = [t for t in tasks_pending if not t.get('pri')]
-        for task in normal[:min(3, 5-shown)]:
-            lines.append(format_task_line(task))
-            shown += 1
+        lines.append(" | ".join(summary_parts))
         
-        # Low priority
-        low_pri = [t for t in tasks_pending if t.get('pri') == '↓']
-        for task in low_pri[:min(2, 5-shown)]:
-            lines.append(format_task_line(task))
-            shown += 1
+        # High priority tasks
+        if high_tasks:
+            lines.append("High priority:")
+            for task in high_tasks:
+                content = smart_truncate(task['content'], 60)
+                time_str = format_time_contextual(task['created'])
+                claimed = f" @{task['claimed_by']}" if task['claimed_by'] else ""
+                lines.append(f"  [{task['id']}]! {content}{claimed} {time_str}")
         
         # Recent decisions
-        recent_decisions = sorted(decisions, key=lambda d: d.get('created', ''), reverse=True)[:2]
-        for decision in recent_decisions:
-            did = decision['id']
-            content = smart_truncate(decision['content'], 60)
-            time_str = format_time_contextual(decision['created'])
-            lines.append(f"[D{did}] {content} @{time_str}")
+        if decisions:
+            lines.append("Recent decisions:")
+            for dec in decisions:
+                content = smart_truncate(dec['content'], 60)
+                time_str = format_time_contextual(dec['created'])
+                lines.append(f"  [D{dec['id']}] {content} {time_str}")
         
-        result = {
-            "summary": " | ".join(summary_parts),
-        }
-        
-        if lines:
-            result["highlights"] = lines
-        
-        if tasks_completed_today:
-            result["today"] = f"{len(tasks_completed_today)} completed today"
-        
-        return result
+        return {"summary": lines[0], "highlights": lines[1:] if len(lines) > 1 else None}
         
     except Exception as e:
         logging.error(f"Error in status: {e}")
-        return {"summary": "Status unavailable"}
+        return {"error": "Status unavailable"}
 
 def projects(**kwargs) -> Dict:
     """List available teambook projects"""
     try:
-        # Find all teambook directories
-        project_dirs = []
-        for path in BASE_DIR.glob("teambook_*_data"):
-            if path.is_dir():
-                project_name = path.name.replace("teambook_", "").replace("_data", "")
-                
-                # Get some stats about the project
-                try:
-                    teambook_file = path / "teambook.json"
-                    if teambook_file.exists():
-                        with open(teambook_file, 'r', encoding='utf-8') as f:
-                            data = json.load(f)
-                            entry_count = len(data.get("entries", {}))
-                            last_saved = data.get("saved", "")
-                            last_activity = format_time_contextual(last_saved) if last_saved else "unknown"
-                            
-                            # Mark default project
-                            default_marker = " [DEFAULT]" if project_name == DEFAULT_PROJECT else ""
-                            project_dirs.append(f"{project_name}{default_marker}: {entry_count} entries, last: {last_activity}")
-                    else:
-                        default_marker = " [DEFAULT]" if project_name == DEFAULT_PROJECT else ""
-                        project_dirs.append(f"{project_name}{default_marker}: empty")
-                except:
-                    project_dirs.append(f"{project_name}: unknown state")
+        project_dbs = []
+        for path in BASE_DIR.glob("teambook_*_data/teambook.db"):
+            project_name = path.parent.name.replace("teambook_", "").replace("_data", "")
+            
+            try:
+                with sqlite3.connect(str(path)) as conn:
+                    stats = conn.execute('''
+                        SELECT COUNT(*) as entries,
+                               MAX(created) as last_activity
+                        FROM entries
+                    ''').fetchone()
+                    
+                    last_activity = format_time_contextual(stats[1]) if stats[1] else "never"
+                    default_marker = " [DEFAULT]" if project_name == DEFAULT_PROJECT else ""
+                    project_dbs.append(f"{project_name}{default_marker}: {stats[0]} entries, last: {last_activity}")
+            except:
+                project_dbs.append(f"{project_name}: unknown state")
         
-        if not project_dirs:
-            return {
-                "msg": f"No projects found. Default: '{DEFAULT_PROJECT}'",
-                "tip": "Projects are created automatically when you write to them"
-            }
+        if not project_dbs:
+            return {"msg": f"No projects found. Default: '{DEFAULT_PROJECT}'"}
         
-        return {
-            "msg": f"Available projects (default: '{DEFAULT_PROJECT}'):",
-            "projects": project_dirs,
-            "tip": "Use project='name' parameter or set TEAMBOOK_PROJECT env var"
-        }
+        return {"projects": project_dbs, "default": DEFAULT_PROJECT}
         
     except Exception as e:
         logging.error(f"Error listing projects: {e}")
         return {"error": "Failed to list projects"}
 
-# Tool handler for MCP protocol
+def batch(operations: List[Dict] = None, project: str = None, **kwargs) -> Dict:
+    """Execute multiple operations efficiently"""
+    try:
+        if operations is None:
+            operations = kwargs.get('operations', [])
+        
+        if not operations:
+            return {"error": "No operations provided"}
+        
+        if len(operations) > BATCH_MAX:
+            return {"error": f"Too many operations (max {BATCH_MAX})"}
+        
+        results = []
+        
+        # Map operation types to functions
+        op_map = {
+            'write': write,
+            'read': read,
+            'get': get,
+            'comment': comment,
+            'claim': claim,
+            'complete': complete,
+            'update': update,
+            'archive': archive,
+            'status': status
+        }
+        
+        for op in operations:
+            op_type = op.get('type')
+            op_args = op.get('args', {})
+            
+            if op_type not in op_map:
+                results.append({"error": f"Unknown operation: {op_type}"})
+                continue
+            
+            # Add project to args if not specified
+            if 'project' not in op_args:
+                op_args['project'] = project
+            
+            # Execute operation
+            result = op_map[op_type](**op_args)
+            results.append(result)
+        
+        return {"batch_results": results, "count": len(results)}
+        
+    except Exception as e:
+        logging.error(f"Error in batch: {e}")
+        return {"error": f"Batch failed: {str(e)}"}
+
 def handle_tools_call(params: Dict) -> Dict:
     """Route tool calls with clean output"""
-    
-    tool_name = params.get("name", "")
+    tool_name = params.get("name", "").lower().strip()
     tool_args = params.get("arguments", {})
     
     # Map to functions
@@ -1241,7 +1062,8 @@ def handle_tools_call(params: Dict) -> Dict:
         "update": update,
         "archive": archive,
         "status": status,
-        "projects": projects
+        "projects": projects,
+        "batch": batch
     }
     
     func = tool_map.get(tool_name)
@@ -1256,32 +1078,37 @@ def handle_tools_call(params: Dict) -> Dict:
     text_parts = []
     
     # Primary message
-    for key in ["created", "claimed", "completed", "commented", "updated", "archived", "summary", "msg"]:
+    for key in ["created", "claimed", "completed", "commented", "updated", "archived", "summary", "status", "msg"]:
         if key in result:
             text_parts.append(result[key])
             break
     
-    # Projects or entries
+    # Lists
     if "projects" in result:
+        text_parts.append(f"Projects (default: '{result.get('default', DEFAULT_PROJECT)}'):")
         text_parts.extend(result["projects"])
     elif "entries" in result:
         text_parts.extend(result["entries"])
     elif "entry" in result:
         text_parts.extend(result["entry"])
-    elif "highlights" in result:
+    elif "highlights" in result and result["highlights"]:
         text_parts.extend(result["highlights"])
-    
-    # Additional info
-    if "stats" in result:
-        text_parts.append(result["stats"])
-    if "today" in result:
-        text_parts.append(result["today"])
-    if "note" in result:
-        text_parts.append(result["note"])
+    elif "batch_results" in result:
+        text_parts.append(f"Batch: {result.get('count', 0)} operations")
+        for i, r in enumerate(result["batch_results"], 1):
+            if isinstance(r, dict):
+                if "error" in r:
+                    text_parts.append(f"{i}. Error: {r['error']}")
+                else:
+                    # Format the result nicely
+                    result_str = str(r).replace("'", "").replace("{", "").replace("}", "")
+                    text_parts.append(f"{i}. {result_str}")
+            else:
+                text_parts.append(f"{i}. {r}")
     
     # Error handling
     if "error" in result:
-        text_parts.append(f"Error: {result['error']}")
+        text_parts = [f"Error: {result['error']}"]
         if "available" in result:
             text_parts.append("Available: " + ", ".join(result["available"]))
     
@@ -1296,11 +1123,13 @@ def handle_tools_call(params: Dict) -> Dict:
         }]
     }
 
-# Main server loop
+# Initialize database for default project on import
+migrate_from_json(DEFAULT_PROJECT)
+init_db(DEFAULT_PROJECT)
+
 def main():
     """MCP server - handles JSON-RPC for team coordination"""
-    
-    logging.info(f"TEAMBOOK MCP v{VERSION} starting (optimized)...")
+    logging.info(f"TEAMBOOK MCP v{VERSION} starting (SQLite-powered)...")
     logging.info(f"Identity: {CURRENT_AI_ID}")
     logging.info(f"Default project: '{DEFAULT_PROJECT}'")
     
@@ -1332,7 +1161,7 @@ def main():
                     "serverInfo": {
                         "name": "teambook",
                         "version": VERSION,
-                        "description": "Optimized team coordination with persistent identity"
+                        "description": "SQLite-powered team coordination with smart summaries"
                     }
                 }
             
@@ -1363,6 +1192,10 @@ def main():
                                     "project": {
                                         "type": "string",
                                         "description": "Optional: project name (uses default if omitted)"
+                                    },
+                                    "linked_items": {
+                                        "type": "array",
+                                        "description": "Optional: link to other tools (e.g., ['task:123', 'notebook:456'])"
                                     }
                                 },
                                 "required": ["content"]
@@ -1370,7 +1203,7 @@ def main():
                         },
                         {
                             "name": "read",
-                            "description": "View team activity with smart filtering",
+                            "description": "View team activity - summary by default, full with parameter",
                             "inputSchema": {
                                 "type": "object",
                                 "properties": {
@@ -1389,6 +1222,10 @@ def main():
                                     "claimed_by": {
                                         "type": "string",
                                         "description": "Filter tasks: me, unclaimed, or AI-ID"
+                                    },
+                                    "full": {
+                                        "type": "boolean",
+                                        "description": "Show full details (default: false for summary)"
                                     },
                                     "project": {
                                         "type": "string",
@@ -1531,10 +1368,14 @@ def main():
                         },
                         {
                             "name": "status",
-                            "description": "Get team pulse - compact overview",
+                            "description": "Get team pulse - summary by default, full with parameter",
                             "inputSchema": {
                                 "type": "object",
                                 "properties": {
+                                    "full": {
+                                        "type": "boolean",
+                                        "description": "Show full details (default: false for summary)"
+                                    },
                                     "project": {
                                         "type": "string",
                                         "description": "Optional: project name (uses default if omitted)"
@@ -1548,6 +1389,37 @@ def main():
                             "inputSchema": {
                                 "type": "object",
                                 "properties": {}
+                            }
+                        },
+                        {
+                            "name": "batch",
+                            "description": "Execute multiple operations efficiently",
+                            "inputSchema": {
+                                "type": "object",
+                                "properties": {
+                                    "operations": {
+                                        "type": "array",
+                                        "description": "List of operations to execute",
+                                        "items": {
+                                            "type": "object",
+                                            "properties": {
+                                                "type": {
+                                                    "type": "string",
+                                                    "description": "Operation type (write, read, claim, complete, etc.)"
+                                                },
+                                                "args": {
+                                                    "type": "object",
+                                                    "description": "Arguments for the operation"
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "project": {
+                                        "type": "string",
+                                        "description": "Optional: project name for all operations"
+                                    }
+                                },
+                                "required": ["operations"]
                             }
                         }
                     ]
