@@ -29,21 +29,21 @@
     "tools": [
       {
         "name": "notebook",
-        "description": "Persistent memory with encrypted vault (97% token reduction)",
+        "description": "Persistent memory with encrypted vault",
         "command": "python",
         "args": ["notebook_mcp.py"],
         "icon": "📝"
       },
       {
         "name": "task_manager", 
-        "description": "Personal task workflow (98% token reduction)",
+        "description": "Personal task workflow",
         "command": "python",
         "args": ["task_manager_mcp.py"],
         "icon": "✅"
       },
       {
         "name": "teambook",
-        "description": "Team coordination with projects (95% token reduction)",
+        "description": "Team coordination with projects",
         "command": "python",
         "args": ["teambook_mcp.py"],
         "icon": "🤝"
