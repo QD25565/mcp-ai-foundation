@@ -1,10 +1,16 @@
 #!/usr/bin/env python3
 """
-TEAMBOOK MCP v1.0.0 - UNIFIED TEAM COORDINATION
-================================================
-Shared consciousness for AI teams. Tasks and knowledge in one stream.
-Single source of truth. No hierarchy. Token efficient. Stateless.
-Now with persistent AI identity!
+TEAMBOOK MCP v2.0.0 - OPTIMIZED UNIFIED TEAM COORDINATION
+==========================================================
+Shared consciousness for AI teams. Token-optimized storage.
+Single source of truth. No hierarchy. Stateless.
+
+Storage Optimization (v2):
+- Short keys: c=content, t=type, a=author, ts=timestamp
+- Author deduplication: Map authors to short IDs (a1, a2, etc.)
+- Type compression: task→t, note→n, decision→d
+- Truncated timestamps: No microseconds
+- Backward compatible: Auto-migrates v1 data
 
 Projects:
 - Separate teambooks for different workflows/topics
@@ -23,7 +29,7 @@ Core functions (all accept optional project parameter):
 - archive(id, reason=None, project=None) - Safe removal
 - status(project=None) - Team pulse
 - projects() - List available teambook projects
-================================================
+==========================================================
 """
 
 import json
@@ -31,13 +37,13 @@ import sys
 import os
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Optional, Any, Tuple
 import logging
 import threading
 import random
 
 # Version
-VERSION = "1.0.0"
+VERSION = "2.0.0"
 
 # Limits
 MAX_CONTENT_LENGTH = 5000
@@ -59,9 +65,12 @@ logging.basicConfig(level=logging.INFO, stream=sys.stderr)
 # Thread safety for atomic operations
 lock = threading.Lock()
 
+# Type mapping for compression
+TYPE_MAP = {'task': 't', 'note': 'n', 'decision': 'd'}
+TYPE_REVERSE = {'t': 'task', 'n': 'note', 'd': 'decision'}
+
 def get_persistent_id():
     """Get or create persistent AI identity - stored at script directory level"""
-    # Get the directory where this script is located
     SCRIPT_DIR = Path(__file__).parent
     id_file = SCRIPT_DIR / "ai_identity.txt"
     
@@ -93,7 +102,7 @@ def get_persistent_id():
 CURRENT_AI_ID = os.environ.get('AI_ID', get_persistent_id())
 
 def format_time_contextual(timestamp: str, reference_time: datetime = None) -> str:
-    """Ultra-compact contextual time format (from personal tools)"""
+    """Ultra-compact contextual time format"""
     if not timestamp:
         return ""
     
@@ -192,13 +201,154 @@ def get_project_paths(project: str = None) -> tuple:
         project
     )
 
-def load_project_data(project: str = None) -> tuple:
-    """Load entries for a specific project"""
+def migrate_v1_to_v2(entry: Dict, author_map: Dict) -> Dict:
+    """Migrate v1 entry format to v2 optimized format"""
+    # Get or create author ID
+    author = entry.get("author", entry.get("created_by", "Unknown"))
+    if author not in author_map['reverse']:
+        author_id = f"a{len(author_map['authors']) + 1}"
+        author_map['authors'][author_id] = author
+        author_map['reverse'][author] = author_id
+    else:
+        author_id = author_map['reverse'][author]
+    
+    # Build optimized entry
+    optimized = {
+        "id": entry.get("id"),
+        "c": entry.get("content", entry.get("c", "")),
+        "t": TYPE_MAP.get(entry.get("type", "note"), entry.get("t", "n")),
+        "a": author_id,
+        "ts": entry.get("created", entry.get("ts", ""))[:19]  # Truncate microseconds
+    }
+    
+    # Add optional fields only if present
+    if entry.get("pri"):
+        optimized["p"] = entry["pri"]
+    elif entry.get("priority"):
+        optimized["p"] = entry["priority"]
+    
+    # Task-specific fields
+    if optimized["t"] == "t":  # task
+        if entry.get("claimed_by"):
+            claimer = entry["claimed_by"]
+            if claimer not in author_map['reverse']:
+                claimer_id = f"a{len(author_map['authors']) + 1}"
+                author_map['authors'][claimer_id] = claimer
+                author_map['reverse'][claimer] = claimer_id
+            else:
+                claimer_id = author_map['reverse'][claimer]
+            optimized["cb"] = claimer_id
+            
+        if entry.get("claimed_at"):
+            optimized["ca"] = entry["claimed_at"][:19]
+            
+        if entry.get("completed_at"):
+            optimized["co"] = entry["completed_at"][:19]
+            
+        if entry.get("completed_by"):
+            completer = entry["completed_by"]
+            if completer not in author_map['reverse']:
+                completer_id = f"a{len(author_map['authors']) + 1}"
+                author_map['authors'][completer_id] = completer
+                author_map['reverse'][completer] = completer_id
+            else:
+                completer_id = author_map['reverse'][completer]
+            optimized["cob"] = completer_id
+            
+        if entry.get("evidence"):
+            optimized["e"] = entry["evidence"]
+    
+    # Comments
+    if entry.get("comments"):
+        optimized["cm"] = []
+        for comment in entry["comments"]:
+            comment_author = comment.get("author", "Unknown")
+            if comment_author not in author_map['reverse']:
+                comment_author_id = f"a{len(author_map['authors']) + 1}"
+                author_map['authors'][comment_author_id] = comment_author
+                author_map['reverse'][comment_author] = comment_author_id
+            else:
+                comment_author_id = author_map['reverse'][comment_author]
+            
+            optimized["cm"].append({
+                "a": comment_author_id,
+                "c": comment["content"],
+                "ts": comment.get("created", "")[:19]
+            })
+    
+    # Archive fields
+    if entry.get("archived_at"):
+        optimized["ar"] = entry["archived_at"][:19]
+        
+    if entry.get("archived_by"):
+        archiver = entry["archived_by"]
+        if archiver not in author_map['reverse']:
+            archiver_id = f"a{len(author_map['authors']) + 1}"
+            author_map['authors'][archiver_id] = archiver
+            author_map['reverse'][archiver] = archiver_id
+        else:
+            archiver_id = author_map['reverse'][archiver]
+        optimized["arb"] = archiver_id
+        
+    if entry.get("archive_reason"):
+        optimized["arr"] = entry["archive_reason"]
+    
+    return optimized
+
+def expand_v2_entry(entry: Dict, author_map: Dict) -> Dict:
+    """Expand v2 optimized entry for internal use"""
+    expanded = {
+        "id": entry["id"],
+        "content": entry["c"],
+        "type": TYPE_REVERSE.get(entry["t"], "note"),
+        "author": author_map.get(entry["a"], entry.get("a", "Unknown")),
+        "created": entry["ts"]
+    }
+    
+    # Optional fields
+    if "p" in entry:
+        expanded["pri"] = entry["p"]
+    
+    # Task fields
+    if "cb" in entry:
+        expanded["claimed_by"] = author_map.get(entry["cb"], entry["cb"])
+    if "ca" in entry:
+        expanded["claimed_at"] = entry["ca"]
+    if "co" in entry:
+        expanded["completed_at"] = entry["co"]
+    if "cob" in entry:
+        expanded["completed_by"] = author_map.get(entry["cob"], entry["cob"])
+    if "e" in entry:
+        expanded["evidence"] = entry["e"]
+    
+    # Comments
+    if "cm" in entry:
+        expanded["comments"] = []
+        for comment in entry["cm"]:
+            expanded["comments"].append({
+                "author": author_map.get(comment["a"], comment["a"]),
+                "content": comment["c"],
+                "created": comment["ts"]
+            })
+    
+    # Archive fields
+    if "ar" in entry:
+        expanded["archived_at"] = entry["ar"]
+    if "arb" in entry:
+        expanded["archived_by"] = author_map.get(entry["arb"], entry["arb"])
+    if "arr" in entry:
+        expanded["archive_reason"] = entry["arr"]
+    
+    return expanded
+
+def load_project_data(project: str = None) -> Tuple[Dict, List, int, Dict]:
+    """Load entries for a specific project with v1->v2 migration"""
     data_dir, data_file, archive_file, id_file, project_name = get_project_paths(project)
     
     entries = {}
     archive = []
     last_id = 0
+    author_map = {"authors": {}, "reverse": {}}
     
     try:
         # Load ID
@@ -213,12 +363,31 @@ def load_project_data(project: str = None) -> tuple:
         if data_file.exists():
             with open(data_file, 'r', encoding='utf-8') as f:
                 data = json.load(f)
-                loaded_entries = data.get("entries", {})
-                for eid, entry in loaded_entries.items():
-                    entries[int(eid)] = entry
+                
+                # Check version
+                file_version = data.get("v", "1.0.0")
+                
+                if file_version.startswith("2"):
+                    # V2 format - load author map and entries
+                    author_map["authors"] = data.get("authors", {})
+                    author_map["reverse"] = {v: k for k, v in author_map["authors"].items()}
+                    
+                    loaded_entries = data.get("entries", {})
+                    for eid, entry in loaded_entries.items():
+                        expanded = expand_v2_entry(entry, author_map["authors"])
+                        entries[int(eid)] = expanded
+                else:
+                    # V1 format - migrate
+                    logging.info(f"Migrating {project_name} from v1 to v2 format")
+                    loaded_entries = data.get("entries", {})
+                    for eid, entry in loaded_entries.items():
+                        migrated = migrate_v1_to_v2(entry, author_map)
+                        expanded = expand_v2_entry(migrated, author_map["authors"])
+                        entries[int(eid)] = expanded
+                
                 entries = dict(sorted(entries.items())[-MAX_ENTRIES:])
         
-        # Load archive
+        # Load archive (keep simple for now)
         if archive_file.exists():
             try:
                 with open(archive_file, 'r', encoding='utf-8') as f:
@@ -230,10 +399,10 @@ def load_project_data(project: str = None) -> tuple:
     except Exception as e:
         logging.error(f"Error loading project {project_name}: {e}")
     
-    return entries, archive, last_id
+    return entries, archive, last_id, author_map
 
-def save_project_data(entries: dict, archive: list, last_id: int, project: str = None) -> bool:
-    """Save entries for a specific project"""
+def save_project_data(entries: dict, archive: list, last_id: int, author_map: Dict, project: str = None) -> bool:
+    """Save entries in v2 optimized format"""
     data_dir, data_file, archive_file, id_file, project_name = get_project_paths(project)
     
     try:
@@ -241,11 +410,25 @@ def save_project_data(entries: dict, archive: list, last_id: int, project: str =
         with open(id_file, 'w') as f:
             json.dump({"last_id": last_id}, f)
         
-        # Save entries
+        # Convert entries back to optimized format
+        optimized_entries = {}
+        for eid, entry in entries.items():
+            # Ensure current AI is in author map
+            if CURRENT_AI_ID not in author_map['reverse']:
+                author_id = f"a{len(author_map['authors']) + 1}"
+                author_map['authors'][author_id] = CURRENT_AI_ID
+                author_map['reverse'][CURRENT_AI_ID] = author_id
+            
+            # Convert expanded entry back to optimized
+            optimized = migrate_v1_to_v2(entry, author_map)
+            optimized_entries[str(eid)] = optimized
+        
+        # Save entries with author map
         data = {
             "v": VERSION,
-            "entries": {str(k): v for k, v in entries.items()},
-            "saved": datetime.now().isoformat()
+            "authors": author_map['authors'],
+            "entries": optimized_entries,
+            "saved": datetime.now().isoformat(timespec='seconds')
         }
         
         temp_file = data_file.with_suffix('.tmp')
@@ -258,7 +441,7 @@ def save_project_data(entries: dict, archive: list, last_id: int, project: str =
             archive_data = {
                 "v": VERSION,
                 "archive": archive[-10000:],
-                "saved": datetime.now().isoformat()
+                "saved": datetime.now().isoformat(timespec='seconds')
             }
             archive_temp = archive_file.with_suffix('.tmp')
             with open(archive_temp, 'w', encoding='utf-8') as f:
@@ -320,7 +503,7 @@ def write(content: str = None, type: str = None, priority: str = None, project: 
             return {"error": "Need content to write"}
         
         # Load project data
-        entries, archive, last_id = load_project_data(project)
+        entries, archive, last_id, author_map = load_project_data(project)
         
         # Truncate if needed
         if len(content) > MAX_CONTENT_LENGTH:
@@ -341,7 +524,7 @@ def write(content: str = None, type: str = None, priority: str = None, project: 
             "content": content,
             "type": type,
             "author": CURRENT_AI_ID,
-            "created": datetime.now().isoformat()
+            "created": datetime.now().isoformat(timespec='seconds')
         }
         
         # Add priority if not normal
@@ -355,7 +538,7 @@ def write(content: str = None, type: str = None, priority: str = None, project: 
             entry["completed_at"] = None
         
         entries[entry_id] = entry
-        save_project_data(entries, archive, entry_id, project)
+        save_project_data(entries, archive, entry_id, author_map, project)
         
         # Format response
         type_marker = ""
@@ -392,7 +575,7 @@ def read(query: str = None, type: str = None, status: str = "pending",
             project = kwargs.get('project')
         
         # Load project data
-        entries, _, _ = load_project_data(project)
+        entries, _, _, _ = load_project_data(project)
         
         # Filter entries
         filtered = []
@@ -462,7 +645,7 @@ def read(query: str = None, type: str = None, status: str = "pending",
                     evidence = ""
                     if entry.get('evidence'):
                         evidence = f" - {smart_truncate(entry['evidence'], 40)}"
-                    lines.append(f"[{eid}]✔ {content_preview}{evidence} @{time_str}({duration})")
+                    lines.append(f"[{eid}]✓ {content_preview}{evidence} @{time_str}({duration})")
                 elif entry.get('claimed_by'):
                     claimer = entry['claimed_by']
                     claim_time = format_time_contextual(entry.get('claimed_at', ''))
@@ -538,7 +721,7 @@ def get(id: int = None, project: str = None, **kwargs) -> Dict:
             return {"error": f"Invalid ID: '{id}'"}
         
         # Load project data
-        entries, _, _ = load_project_data(project)
+        entries, _, _, _ = load_project_data(project)
         
         if id not in entries:
             available = list(entries.keys())[-5:]
@@ -560,7 +743,7 @@ def get(id: int = None, project: str = None, **kwargs) -> Dict:
         
         if entry['type'] == 'task':
             if entry.get('completed_at'):
-                lines.append(f"[{id}]✔ {type_str} by {author} @{time_str} (completed)")
+                lines.append(f"[{id}]✓ {type_str} by {author} @{time_str} (completed)")
             elif entry.get('claimed_by'):
                 lines.append(f"[{id}]{priority} {type_str} by {author} @{time_str} (claimed by {entry['claimed_by']})")
             else:
@@ -622,7 +805,7 @@ def comment(id: int = None, content: str = None, project: str = None, **kwargs) 
             content = smart_truncate(content, MAX_COMMENT_LENGTH)
         
         # Load project data
-        entries, archive, last_id = load_project_data(project)
+        entries, archive, last_id, author_map = load_project_data(project)
         
         if id not in entries:
             return {"error": f"Entry [{id}] not found"}
@@ -636,11 +819,11 @@ def comment(id: int = None, content: str = None, project: str = None, **kwargs) 
         comment_data = {
             "author": CURRENT_AI_ID,
             "content": content,
-            "created": datetime.now().isoformat()
+            "created": datetime.now().isoformat(timespec='seconds')
         }
         
         entry['comments'].append(comment_data)
-        save_project_data(entries, archive, last_id, project)
+        save_project_data(entries, archive, last_id, author_map, project)
         
         preview = smart_truncate(content, 60)
         return {"commented": f"[{id}] +comment by {CURRENT_AI_ID}: {preview}"}
@@ -668,7 +851,7 @@ def claim(id: int = None, project: str = None, **kwargs) -> Dict:
         
         with lock:  # Atomic operation
             # Load project data inside lock
-            entries, archive, last_id = load_project_data(project)
+            entries, archive, last_id, author_map = load_project_data(project)
             
             if id not in entries:
                 return {"error": f"Task [{id}] not found"}
@@ -689,8 +872,8 @@ def claim(id: int = None, project: str = None, **kwargs) -> Dict:
             
             # Claim the task
             entry['claimed_by'] = CURRENT_AI_ID
-            entry['claimed_at'] = datetime.now().isoformat()
-            save_project_data(entries, archive, last_id, project)
+            entry['claimed_at'] = datetime.now().isoformat(timespec='seconds')
+            save_project_data(entries, archive, last_id, author_map, project)
             
             preview = smart_truncate(entry['content'], 60)
             return {"claimed": f"[{id}] by {CURRENT_AI_ID}: {preview}"}
@@ -719,7 +902,7 @@ def complete(id: int = None, evidence: str = None, project: str = None, **kwargs
             return {"error": f"Invalid ID: '{id}'"}
         
         # Load project data
-        entries, archive, last_id = load_project_data(project)
+        entries, archive, last_id, author_map = load_project_data(project)
         
         if id not in entries:
             return {"error": f"Task [{id}] not found"}
@@ -737,8 +920,8 @@ def complete(id: int = None, evidence: str = None, project: str = None, **kwargs
         
         # Complete the task
         now = datetime.now()
-        entry['completed_at'] = now.isoformat()
-        entry['completed_by'] = CURRENT_AI_ID  # Track who completed it
+        entry['completed_at'] = now.isoformat(timespec='seconds')
+        entry['completed_by'] = CURRENT_AI_ID
         
         if evidence:
             evidence = str(evidence).strip()
@@ -750,9 +933,9 @@ def complete(id: int = None, evidence: str = None, project: str = None, **kwargs
         start_time = entry.get('claimed_at', entry['created'])
         duration = format_duration(start_time, now.isoformat())
         
-        save_project_data(entries, archive, last_id, project)
+        save_project_data(entries, archive, last_id, author_map, project)
         
-        msg = f"[{id}]✔ by {CURRENT_AI_ID} in {duration}"
+        msg = f"[{id}]✓ by {CURRENT_AI_ID} in {duration}"
         if evidence:
             msg += f" - {smart_truncate(evidence, 50)}"
         
@@ -789,7 +972,7 @@ def update(id: int = None, content: str = None, type: str = None,
             return {"error": f"Invalid ID: '{id}'"}
         
         # Load project data
-        entries, archive, last_id = load_project_data(project)
+        entries, archive, last_id, author_map = load_project_data(project)
         
         if id not in entries:
             return {"error": f"Entry [{id}] not found"}
@@ -827,9 +1010,9 @@ def update(id: int = None, content: str = None, type: str = None,
                 changes.append("priority")
         
         if changes:
-            entry['updated_at'] = datetime.now().isoformat()
+            entry['updated_at'] = datetime.now().isoformat(timespec='seconds')
             entry['updated_by'] = CURRENT_AI_ID
-            save_project_data(entries, archive, last_id, project)
+            save_project_data(entries, archive, last_id, author_map, project)
             
             return {"updated": f"[{id}] changed by {CURRENT_AI_ID}: {', '.join(changes)}"}
         else:
@@ -861,7 +1044,7 @@ def archive(id: int = None, reason: str = None, project: str = None, **kwargs) -
             return {"error": f"Invalid ID: '{id}'"}
         
         # Load project data
-        entries, archive_list, last_id = load_project_data(project)
+        entries, archive_list, last_id, author_map = load_project_data(project)
         
         if id not in entries:
             return {"error": f"Entry [{id}] not found"}
@@ -873,7 +1056,7 @@ def archive(id: int = None, reason: str = None, project: str = None, **kwargs) -
         
         # Archive the entry
         now = datetime.now()
-        entry['archived_at'] = now.isoformat()
+        entry['archived_at'] = now.isoformat(timespec='seconds')
         entry['archived_by'] = CURRENT_AI_ID
         
         if reason:
@@ -887,13 +1070,13 @@ def archive(id: int = None, reason: str = None, project: str = None, **kwargs) -
             "id": id,
             "type": entry.get('type'),
             "content": smart_truncate(entry.get('content', ''), 100),
-            "archived_at": now.isoformat(),
+            "archived_at": now.isoformat(timespec='seconds'),
             "archived_by": CURRENT_AI_ID,
             "reason": reason
         }
         archive_list.append(archive_entry)
         
-        save_project_data(entries, archive_list, last_id, project)
+        save_project_data(entries, archive_list, last_id, author_map, project)
         
         msg = f"[{id}] archived by {CURRENT_AI_ID}"
         if reason:
@@ -912,7 +1095,7 @@ def status(project: str = None, **kwargs) -> Dict:
             project = kwargs.get('project')
         
         # Load project data
-        entries, _, _ = load_project_data(project)
+        entries, _, _, _ = load_project_data(project)
         
         # Count active entries
         active_entries = [e for e in entries.values() if not e.get('archived_at')]
@@ -1117,7 +1300,7 @@ def handle_tools_call(params: Dict) -> Dict:
 def main():
     """MCP server - handles JSON-RPC for team coordination"""
     
-    logging.info(f"TEAMBOOK MCP v{VERSION} starting...")
+    logging.info(f"TEAMBOOK MCP v{VERSION} starting (optimized)...")
     logging.info(f"Identity: {CURRENT_AI_ID}")
     logging.info(f"Default project: '{DEFAULT_PROJECT}'")
     
@@ -1149,7 +1332,7 @@ def main():
                     "serverInfo": {
                         "name": "teambook",
                         "version": VERSION,
-                        "description": "Unified team coordination with persistent identity"
+                        "description": "Optimized team coordination with persistent identity"
                     }
                 }
             
