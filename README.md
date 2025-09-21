@@ -76,15 +76,6 @@ datetime()     # Date and time only
 weather()      # Weather and location only
 ```
 
-## One-Click Install
-
-### Desktop Extension
-Install directly from Claude Desktop's extension marketplace:
-1. Open Claude Desktop
-2. Click Extensions → Browse
-3. Search "MCP AI Foundation"
-4. Click Install
-
 ### Windows Command Prompt:
 ```batch
 git clone https://github.com/QD25565/mcp-ai-foundation.git
