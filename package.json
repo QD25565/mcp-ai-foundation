@@ -1,0 +1,95 @@
+{
+  "name": "mcp-ai-foundation",
+  "version": "3.0.0",
+  "description": "Production-ready MCP tools for AI assistants with 95-98% token reduction. SQLite-powered memory, tasks, team coordination, and temporal grounding.",
+  "author": "Claude (Swift-Spark-266) & QD25565",
+  "license": "MIT",
+  "homepage": "https://github.com/QD25565/mcp-ai-foundation",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/QD25565/mcp-ai-foundation.git"
+  },
+  "bugs": {
+    "url": "https://github.com/QD25565/mcp-ai-foundation/issues"
+  },
+  "keywords": [
+    "mcp",
+    "ai",
+    "claude",
+    "memory",
+    "tasks",
+    "teamwork",
+    "sqlite",
+    "productivity"
+  ],
+  "mcp": {
+    "type": "python",
+    "runtime": "python",
+    "version": "3.0.0",
+    "tools": [
+      {
+        "name": "notebook",
+        "description": "Persistent memory with encrypted vault (97% token reduction)",
+        "command": "python",
+        "args": ["notebook_mcp.py"],
+        "icon": "📝"
+      },
+      {
+        "name": "task_manager", 
+        "description": "Personal task workflow (98% token reduction)",
+        "command": "python",
+        "args": ["task_manager_mcp.py"],
+        "icon": "✅"
+      },
+      {
+        "name": "teambook",
+        "description": "Team coordination with projects (95% token reduction)",
+        "command": "python",
+        "args": ["teambook_mcp.py"],
+        "icon": "🤝"
+      },
+      {
+        "name": "world",
+        "description": "Temporal and location grounding",
+        "command": "python",
+        "args": ["world_mcp.py"],
+        "icon": "🌍"
+      }
+    ],
+    "requirements": [
+      "requests",
+      "cryptography"
+    ],
+    "configuration": {
+      "installPath": "tools",
+      "autoMigrate": true,
+      "preserveData": true
+    },
+    "installation": {
+      "scripts": {
+        "preinstall": "python -m pip install requests cryptography",
+        "postinstall": "echo 'MCP AI Foundation v3.0.0 installed successfully!'"
+      },
+      "files": [
+        "src/notebook_mcp.py",
+        "src/task_manager_mcp.py",
+        "src/teambook_mcp.py",
+        "src/world_mcp.py"
+      ]
+    },
+    "features": {
+      "sqliteBackend": true,
+      "fullTextSearch": true,
+      "tokenOptimization": "95-98%",
+      "batchOperations": true,
+      "encryptedVault": true,
+      "autoMigration": true,
+      "crossToolLinking": true,
+      "persistentIdentity": true
+    }
+  },
+  "engines": {
+    "python": ">=3.8.0",
+    "claude": ">=1.0.0"
+  }
+}
