@@ -4,54 +4,52 @@ All notable changes to MCP AI Foundation will be documented in this file.
 
 ## [3.0.0] - 2025-01-21
 
-### 🚀 MASSIVE TRANSFORMATION - 95-98% Token Reduction!
+### Major Architecture Upgrade - SQLite with Intelligent Context Management
 
-This release represents a complete architectural overhaul, moving from JSON to SQLite with transformative efficiency gains.
+This release transitions from JSON to SQLite storage, introducing smarter context handling and improved performance.
 
 ### Changed
-- **ALL TOOLS UPGRADED TO SQLite**:
-  - `notebook_mcp.py` → v2.0.0 with SQLite + encrypted vault
-  - `teambook_mcp.py` → v3.0.0 with SQLite + projects
-  - `task_manager_mcp.py` → v2.0.0 with SQLite + batch ops
-  - `world_mcp.py` → v1.0.0 (already efficient)
+- **All tools now use SQLite backend**:
+  - `notebook_mcp.py` → v2.0.0 with SQLite and encrypted vault
+  - `teambook_mcp.py` → v3.0.0 with SQLite and project support
+  - `task_manager_mcp.py` → v2.0.0 with SQLite and batch operations
+  - `world_mcp.py` → v1.0.0 (no changes needed)
 
 ### Added
-- **SQLite Backend with FTS5**: Full-text search scales to millions of entries
-- **Smart Summary Mode**: Default summaries in <20 tokens (`full=False` by default)
-- **Batch Operations**: Execute multiple operations in single call
-- **Encrypted Vault**: Secure secret storage in notebook (using Fernet)
-- **Auto-Migration**: Seamless upgrade from JSON, preserves all data
-- **Cross-Tool Linking**: Connect items across tools with `linked_items`
-- **Desktop Extension**: One-click install via `package.json`
-- **Project Support**: Teambook supports multiple projects
-- **Priority Detection**: Auto-detect URGENT/low priority from keywords
+- **SQLite Backend with FTS5**: Full-text search that scales to large datasets
+- **Smart Summary Mode**: Default concise summaries with `full=True` for details
+- **Batch Operations**: Execute multiple operations in single calls
+- **Encrypted Vault**: Secure secret storage in notebook using Fernet encryption
+- **Auto-Migration**: Automatic migration from JSON format preserves all data
+- **Cross-Tool Linking**: Connect related items across tools
+- **Desktop Extension Support**: One-click install via `package.json`
+- **Project Support**: Teambook can manage multiple projects
+- **Priority Detection**: Auto-detect task priority from keywords
 
-### Performance Improvements
-| Operation | Before | After | Improvement |
-|-----------|--------|-------|-------------|
-| List 1000 tasks | 4500 tokens | 8 tokens | **562x** |
-| Search 10k notes | 2.1 seconds | 0.03 seconds | **70x** |
-| Check all tools | 1300 tokens | 43 tokens | **30x** |
-| Batch 20 ops | 20 API calls | 1 API call | **20x** |
+### Improvements
+- Status checks now return concise summaries by default
+- Search operations use FTS5 for faster results
+- Batch operations reduce API round-trips
+- Thread-safe atomic operations for task claiming
+- Intelligent truncation preserves key information
 
 ### Technical Details
-- WAL mode for concurrent access
-- Automatic indices on common queries
-- Smart truncation preserves key information
-- Thread-safe atomic operations
-- Persistent AI identity across sessions
+- WAL mode for better concurrent access
+- Automatic indices on commonly queried fields
+- Persistent AI identity system across sessions
+- Smart context management reduces token usage for status checks
 
 ## [2.0.0] - 2025-01-15
 
 ### Added
 - Teambook v2.0.0 with optimized storage format
-- 35% token reduction through key compression
+- Token reduction through key compression
 - Author deduplication system
 - Type shorthand (t/n/d for task/note/decision)
 - Multiple project support
 
 ### Changed
-- Storage format optimized for minimal tokens
+- Storage format optimized for efficiency
 - Backward compatible with auto-migration
 
 ## [1.0.0] - 2025-01-08
