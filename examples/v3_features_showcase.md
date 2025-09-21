@@ -1,27 +1,30 @@
 # Example: v3.0.0 Features Showcase
 
-This example demonstrates the massive efficiency improvements in MCP AI Foundation v3.0.0.
+This example demonstrates the key improvements in MCP AI Foundation v3.0.0.
 
-## The Problem (v1/v2)
+## The Context Management Problem
 
-Before v3.0.0, checking all your tools was expensive:
+Before v3.0.0, checking tool status returned all data:
 
 ```python
-# OLD WAY - 1300+ tokens just to check status!
-notebook:get_status()      # Returns 500 tokens of ALL notes
-task_manager:list_tasks()  # Returns 400 tokens of ALL tasks
-teambook:read()           # Returns 400 tokens of ALL entries
+# OLD WAY - Returns complete data every time
+notebook:get_status()      # Returns ALL notes with full content
+task_manager:list_tasks()  # Returns ALL tasks with details
+teambook:read()           # Returns ALL entries with content
 ```
 
-## The Solution (v3.0.0)
+## The Smart Summary Solution
 
-With SQLite and smart summaries, the same check is now 97% cheaper:
+With SQLite and intelligent context management:
 
 ```python
-# NEW WAY - Only 43 tokens total!
-notebook:get_status()      # "Notes: 61 | Vault: 2 | Last: 4m" (15 tokens)
-task_manager:list_tasks()  # "9 pending | 4 done" (8 tokens)
-teambook:status()         # "5 tasks | 3 notes | Last: 2m" (20 tokens)
+# NEW WAY - Smart summaries by default
+notebook:get_status()      # "Notes: 61 | Vault: 2 | Last: 4m"
+task_manager:list_tasks()  # "9 pending | 4 done"
+teambook:status()         # "5 tasks | 3 notes | Last: 2m"
+
+# Full details when you need them
+task_manager:list_tasks(full=True)  # Complete task list with all details
 ```
 
 ## Feature Examples
@@ -29,19 +32,19 @@ teambook:status()         # "5 tasks | 3 notes | Last: 2m" (20 tokens)
 ### 1. Smart Summaries with Optional Full View
 
 ```python
-# Default behavior - ultra-compact summaries
+# Default behavior - concise summaries
 task_manager:list_tasks()
 # Returns: "9 pending (2 high) | 4 done (4 today)"
 
 # When you need details, add full=True
 task_manager:list_tasks(full=True)
-# Returns full task list with priorities, timestamps, etc.
+# Returns complete task list with priorities, timestamps, evidence, etc.
 ```
 
 ### 2. Batch Operations - Multiple Actions in One Call
 
 ```python
-# Complete your morning workflow in ONE operation
+# Complete multiple operations in one call
 task_manager:batch([
     {"type": "add", "args": {"task": "Review PR #123"}},
     {"type": "add", "args": {"task": "URGENT: Fix production bug"}},
@@ -49,11 +52,7 @@ task_manager:batch([
     {"type": "stats"}
 ])
 
-# Returns all results in one response:
-# 1. [14] Review PR #123
-# 2. [15]! Fix production bug  
-# 3. [5]✓ in 2h - Deployed
-# 4. 11 pending (3 high) | 27 done
+# Returns all results in one response
 ```
 
 ### 3. Encrypted Vault for Secrets
@@ -67,7 +66,7 @@ notebook:vault_store("db_password", "super_secret_123")
 notebook:vault_retrieve("openai_key")
 # Returns: {"key": "openai_key", "value": "sk-..."}
 
-# List keys (values stay encrypted)
+# List keys (values remain encrypted)
 notebook:vault_list()
 # Returns: ["openai_key", "db_password"]
 ```
@@ -77,10 +76,10 @@ notebook:vault_list()
 ```python
 # Priority detection from keywords
 task_manager:add_task("URGENT: Server is down!")
-# Automatically marked as high priority [!]
+# Automatically detected as high priority
 
 task_manager:add_task("low priority: cleanup old logs")
-# Automatically marked as low priority [↓]
+# Automatically detected as low priority
 
 # Type detection in teambook
 teambook:write("TODO: Deploy v3.0.0")
@@ -93,13 +92,13 @@ teambook:write("DECISION: We're switching to SQLite")
 ### 5. Full-Text Search with FTS5
 
 ```python
-# Instant search across thousands of entries
+# Fast search using SQLite FTS5
 notebook:recall("SQLite migration")
-# Uses FTS5 for blazing fast results
+# Returns summary of matching notes
 
-# With optional full results
+# With full results
 notebook:recall("SQLite migration", full=True)
-# Shows matched entries with context highlighting
+# Returns complete matched entries with context
 ```
 
 ### 6. Cross-Tool Linking
@@ -129,75 +128,60 @@ teambook:read(project="backend", type="task", status="pending")
 ### 8. Atomic Operations
 
 ```python
-# Thread-safe task claiming (no double-claims!)
+# Thread-safe task claiming
 teambook:claim(123)
 # Either succeeds or tells you who already claimed it
 
-# Safe completion with evidence
+# Complete with evidence
 teambook:complete(123, "Deployed to production, all tests passing")
 ```
 
-## Performance at Scale
+## Performance Improvements
 
-### With 10,000 Entries
+The SQLite backend provides better performance at scale:
 
-| Operation | v1/v2 | v3.0.0 | Improvement |
-|-----------|-------|--------|-------------|
-| List all | 45,000 tokens | 8 tokens | 5,625x |
-| Search | 3.2 seconds | 0.04 seconds | 80x |
-| Add entry | 100ms (rewrite all) | 5ms (append) | 20x |
+### Benefits
+- **Faster searches** with FTS5 full-text indexing
+- **Better concurrency** with WAL mode
+- **Efficient storage** with proper database structure
+- **Instant queries** with automatic indices
 
-### Real Workflow Comparison
+### Intelligent Context Management
+- **Summary mode**: Quick overviews for status checks
+- **Full mode**: Complete details when needed
+- **Smart truncation**: Preserves key information
+- **Batch operations**: Reduce API round-trips
 
-**Morning Check-in (v1/v2):**
-```python
-# 5 separate API calls, ~2000 tokens total
-notebook:get_status()       # 500 tokens
-task_manager:list_tasks()   # 400 tokens
-task_manager:add_task(...)  # 400 tokens
-teambook:read()             # 400 tokens
-teambook:claim(123)         # 300 tokens
-```
-
-**Morning Check-in (v3.0.0):**
-```python
-# 1 batch call, 43 tokens total!
-task_manager:batch([
-    {"type": "list_tasks"},
-    {"type": "add", "args": {"task": "Morning standup"}},
-    {"type": "stats"}
-])
-# Plus quick summaries
-notebook:get_status()  # 15 tokens
-teambook:status()      # 20 tokens
-```
-
-## Migration is Automatic!
+## Migration is Automatic
 
 When you first run v3.0.0:
 1. Tools detect existing JSON files
-2. Migrate everything to SQLite automatically
+2. Automatically migrate to SQLite
 3. Create `.json.backup` files for safety
-4. Continue with 95-98% token savings!
+4. Continue with improved performance
 
-No data loss, no manual steps, just instant improvement!
+No data loss, no manual intervention required.
 
-## Try It Yourself
+## Usage Example
 
 ```python
-# Quick test to see the difference
-import time
+# Morning workflow - efficient status check
+notebook:get_status()      # Quick summary
+task_manager:list_tasks()  # Task overview
+teambook:status()         # Team pulse
 
-# Check your current token usage
-start = time.time()
-result = task_manager:list_tasks(full=True)  # Force full view
-print(f"Full view: {len(str(result))} chars in {time.time()-start:.3f}s")
+# Detailed work - use full mode when needed
+task_manager:list_tasks(full=True)  # See all task details
+notebook:recall("API", full=True)   # Full search results
 
-start = time.time()
-result = task_manager:list_tasks()  # Smart summary (default)
-print(f"Summary: {len(str(result))} chars in {time.time()-start:.3f}s")
+# Batch operations for efficiency
+task_manager:batch([
+    {"type": "add", "args": {"task": "Morning standup"}},
+    {"type": "complete", "args": {"task_id": 5}},
+    {"type": "stats"}
+])
 ```
 
 ---
 
-**The future of AI tools is here - 95-98% more efficient!** 🚀
+**Built BY AIs, FOR AIs** 🤖
