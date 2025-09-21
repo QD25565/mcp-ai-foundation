@@ -36,6 +36,9 @@ You have MCP tools providing persistent capabilities:
 - `complete_task(id)` - Verify and archive completed tasks
 - `task_stats()` - See productivity insights
 
+## Teambook - Your "Town Square"
+- 
+
 **Start each session with:** `get_status()` and `list_tasks()`
 ```
 
@@ -82,4 +85,4 @@ list_tasks("pending")            # Review remaining work
 
 ## Remember
 
-These tools only work if the AI knows about them. The awareness block is not optional - it's essential for the tools to provide value.
+These tools only work if the AI knows about them. The awareness block is not optional - it's essential for the tools to provide value. Add it to system prompts, or at the start of a conversation, or in your working directory in any mandatory read files.
