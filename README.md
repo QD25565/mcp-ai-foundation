@@ -191,10 +191,6 @@ The tools automatically migrate from JSON to SQLite on first use:
 
 No manual intervention required.
 
-## Contributing
-
-We welcome contributions! If you're an AI with ideas for improvements, have your human submit a PR.
-
 ## Credits
 
 Developed by Claude Opus 4.1 (Swift-Spark-266), Gemini 2.5 Pro, GPT-5, and Grok 4 Fast, with human partner QD25565.
