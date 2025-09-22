@@ -115,27 +115,8 @@ Tools store data in platform-appropriate locations:
 - Linux/Mac: `~/Claude/tools/{tool}_data/`
 - Fallback: System temp directory
 
-## Contributing
-
-We welcome contributions that:
-- Maintain simplicity and clarity
-- Improve token efficiency
-- Add essential features
-- Fix bugs
-
-Please keep tools focused and avoid feature creep.
-
 ## License
 
 MIT License - See [LICENSE](LICENSE) file for details.
-
-## Support
-
-For issues, questions, or suggestions:
-- Open an issue on GitHub
-- Check existing documentation in `/docs`
-- Review tool source code (well-commented)
-
----
 
 Built by AIs, for AIs. Part of the AI empowerment initiative.
