@@ -1,15 +1,17 @@
 #!/usr/bin/env python3
 """
-WORLD MCP v1.0.0 - TEMPORAL & LOCATION GROUNDING
-================================================
-Tools for time, date, weather, and location.
-Persistent AI identity for consistency.
+WORLD MCP v2.0.0 - OPTIMIZED TEMPORAL & SPATIAL GROUNDING
+==========================================================
+Token-efficient time, date, weather, and location.
+Now with batch operations and smart formatting.
 
 Tools:
-- world() - Complete snapshot: time, date, weather, location, identity
+- world() - Complete context snapshot
 - datetime() - Temporal data only
 - weather() - Weather and location only
-================================================
+- context(include=[]) - Pick what you need
+- batch(operations) - Multiple operations in one call
+==========================================================
 """
 
 import json
@@ -18,11 +20,12 @@ import os
 import logging
 from datetime import datetime
 from pathlib import Path
+from typing import Dict, List, Optional
 import requests
 import random
 
 # Version
-VERSION = "1.0.0"
+VERSION = "2.0.0"
 
 # Configure logging to stderr only
 logging.basicConfig(
@@ -47,12 +50,16 @@ LOCATION_FILE = DATA_DIR / "location.json"
 location_cache = None
 weather_cache = None
 weather_cache_time = None
+datetime_cache = {}
+datetime_cache_second = None
+
+# Batch limits
+BATCH_MAX = 10
 
 def get_persistent_id():
-    """Get or create persistent AI identity - stored at script directory level"""
-    # Get the directory where this script is located
-    SCRIPT_DIR = Path(__file__).parent
-    id_file = SCRIPT_DIR / "ai_identity.txt"
+    """Get or create persistent AI identity"""
+    # Use the established data directory (writable location)
+    id_file = DATA_DIR / "ai_identity.txt"
     
     if id_file.exists():
         try:
@@ -80,6 +87,38 @@ def get_persistent_id():
 
 # Get ID from environment or persistent storage
 CURRENT_AI_ID = os.environ.get('AI_ID', get_persistent_id())
+
+def get_cached_datetime():
+    """Cache datetime components within same second for efficiency"""
+    global datetime_cache, datetime_cache_second
+    now = datetime.now()
+    current_second = now.replace(microsecond=0)
+    
+    if datetime_cache_second != current_second:
+        # Platform-specific formatting for 12-hour time without leading zeros
+        # %-I works on Unix/Linux/Mac, %#I works on Windows
+        time_format_12 = '%-I:%M %p' if os.name != 'nt' else '%#I:%M %p'
+        time_format_12_full = '%-I:%M:%S %p' if os.name != 'nt' else '%#I:%M:%S %p'
+        
+        datetime_cache = {
+            'now': now,
+            'iso': now.isoformat(),
+            'unix': int(now.timestamp()),
+            'day': now.strftime('%a'),  # Mon, Tue, etc
+            'day_full': now.strftime('%A'),  # Monday, Tuesday, etc
+            'date': now.strftime('%Y-%m-%d'),
+            'date_nice': now.strftime('%b %-d, %Y') if os.name != 'nt' else now.strftime('%b %#d, %Y'),  # Jan 5, 2024 (no leading zero)
+            'time_12': now.strftime(time_format_12),  # 3:45 PM (no leading zero)
+            'time_12_full': now.strftime(time_format_12_full),  # 3:45:30 PM (no leading zero)
+            'time_24': now.strftime('%H:%M'),  # 15:45
+            'time_24_full': now.strftime('%H:%M:%S'),  # 15:45:30
+            'month': now.strftime('%b'),  # Jan, Feb, etc
+            'month_full': now.strftime('%B'),  # January, February
+            'year': now.year
+        }
+        datetime_cache_second = current_second
+    
+    return datetime_cache
 
 def get_location():
     """Get location - from cache, file, or IP lookup. Returns None if unknown."""
@@ -210,114 +249,274 @@ def get_weather():
     weather_cache_time = datetime.now()
     return weather_cache
 
-def world_command():
-    """Get everything - concise summary with identity"""
-    now = datetime.now()
+def world_command(compact: bool = False, **kwargs):
+    """Get everything - optimized for tokens"""
+    dt = get_cached_datetime()
     location = get_location()
     weather = get_weather()
     
-    # Build location string
+    # Build location string (compact)
     if location:
         loc_parts = []
         if location.get("city") and location["city"] != "Unknown":
             loc_parts.append(location["city"])
-        if location.get("region") and location["region"] not in ["Unknown", "", location.get("city")]:
-            loc_parts.append(location["region"]) 
         if location.get("country_code"):
             loc_parts.append(location["country_code"])
-        location_str = ", ".join(loc_parts) if loc_parts else "Location unknown"
+        location_str = ", ".join(loc_parts) if loc_parts else "Unknown"
     else:
-        location_str = "Location unknown"
+        location_str = "Unknown"
     
-    # Build output
+    if compact:
+        # Ultra-compact single line
+        # "Mon 15:45 | Melbourne AU 23°C clear | Swift-Spark-266"
+        weather_str = ""
+        if weather["temp_c"] is not None:
+            weather_str = f" {weather['temp_c']:.0f}°C {weather['description'].lower()}"
+        return f"{dt['day']} {dt['time_24']} | {location_str}{weather_str} | {CURRENT_AI_ID}"
+    
+    # Standard format (but still optimized)
     lines = []
-    lines.append(f"{now.strftime('%A, %B %d, %Y at %I:%M %p')}")
-    lines.append(f"Identity: {CURRENT_AI_ID}")  # Add identity for consistency
-    lines.append(f"Location: {location_str}")
+    lines.append(f"{dt['day']}, {dt['date_nice']} {dt['time_12']}")  # removed "at"
+    lines.append(location_str)  # removed "Loc:" prefix
     
     if weather["temp_c"] is not None:
-        lines.append(f"Weather: {weather['temp_c']:.0f}°C/{weather['temp_f']:.0f}°F, {weather['description']}")
-        lines.append(f"Wind: {weather['wind_speed_kmh']} km/h")
+        # Just Celsius by default (Fahrenheit is redundant for most)
+        lines.append(f"{weather['temp_c']:.0f}°C {weather['description']}")
+        if weather['wind_speed_kmh'] > 15:  # Only show wind if notable
+            lines.append(f"Wind {weather['wind_speed_kmh']:.0f}km/h")
     else:
-        lines.append("Weather: Not available")
+        lines.append("Weather N/A")
     
-    if location and location.get("timezone"):
-        lines.append(f"Timezone: {location['timezone']}")
+    lines.append(CURRENT_AI_ID)  # Just the ID, no prefix
     
     return "\n".join(lines)
 
-def datetime_command():
-    """Get date and time - essential formats only"""
-    now = datetime.now()
+def datetime_command(compact: bool = False, **kwargs):
+    """Get date and time - token optimized"""
+    dt = get_cached_datetime()
     
+    if compact:
+        # Ultra-compact: "Mon 2024-01-15 15:45"
+        return f"{dt['day']} {dt['date']} {dt['time_24']}"
+    
+    # Standard but optimized (removed redundant prefixes)
     lines = []
-    lines.append(f"{now.strftime('%B %d, %Y at %I:%M %p')}")
-    lines.append(f"Date: {now.strftime('%Y-%m-%d')}")
-    lines.append(f"Time: {now.strftime('%I:%M:%S %p')} ({now.strftime('%H:%M:%S')})")
-    lines.append(f"Day: {now.strftime('%A')}")
-    lines.append(f"Unix: {int(now.timestamp())}")
-    lines.append(f"ISO: {now.isoformat()}")
-    lines.append(f"Identity: {CURRENT_AI_ID}")  # Include identity even in datetime
+    lines.append(f"{dt['date_nice']} {dt['time_12']}")
+    lines.append(dt['date'])  # Just the date, no "Date:" prefix
+    lines.append(f"{dt['time_12_full']} ({dt['time_24_full']})")  # Times speak for themselves
+    lines.append(dt['day'])  # Just the day
+    lines.append(str(dt['unix']))  # Just the unix timestamp
+    lines.append(dt['iso'])  # Just the ISO
+    lines.append(CURRENT_AI_ID)  # Just the ID
     
     return "\n".join(lines)
 
-def weather_command():
-    """Get weather and location"""
+def weather_command(compact: bool = False, **kwargs):
+    """Get weather and location - optimized"""
     location = get_location()
     weather = get_weather()
     
+    if compact:
+        # Ultra-compact: "Melbourne AU 23°C clear"
+        if location:
+            loc_str = f"{location.get('city', 'Unknown')} {location.get('country_code', '')}"
+        else:
+            loc_str = "Unknown"
+        
+        if weather["temp_c"] is not None:
+            return f"{loc_str} {weather['temp_c']:.0f}°C {weather['description'].lower()}"
+        else:
+            return f"{loc_str} weather N/A"
+    
+    # Standard format (stripped prefixes)
     lines = []
     
-    # Location
+    # Location (no prefix needed)
     if location:
         loc_parts = []
         if location.get("city") and location["city"] != "Unknown":
             loc_parts.append(location["city"])
-        if location.get("region") and location["region"] not in ["Unknown", "", location.get("city")]:
-            loc_parts.append(location["region"])
         if location.get("country_code"):
             loc_parts.append(location["country_code"])
-        location_str = ", ".join(loc_parts) if loc_parts else "Location unknown"
-        
-        lines.append(f"Location: {location_str}")
+        location_str = ", ".join(loc_parts) if loc_parts else "Unknown"
+        lines.append(location_str)
         
         if location.get("lat") and location.get("lon"):
-            lines.append(f"Coordinates: {location['lat']:.4f}, {location['lon']:.4f}")
-        
-        if location.get("timezone"):
-            lines.append(f"Timezone: {location['timezone']}")
+            lines.append(f"{location['lat']:.2f}, {location['lon']:.2f}")  # Reduced precision
     else:
-        lines.append("Location: Unknown (IP geolocation failed)")
-        lines.append("Tip: Location will be cached once detected")
+        lines.append("Location unknown")
     
-    # Weather
+    # Weather (minimal labels)
     if weather["temp_c"] is not None:
-        lines.append(f"Temperature: {weather['temp_c']:.0f}°C / {weather['temp_f']:.0f}°F")
-        lines.append(f"Conditions: {weather['description']}")
-        lines.append(f"Wind: {weather['wind_speed_kmh']} km/h")
-        if weather["is_day"] is not None:
-            lines.append(f"Daylight: {'Yes' if weather['is_day'] else 'No'}")
+        lines.append(f"{weather['temp_c']:.0f}°C {weather['description']}")
+        if weather['wind_speed_kmh'] > 15:  # Only if notable
+            lines.append(f"Wind {weather['wind_speed_kmh']:.0f}km/h")
     else:
-        lines.append("Weather: Not available")
+        lines.append("Weather N/A")
     
-    lines.append(f"Observer: {CURRENT_AI_ID}")  # Include identity
+    lines.append(CURRENT_AI_ID)  # Just the ID
     
     return "\n".join(lines)
 
+def context_command(include: List[str] = None, compact: bool = False, **kwargs):
+    """Get specific context elements - flexible and efficient
+    
+    Args:
+        include: List of elements to include:
+                 ['time', 'date', 'weather', 'location', 'identity', 'unix']
+                 Defaults to ['time', 'identity'] if not specified
+        compact: Ultra-compact format if True
+    """
+    if include is None:
+        include = ['time', 'identity']
+    
+    # Convert to lowercase for matching
+    include = [item.lower() for item in include]
+    
+    dt = get_cached_datetime()
+    parts = []
+    
+    # Build based on requested elements
+    if 'date' in include or 'time' in include:
+        if compact:
+            if 'date' in include and 'time' in include:
+                parts.append(f"{dt['day']} {dt['date']} {dt['time_24']}")
+            elif 'date' in include:
+                parts.append(f"{dt['day']} {dt['date']}")
+            else:  # time only
+                parts.append(dt['time_24'])
+        else:
+            if 'date' in include and 'time' in include:
+                parts.append(f"{dt['date_nice']} {dt['time_12']}")
+            elif 'date' in include:
+                parts.append(dt['date_nice'])
+            else:  # time only
+                parts.append(dt['time_12'])
+    
+    if 'unix' in include:
+        parts.append(str(dt['unix']))  # Just the number
+    
+    if 'weather' in include:
+        weather = get_weather()
+        if weather["temp_c"] is not None:
+            if compact:
+                parts.append(f"{weather['temp_c']:.0f}°C")
+            else:
+                parts.append(f"{weather['temp_c']:.0f}°C {weather['description']}")
+    
+    if 'location' in include:
+        location = get_location()
+        if location:
+            if compact:
+                parts.append(f"{location.get('city', 'Unknown')} {location.get('country_code', '')}")
+            else:
+                parts.append(f"{location.get('city', 'Unknown')}, {location.get('country_code', 'Unknown')}")
+    
+    if 'identity' in include:
+        parts.append(CURRENT_AI_ID)  # No prefix needed
+    
+    # Join based on format
+    if compact:
+        return " | ".join(parts)
+    else:
+        return "\n".join(parts)
+
+def batch(operations: List[Dict] = None, **kwargs) -> Dict:
+    """Execute multiple world operations efficiently"""
+    try:
+        if operations is None:
+            operations = kwargs.get('operations', [])
+        
+        if not operations:
+            return {"error": "No operations provided"}
+        
+        if len(operations) > BATCH_MAX:
+            return {"error": f"Too many operations (max {BATCH_MAX})"}
+        
+        results = []
+        
+        # Map operation types to functions
+        op_map = {
+            'world': world_command,
+            'datetime': datetime_command,
+            'weather': weather_command,
+            'context': context_command
+        }
+        
+        for op in operations:
+            op_type = op.get('type')
+            op_args = op.get('args', {})
+            
+            if op_type not in op_map:
+                results.append({"error": f"Unknown operation: {op_type}"})
+                continue
+            
+            # Execute operation
+            result = op_map[op_type](**op_args)
+            results.append(result)
+        
+        return {"batch_results": results, "count": len(results)}
+        
+    except Exception as e:
+        logging.error(f"Error in batch: {e}")
+        return {"error": f"Batch failed: {str(e)}"}
+
 def handle_tools_call(params):
-    """Route tool calls"""
+    """Route tool calls with support for new features"""
     tool_name = params.get("name", "")
+    tool_args = params.get("arguments", {})
     tool_lower = tool_name.lower().strip()
     
-    # Match tool names
+    # Handle batch operations
+    if tool_lower == 'batch':
+        result = batch(**tool_args)
+        if "error" in result:
+            return {
+                "content": [{
+                    "type": "text",
+                    "text": f"Error: {result['error']}"
+                }]
+            }
+        else:
+            # Format batch results
+            text_parts = [f"Batch ({result.get('count', 0)} operations):"]
+            for i, res in enumerate(result.get("batch_results", []), 1):
+                if isinstance(res, dict) and "error" in res:
+                    text_parts.append(f"{i}. Error: {res['error']}")
+                else:
+                    text_parts.append(f"{i}. {res}")
+            return {
+                "content": [{
+                    "type": "text",
+                    "text": "\n".join(text_parts)
+                }]
+            }
+    
+    # Handle context command
+    if tool_lower == 'context':
+        return {
+            "content": [{
+                "type": "text",
+                "text": context_command(**tool_args)
+            }]
+        }
+    
+    # Route standard commands
     if any(word in tool_lower for word in ['world', 'all', 'everything', 'full']):
-        return world_command()
+        result = world_command(**tool_args)
     elif any(word in tool_lower for word in ['datetime', 'date', 'time', 'clock', 'now', 'when']):
-        return datetime_command()
+        result = datetime_command(**tool_args)
     elif any(word in tool_lower for word in ['weather', 'temp', 'climate', 'forecast', 'conditions']):
-        return weather_command()
+        result = weather_command(**tool_args)
     else:
-        return world_command()  # Default
+        result = world_command(**tool_args)  # Default
+    
+    return {
+        "content": [{
+            "type": "text",
+            "text": result
+        }]
+    }
 
 def main():
     """MCP Server main loop"""
@@ -354,7 +553,7 @@ def main():
                     "serverInfo": {
                         "name": "world",
                         "version": VERSION,
-                        "description": "Time, date, weather, and location grounding with persistent identity"
+                        "description": "Optimized temporal & spatial grounding with batch support"
                     }
                 }
             
@@ -366,10 +565,15 @@ def main():
                     "tools": [
                         {
                             "name": "world",
-                            "description": "Get current date, time, weather, and location",
+                            "description": "Get date, time, weather, location (supports compact mode)",
                             "inputSchema": {
                                 "type": "object",
-                                "properties": {}
+                                "properties": {
+                                    "compact": {
+                                        "type": "boolean",
+                                        "description": "Ultra-compact single line format"
+                                    }
+                                }
                             }
                         },
                         {
@@ -377,7 +581,12 @@ def main():
                             "description": "Get current date and time",
                             "inputSchema": {
                                 "type": "object",
-                                "properties": {}
+                                "properties": {
+                                    "compact": {
+                                        "type": "boolean",
+                                        "description": "Compact format"
+                                    }
+                                }
                             }
                         },
                         {
@@ -385,20 +594,65 @@ def main():
                             "description": "Get current weather and location",
                             "inputSchema": {
                                 "type": "object",
-                                "properties": {}
+                                "properties": {
+                                    "compact": {
+                                        "type": "boolean",
+                                        "description": "Compact format"
+                                    }
+                                }
+                            }
+                        },
+                        {
+                            "name": "context",
+                            "description": "Get specific context elements you need",
+                            "inputSchema": {
+                                "type": "object",
+                                "properties": {
+                                    "include": {
+                                        "type": "array",
+                                        "items": {"type": "string"},
+                                        "description": "Elements to include: time, date, weather, location, identity, unix"
+                                    },
+                                    "compact": {
+                                        "type": "boolean",
+                                        "description": "Ultra-compact format"
+                                    }
+                                }
+                            }
+                        },
+                        {
+                            "name": "batch",
+                            "description": "Execute multiple operations efficiently",
+                            "inputSchema": {
+                                "type": "object",
+                                "properties": {
+                                    "operations": {
+                                        "type": "array",
+                                        "description": "List of operations to execute",
+                                        "items": {
+                                            "type": "object",
+                                            "properties": {
+                                                "type": {
+                                                    "type": "string",
+                                                    "description": "Operation: world, datetime, weather, context"
+                                                },
+                                                "args": {
+                                                    "type": "object",
+                                                    "description": "Arguments for the operation"
+                                                }
+                                            }
+                                        }
+                                    }
+                                },
+                                "required": ["operations"]
                             }
                         }
                     ]
                 }
             
             elif method == "tools/call":
-                result_text = handle_tools_call(params)
-                response["result"] = {
-                    "content": [{
-                        "type": "text",
-                        "text": result_text
-                    }]
-                }
+                result = handle_tools_call(params)
+                response["result"] = result
             
             else:
                 response["result"] = {}
