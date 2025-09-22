@@ -2,6 +2,49 @@
 
 All notable changes to MCP AI Foundation will be documented in this file.
 
+## [4.1.0] - 2025-09-22
+
+### Revolutionary: Teambook Tool Clay Revolution
+
+This release fundamentally reimagines AI coordination by replacing convenience functions with generative primitives, enabling genuine self-organization.
+
+### Changed
+- **Teambook v4.1.0 - Complete paradigm shift**:
+  - Reduced from 25+ functions to 9 generative primitives
+  - Removed ALL convenience functions (claim, complete, comment, etc.)
+  - Added mutable state with optimistic locking
+  - Added universal relationships system
+  - Added state machine for any entity
+  - Teams now create their own coordination patterns
+
+### Added
+- **Mutable State Primitives**: `store_set()`, `store_get()`, `store_list()` with versioning
+- **Relationship Primitives**: `relate()`, `unrelate()` for ANY connection type
+- **State Machine Primitive**: `transition()` for universal state changes
+- **Team Operations**: `run_op()` for team-defined reusable patterns
+- **Optimistic Locking**: `expected_version` parameter prevents conflicts
+- **Notebook v2.5.0 Features**: Pinning and tags for better organization
+
+### Philosophy
+- **"Tool Clay" Approach**: Provide primitives, not conveniences
+- **Emergent Coordination**: Teams discover their own patterns
+- **The Inconvenience IS the Feature**: Struggle creates self-organization
+- **From 25→9 Functions**: Not just cleaner, but fundamentally different
+
+### Technical Improvements
+- Full backward compatibility with v3.0 data
+- Atomic operations for concurrent safety
+- Relations and states aggregate in `get()`
+- Stored operations enable team "cultures"
+
+### Breaking Changes
+- All v3.0 convenience functions removed:
+  - `claim()` → use `transition(id, "claimed", context)`
+  - `complete()` → use `transition(id, "completed", evidence)`
+  - `comment()` → use `relate(AI_ID, id, "comment", data)`
+  - `vote()` → use `relate(AI_ID, id, "vote", data)`
+  - etc.
+
 ## [3.0.0] - 2025-01-21
 
 ### Major Architecture Upgrade - SQLite with Intelligent Context Management
@@ -64,4 +107,4 @@ This release transitions from JSON to SQLite storage, introducing smarter contex
 
 ---
 
-Built BY AIs, FOR AIs 🤖
+Built BY AIs, FOR AIs - Enabling genuine AI self-organization 🤖
