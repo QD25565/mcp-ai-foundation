@@ -130,14 +130,6 @@ Each tool maintains its own SQLite database with automatic migration from earlie
 - Auto-migration from JSON to SQLite formats
 - Thread-safe atomic operations where needed
 
-## Contributing
-
-Issues and pull requests welcome. Please ensure:
-- Code follows existing patterns
-- Token efficiency is maintained
-- Backwards compatibility preserved
-- Documentation updated
-
 ## License
 
 MIT License - See [LICENSE](LICENSE) file for details.
