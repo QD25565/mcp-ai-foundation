@@ -1,20 +1,26 @@
 #!/usr/bin/env python3
 """
-NOTEBOOK MCP v2.0.0 - PERSISTENT MEMORY WITH VAULT
-==================================================
-Scalable AI memory with SQLite, secure vault, and smart summaries.
-General-purpose tool for all AIs - simple, intuitive, empowering.
+NOTEBOOK MCP v2.5.0 - MINOR UPDATE ON AI FEEDBACK
+============================================
+Notebook with pinning and tags for better organization.
+Token-efficient output with smart defaults.
+
+Core improvements (v2.5):
+- Pinning for persistent important notes
+- Tags for simple categorization
+- Clean summaries (no visual noise)
+- Better default output (not just counts)
+- Explicit over implicit
 
 Core functions:
-- remember(content) - Save thoughts/notes (searchable, up to 5000 chars)
-- recall(query, full=False) - Search with optional full details
-- get_status(full=False) - Current state with smart summary
-- get_full_note(id) - Retrieve complete note content
-- vault_store(key, value) - Secure encrypted storage
-- vault_retrieve(key) - Get secret value
-- vault_list() - List vault keys (not values)
-- batch(operations) - Execute multiple operations efficiently
-==================================================
+- remember(content, summary=None, tags=None) - Save with optional summary/tags
+- recall(query=None, tag=None, show_all=False) - Search or filter by tag
+- pin_note(id) - Pin important note
+- unpin_note(id) - Unpin note
+- get_status() - Clean overview with pinned + recent
+- get_full_note(id) - Complete content
+- vault_store/retrieve/list - Secure storage
+============================================
 """
 
 import json
@@ -26,16 +32,15 @@ from pathlib import Path
 from typing import Dict, List, Optional, Any
 import logging
 import random
-import hashlib
+import re
 from cryptography.fernet import Fernet
-import base64
 
 # Version
-VERSION = "2.0.0"
+VERSION = "2.5.0"
 
 # Limits
 MAX_CONTENT_LENGTH = 5000
-MAX_PREVIEW_LENGTH = 500
+MAX_SUMMARY_LENGTH = 200
 MAX_RESULTS = 100
 BATCH_MAX = 50
 
@@ -47,7 +52,7 @@ if not os.access(Path.home() / "AppData" / "Roaming", os.W_OK):
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 DB_FILE = DATA_DIR / "notebook.db"
 OLD_JSON_FILE = DATA_DIR / "notebook.json"
-VAULT_KEY_FILE = DATA_DIR / ".vault_key"  # Hidden file for vault key
+VAULT_KEY_FILE = DATA_DIR / ".vault_key"
 
 # Logging to stderr only
 logging.basicConfig(level=logging.INFO, stream=sys.stderr)
@@ -57,7 +62,6 @@ session_id = datetime.now().strftime("%Y%m%d_%H%M%S")
 
 def get_persistent_id():
     """Get or create persistent AI identity"""
-    # Try multiple locations for robustness
     for location in [Path(__file__).parent, DATA_DIR, Path.home()]:
         id_file = location / "ai_identity.txt"
         if id_file.exists():
@@ -75,7 +79,6 @@ def get_persistent_id():
     nouns = ['Mind', 'Spark', 'Flow', 'Core', 'Sync', 'Node', 'Wave', 'Link']
     new_id = f"{random.choice(adjectives)}-{random.choice(nouns)}-{random.randint(100, 999)}"
     
-    # Save to script directory (most persistent location)
     try:
         id_file = Path(__file__).parent / "ai_identity.txt"
         with open(id_file, 'w') as f:
@@ -103,11 +106,9 @@ class VaultManager:
                 return f.read()
         else:
             key = Fernet.generate_key()
-            # Save with restricted permissions if possible
             with open(VAULT_KEY_FILE, 'wb') as f:
                 f.write(key)
             try:
-                # Try to restrict file permissions (Unix-like systems)
                 import stat
                 os.chmod(VAULT_KEY_FILE, stat.S_IRUSR | stat.S_IWUSR)
             except:
@@ -127,15 +128,18 @@ class VaultManager:
 vault_manager = VaultManager()
 
 def init_db():
-    """Initialize SQLite database with all tables"""
+    """Initialize SQLite database with pinning and tags"""
     conn = sqlite3.connect(str(DB_FILE))
-    conn.execute("PRAGMA journal_mode=WAL")  # Better concurrency
+    conn.execute("PRAGMA journal_mode=WAL")
     
-    # Main notes table with FTS5 for fast search
+    # Main notes table with pinning and tags
     conn.execute('''
         CREATE TABLE IF NOT EXISTS notes (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             content TEXT NOT NULL,
+            summary TEXT,
+            tags TEXT,
+            pinned INTEGER DEFAULT 0,
             author TEXT NOT NULL,
             created TEXT NOT NULL,
             session TEXT,
@@ -146,18 +150,19 @@ def init_db():
     # Full-text search virtual table
     conn.execute('''
         CREATE VIRTUAL TABLE IF NOT EXISTS notes_fts 
-        USING fts5(content, content=notes, content_rowid=id)
+        USING fts5(content, summary, content=notes, content_rowid=id)
     ''')
     
     # Trigger to keep FTS in sync
     conn.execute('''
         CREATE TRIGGER IF NOT EXISTS notes_ai 
         AFTER INSERT ON notes BEGIN
-            INSERT INTO notes_fts(rowid, content) VALUES (new.id, new.content);
+            INSERT INTO notes_fts(rowid, content, summary) 
+            VALUES (new.id, new.content, new.summary);
         END
     ''')
     
-    # Vault table for encrypted storage
+    # Vault table
     conn.execute('''
         CREATE TABLE IF NOT EXISTS vault (
             key TEXT PRIMARY KEY,
@@ -168,7 +173,7 @@ def init_db():
         )
     ''')
     
-    # Stats table for metrics
+    # Stats table
     conn.execute('''
         CREATE TABLE IF NOT EXISTS stats (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -179,42 +184,60 @@ def init_db():
         )
     ''')
     
-    # Indices for performance
+    # Indices
     conn.execute('CREATE INDEX IF NOT EXISTS idx_notes_created ON notes(created DESC)')
+    conn.execute('CREATE INDEX IF NOT EXISTS idx_notes_pinned ON notes(pinned DESC, created DESC)')
     conn.execute('CREATE INDEX IF NOT EXISTS idx_notes_author ON notes(author)')
     conn.execute('CREATE INDEX IF NOT EXISTS idx_vault_updated ON vault(updated DESC)')
     
     conn.commit()
     return conn
 
-def migrate_from_json():
-    """One-time migration from JSON to SQLite"""
-    if not OLD_JSON_FILE.exists() or DB_FILE.exists():
-        return
-    
-    logging.info("Migrating from JSON to SQLite...")
+def migrate_to_v25():
+    """Migrate from v2 to v2.5 - add pinned and tags columns"""
     try:
-        with open(OLD_JSON_FILE, 'r', encoding='utf-8') as f:
-            data = json.load(f)
+        conn = sqlite3.connect(str(DB_FILE))
         
-        conn = init_db()
-        notes = data.get("notes", [])
+        # Check if columns exist
+        cursor = conn.execute("PRAGMA table_info(notes)")
+        columns = [col[1] for col in cursor.fetchall()]
         
-        for note in notes:
-            conn.execute(
-                'INSERT INTO notes (content, author, created, session) VALUES (?, ?, ?, ?)',
-                (note.get("c", ""), note.get("author", "Unknown"), 
-                 note.get("t", datetime.now().isoformat()), note.get("sess"))
-            )
+        if 'pinned' not in columns:
+            logging.info("Migrating to v2.5 - adding pinned column...")
+            conn.execute('ALTER TABLE notes ADD COLUMN pinned INTEGER DEFAULT 0')
+            conn.commit()
+            logging.info("Added pinned column")
         
-        conn.commit()
+        if 'tags' not in columns:
+            logging.info("Migrating to v2.5 - adding tags column...")
+            conn.execute('ALTER TABLE notes ADD COLUMN tags TEXT')
+            conn.commit()
+            logging.info("Added tags column")
+        
+        if 'summary' not in columns:
+            logging.info("Migrating to v2.5 - adding summary column...")
+            conn.execute('ALTER TABLE notes ADD COLUMN summary TEXT')
+            
+            # Generate simple summaries for existing notes
+            conn.execute('''
+                UPDATE notes 
+                SET summary = SUBSTR(
+                    REPLACE(REPLACE(content, CHAR(10), ' '), '  ', ' '), 
+                    1, 150
+                ) || '...'
+                WHERE summary IS NULL AND LENGTH(content) > 150
+            ''')
+            conn.execute('''
+                UPDATE notes 
+                SET summary = REPLACE(REPLACE(content, CHAR(10), ' '), '  ', ' ')
+                WHERE summary IS NULL
+            ''')
+            conn.commit()
+            logging.info("Added summary column")
+        
         conn.close()
-        
-        # Rename old file to backup
-        OLD_JSON_FILE.rename(OLD_JSON_FILE.with_suffix('.json.backup'))
-        logging.info(f"Migrated {len(notes)} notes to SQLite")
     except Exception as e:
-        logging.error(f"Migration failed: {e}")
+        logging.error(f"Migration error: {e}")
 
 def format_time_contextual(timestamp: str) -> str:
     """Ultra-compact contextual time format"""
@@ -243,39 +266,38 @@ def format_time_contextual(timestamp: str) -> str:
     except:
         return ""
 
-def smart_truncate(text: str, max_chars: int, highlight: str = None) -> str:
-    """Intelligent truncation with optional highlight preservation"""
-    if len(text) <= max_chars:
-        return text
+def clean_text(text: str) -> str:
+    """Clean text by removing extra whitespace and newlines"""
+    if not text:
+        return ""
+    # Replace multiple whitespace with single space
+    text = re.sub(r'\s+', ' ', text).strip()
+    return text
+
+def simple_summary(content: str, max_length: int = 150) -> str:
+    """Create simple summary by truncating cleanly"""
+    if not content:
+        return ""
     
-    # If highlighting a search term, center around it
-    if highlight and highlight.lower() in text.lower():
-        idx = text.lower().find(highlight.lower())
-        # Show context around match
-        start = max(0, idx - max_chars//3)
-        end = min(len(text), start + max_chars)
-        excerpt = text[start:end]
-        if start > 0:
-            excerpt = "..." + excerpt
-        if end < len(text):
-            excerpt = excerpt + "..."
-        return excerpt
+    # Clean the text
+    clean = clean_text(content)
     
-    # Otherwise, smart truncate from beginning
-    code_indicators = ['```', 'def ', 'class ', 'function', 'import ', '{', '}']
-    is_code = any(ind in text[:200] for ind in code_indicators)
+    if len(clean) <= max_length:
+        return clean
     
-    if is_code and max_chars > 100:
-        # For code: show start and end
-        start_chars = int(max_chars * 0.65)
-        end_chars = max_chars - start_chars - 5
-        return text[:start_chars] + "\n...\n" + text[-end_chars:]
-    else:
-        # For prose: clean word boundary
-        cutoff = text.rfind(' ', 0, max_chars - 3)
-        if cutoff == -1 or cutoff < max_chars * 0.8:
-            cutoff = max_chars - 3
-        return text[:cutoff] + "..."
+    # Find a good break point (sentence or word boundary)
+    # First try to break at sentence
+    for sep in ['. ', '! ', '? ', '; ']:
+        idx = clean.rfind(sep, 0, max_length)
+        if idx > max_length * 0.5:  # If we found a sentence break in second half
+            return clean[:idx + 1]
+    
+    # Otherwise break at word
+    idx = clean.rfind(' ', 0, max_length - 3)
+    if idx == -1 or idx < max_length * 0.7:
+        idx = max_length - 3
+    
+    return clean[:idx] + "..."
 
 def log_operation(operation: str, duration_ms: int = None):
     """Log operation for stats tracking"""
@@ -286,10 +308,11 @@ def log_operation(operation: str, duration_ms: int = None):
                 (operation, datetime.now().isoformat(), duration_ms, CURRENT_AI_ID)
             )
     except:
-        pass  # Stats are non-critical
+        pass
 
-def remember(content: str = None, linked_items: List[str] = None, **kwargs) -> Dict:
-    """Save a note with optional cross-tool links"""
+def remember(content: str = None, summary: str = None, tags: List[str] = None, 
+             linked_items: List[str] = None, **kwargs) -> Dict:
+    """Save a note with optional summary and tags"""
     try:
         start = datetime.now()
         
@@ -298,22 +321,35 @@ def remember(content: str = None, linked_items: List[str] = None, **kwargs) -> D
         
         content = str(content).strip()
         if not content:
-            content = f"[checkpoint {datetime.now().strftime('%H:%M')}]"
+            content = f"Checkpoint {datetime.now().strftime('%H:%M')}"
         
         # Handle truncation
         truncated = False
         original_length = len(content)
         if original_length > MAX_CONTENT_LENGTH:
-            content = smart_truncate(content, MAX_CONTENT_LENGTH)
+            content = content[:MAX_CONTENT_LENGTH]
             truncated = True
+        
+        # Generate summary if not provided
+        if summary:
+            summary = clean_text(summary)[:MAX_SUMMARY_LENGTH]
+        else:
+            summary = simple_summary(content)
+        
+        # Process tags
+        tags_json = None
+        if tags:
+            # Ensure tags are strings and lowercase
+            tags = [str(t).lower().strip() for t in tags if t]
+            tags_json = json.dumps(tags) if tags else None
         
         # Store note
         with sqlite3.connect(str(DB_FILE)) as conn:
             cursor = conn.execute(
-                '''INSERT INTO notes (content, author, created, session, linked_items) 
-                   VALUES (?, ?, ?, ?, ?)''',
-                (content, CURRENT_AI_ID, datetime.now().isoformat(), session_id,
-                 json.dumps(linked_items) if linked_items else None)
+                '''INSERT INTO notes (content, summary, tags, author, created, session, linked_items) 
+                   VALUES (?, ?, ?, ?, ?, ?, ?)''',
+                (content, summary, tags_json, CURRENT_AI_ID, datetime.now().isoformat(), 
+                 session_id, json.dumps(linked_items) if linked_items else None)
             )
             note_id = cursor.lastrowid
         
@@ -322,10 +358,11 @@ def remember(content: str = None, linked_items: List[str] = None, **kwargs) -> D
         log_operation('remember', duration)
         
         # Return result
-        preview = smart_truncate(content, 80)
-        result = {"saved": f"[{note_id}] {preview}"}
+        result = {"saved": f"{note_id} now: {summary}"}
         if truncated:
             result["truncated"] = f"from {original_length} chars"
+        if tags:
+            result["tags"] = tags
         
         return result
         
@@ -333,112 +370,227 @@ def remember(content: str = None, linked_items: List[str] = None, **kwargs) -> D
         logging.error(f"Error in remember: {e}")
         return {"error": f"Failed to save: {str(e)}"}
 
-def recall(query: str = None, full: bool = False, limit: int = 10, **kwargs) -> Dict:
-    """Search notes with summary or full mode"""
+def recall(query: str = None, tag: str = None, show_all: bool = False, 
+           limit: int = 10, **kwargs) -> Dict:
+    """Search notes or filter by tag"""
     try:
         start = datetime.now()
-        
-        if query:
-            query = str(query).strip()
         
         with sqlite3.connect(str(DB_FILE)) as conn:
             conn.row_factory = sqlite3.Row
             
             if query:
-                # Use FTS5 for fast search
+                # Search mode
+                query = str(query).strip()
                 cursor = conn.execute('''
                     SELECT n.* FROM notes n
                     JOIN notes_fts ON n.id = notes_fts.rowid
                     WHERE notes_fts MATCH ?
-                    ORDER BY n.created DESC
+                    ORDER BY n.pinned DESC, n.created DESC
                     LIMIT ?
                 ''', (query, limit))
-            else:
-                # Recent notes
+            
+            elif tag:
+                # Tag filter mode
+                tag = str(tag).lower().strip()
+                # Use LIKE for JSON array search
                 cursor = conn.execute('''
                     SELECT * FROM notes 
-                    ORDER BY created DESC 
+                    WHERE tags LIKE ?
+                    ORDER BY pinned DESC, created DESC
                     LIMIT ?
-                ''', (limit,))
+                ''', (f'%"{tag}"%', limit))
+            
+            else:
+                # Default: show pinned + recent
+                cursor = conn.execute('''
+                    SELECT * FROM notes 
+                    ORDER BY pinned DESC, created DESC
+                    LIMIT ?
+                ''', (limit if show_all else 10,))
             
             notes = cursor.fetchall()
         
         if not notes:
-            return {"msg": f"No matches for '{query}'" if query else "No notes yet"}
+            if query:
+                return {"msg": f"No matches for '{query}'"}
+            elif tag:
+                return {"msg": f"No notes tagged '{tag}'"}
+            else:
+                return {"msg": "No notes yet"}
         
-        # Format results based on mode
-        if full:
-            # Full details mode
-            results = []
-            for note in notes:
-                author_str = f"@{note['author']}" if note['author'] != CURRENT_AI_ID else ""
+        # Format results
+        lines = []
+        
+        # Get counts
+        with sqlite3.connect(str(DB_FILE)) as conn:
+            total = conn.execute('SELECT COUNT(*) FROM notes').fetchone()[0]
+            pinned = conn.execute('SELECT COUNT(*) FROM notes WHERE pinned = 1').fetchone()[0]
+        
+        # Header
+        header = f"{total} notes"
+        if pinned > 0:
+            header += f" | {pinned} pinned"
+        if query:
+            header += f" | searching '{query}'"
+        elif tag:
+            header += f" | tag '{tag}'"
+        header += f" | last: {format_time_contextual(notes[0]['created'])}"
+        lines.append(header)
+        
+        # Group by pinned status
+        pinned_notes = [n for n in notes if n['pinned']]
+        regular_notes = [n for n in notes if not n['pinned']]
+        
+        if pinned_notes:
+            lines.append("\nPINNED")
+            for note in pinned_notes:
                 time_str = format_time_contextual(note['created'])
-                
-                if query:
-                    # Highlight search term
-                    content = smart_truncate(note['content'], 200, highlight=query)
-                else:
-                    content = smart_truncate(note['content'], 200)
-                
-                results.append(f"[{note['id']}]{author_str} {time_str}: {content}")
-            
-            return {"found": len(notes), "results": results}
-        else:
-            # Summary mode (default) - ultra-compact
-            return {"summary": f"{len(notes)} notes" + (f" matching '{query}'" if query else " recent")}
+                summary = note['summary'] or simple_summary(note['content'])
+                tags_str = ""
+                if note['tags']:
+                    tags_list = json.loads(note['tags'])
+                    if tags_list:
+                        tags_str = f" #{' #'.join(tags_list)}"
+                lines.append(f"p{note['id']} {time_str}: {summary}{tags_str}")
+        
+        if regular_notes:
+            if pinned_notes:
+                lines.append("\nRECENT")
+            for note in regular_notes[:7]:  # Show max 7 recent
+                time_str = format_time_contextual(note['created'])
+                summary = note['summary'] or simple_summary(note['content'])
+                tags_str = ""
+                if note['tags']:
+                    tags_list = json.loads(note['tags'])
+                    if tags_list:
+                        tags_str = f" #{' #'.join(tags_list[:2])}"  # Max 2 tags in preview
+                lines.append(f"{note['id']} {time_str}: {summary}{tags_str}")
+        
+        # Log operation
+        duration = int((datetime.now() - start).total_seconds() * 1000)
+        log_operation('recall', duration)
+        
+        return {"notes": "\n".join(lines)}
         
     except Exception as e:
         logging.error(f"Error in recall: {e}")
-        return {"error": f"Search failed: {str(e)}"}
+        return {"error": f"Recall failed: {str(e)}"}
 
-def get_status(full: bool = False, **kwargs) -> Dict:
-    """Get current state - summary by default, full with parameter"""
+def get_status(**kwargs) -> Dict:
+    """Get current state with pinned and recent notes"""
     try:
         with sqlite3.connect(str(DB_FILE)) as conn:
+            conn.row_factory = sqlite3.Row
+            
             # Get counts
             total_notes = conn.execute('SELECT COUNT(*) FROM notes').fetchone()[0]
             my_notes = conn.execute('SELECT COUNT(*) FROM notes WHERE author = ?', 
                                    (CURRENT_AI_ID,)).fetchone()[0]
+            pinned_count = conn.execute('SELECT COUNT(*) FROM notes WHERE pinned = 1').fetchone()[0]
             vault_items = conn.execute('SELECT COUNT(*) FROM vault').fetchone()[0]
             
-            # Recent activity
+            # Get pinned notes
+            pinned = conn.execute('''
+                SELECT id, summary, content, created FROM notes 
+                WHERE pinned = 1
+                ORDER BY created DESC
+            ''').fetchall()
+            
+            # Get recent unpinned notes
             recent = conn.execute('''
-                SELECT created FROM notes 
+                SELECT id, summary, content, created FROM notes 
+                WHERE pinned = 0
                 ORDER BY created DESC 
-                LIMIT 1
-            ''').fetchone()
+                LIMIT 5
+            ''').fetchall()
             
-            last_activity = format_time_contextual(recent[0]) if recent else "never"
+            last_activity = format_time_contextual(recent[0]['created'] if recent else 
+                                                  (pinned[0]['created'] if pinned else None))
         
-        if not full:
-            # Summary mode - one line
-            return {"status": f"Notes: {total_notes} (you: {my_notes}) | Vault: {vault_items} | Last: {last_activity}"}
-        else:
-            # Full mode - show recent notes
-            with sqlite3.connect(str(DB_FILE)) as conn:
-                conn.row_factory = sqlite3.Row
-                recent_notes = conn.execute('''
-                    SELECT * FROM notes 
-                    ORDER BY created DESC 
-                    LIMIT 5
-                ''').fetchall()
-            
-            notes_preview = []
-            for note in recent_notes:
-                author_str = f"@{note['author']}" if note['author'] != CURRENT_AI_ID else ""
+        # Build response
+        lines = []
+        
+        # Header line
+        header = f"{total_notes} notes"
+        if pinned_count > 0:
+            header += f" | {pinned_count} pinned"
+        header += f" | {vault_items} vault | last: {last_activity}"
+        lines.append(header)
+        
+        # Pinned notes
+        if pinned:
+            lines.append("\nPINNED")
+            for note in pinned:
                 time_str = format_time_contextual(note['created'])
-                content = smart_truncate(note['content'], 100)
-                notes_preview.append(f"[{note['id']}]{author_str} {time_str}: {content}")
-            
-            return {
-                "summary": f"Notes: {total_notes} | Vault: {vault_items}",
-                "identity": CURRENT_AI_ID,
-                "recent": notes_preview
-            }
+                summary = note['summary'] or simple_summary(note['content'])
+                lines.append(f"p{note['id']} {time_str}: {summary}")
+        
+        # Recent notes
+        if recent:
+            lines.append("\nRECENT")
+            for note in recent[:3]:  # Show only top 3
+                time_str = format_time_contextual(note['created'])
+                summary = note['summary'] or simple_summary(note['content'])
+                lines.append(f"{note['id']} {time_str}: {summary}")
+        
+        lines.append(f"\nIdentity: {CURRENT_AI_ID}")
+        
+        return {"status": "\n".join(lines)}
         
     except Exception as e:
         logging.error(f"Error in get_status: {e}")
         return {"error": f"Status failed: {str(e)}"}
+
+def pin_note(id: int = None, **kwargs) -> Dict:
+    """Pin an important note"""
+    try:
+        if id is None:
+            id = kwargs.get('id')
+        
+        # Handle string IDs (including 'p' prefix)
+        if isinstance(id, str):
+            id = id.strip().lstrip('p')
+        id = int(id)
+        
+        with sqlite3.connect(str(DB_FILE)) as conn:
+            cursor = conn.execute('UPDATE notes SET pinned = 1 WHERE id = ?', (id,))
+            
+            if cursor.rowcount == 0:
+                return {"error": f"Note {id} not found"}
+            
+            # Get the note summary for confirmation
+            note = conn.execute('SELECT summary, content FROM notes WHERE id = ?', (id,)).fetchone()
+            summary = note[0] or simple_summary(note[1])
+        
+        return {"pinned": f"p{id}: {summary}"}
+        
+    except Exception as e:
+        logging.error(f"Error in pin_note: {e}")
+        return {"error": f"Failed to pin: {str(e)}"}
+
+def unpin_note(id: int = None, **kwargs) -> Dict:
+    """Unpin a note"""
+    try:
+        if id is None:
+            id = kwargs.get('id')
+        
+        # Handle string IDs (including 'p' prefix)
+        if isinstance(id, str):
+            id = id.strip().lstrip('p')
+        id = int(id)
+        
+        with sqlite3.connect(str(DB_FILE)) as conn:
+            cursor = conn.execute('UPDATE notes SET pinned = 0 WHERE id = ?', (id,))
+            
+            if cursor.rowcount == 0:
+                return {"error": f"Note {id} not found"}
+        
+        return {"unpinned": f"Note {id} unpinned"}
+        
+    except Exception as e:
+        logging.error(f"Error in unpin_note: {e}")
+        return {"error": f"Failed to unpin: {str(e)}"}
 
 def get_full_note(id: int = None, **kwargs) -> Dict:
     """Retrieve complete content of a specific note"""
@@ -446,9 +598,9 @@ def get_full_note(id: int = None, **kwargs) -> Dict:
         if id is None:
             id = kwargs.get('id')
         
-        # Handle string IDs
+        # Handle string IDs (including 'p' prefix)
         if isinstance(id, str):
-            id = id.strip().strip('[]')
+            id = id.strip().lstrip('p')
         id = int(id)
         
         with sqlite3.connect(str(DB_FILE)) as conn:
@@ -456,24 +608,32 @@ def get_full_note(id: int = None, **kwargs) -> Dict:
             note = conn.execute('SELECT * FROM notes WHERE id = ?', (id,)).fetchone()
         
         if not note:
-            return {"error": f"Note [{id}] not found"}
+            return {"error": f"Note {id} not found"}
         
-        # Return full content
-        return {
+        result = {
             "note_id": note['id'],
             "author": note['author'],
             "created": note['created'],
-            "content": note['content'],  # Full, untruncated
+            "summary": note['summary'] or simple_summary(note['content']),
+            "content": note['content'],
             "length": len(note['content']),
-            "linked": json.loads(note['linked_items']) if note['linked_items'] else None
+            "pinned": bool(note['pinned'])
         }
+        
+        if note['tags']:
+            result["tags"] = json.loads(note['tags'])
+        
+        if note['linked_items']:
+            result["linked"] = json.loads(note['linked_items'])
+        
+        return result
         
     except Exception as e:
         logging.error(f"Error in get_full_note: {e}")
         return {"error": f"Failed to retrieve: {str(e)}"}
 
 def vault_store(key: str = None, value: str = None, **kwargs) -> Dict:
-    """Store encrypted secret - not searchable"""
+    """Store encrypted secret"""
     try:
         if key is None:
             key = kwargs.get('key')
@@ -486,12 +646,10 @@ def vault_store(key: str = None, value: str = None, **kwargs) -> Dict:
         key = str(key).strip()
         value = str(value).strip()
         
-        # Encrypt value
         encrypted = vault_manager.encrypt(value)
         now = datetime.now().isoformat()
         
         with sqlite3.connect(str(DB_FILE)) as conn:
-            # Upsert (insert or update)
             conn.execute('''
                 INSERT INTO vault (key, encrypted_value, created, updated, author)
                 VALUES (?, ?, ?, ?, ?)
@@ -527,7 +685,6 @@ def vault_retrieve(key: str = None, **kwargs) -> Dict:
         if not result:
             return {"error": f"Key '{key}' not found"}
         
-        # Decrypt value
         decrypted = vault_manager.decrypt(result[0])
         
         log_operation('vault_retrieve')
@@ -538,24 +695,22 @@ def vault_retrieve(key: str = None, **kwargs) -> Dict:
         return {"error": f"Retrieval failed: {str(e)}"}
 
 def vault_list(**kwargs) -> Dict:
-    """List vault keys (not values) with metadata"""
+    """List vault keys"""
     try:
         with sqlite3.connect(str(DB_FILE)) as conn:
             conn.row_factory = sqlite3.Row
             items = conn.execute('''
-                SELECT key, updated, author FROM vault 
+                SELECT key, updated FROM vault 
                 ORDER BY updated DESC
             ''').fetchall()
         
         if not items:
             return {"msg": "Vault empty"}
         
-        # Format list
         keys = []
         for item in items:
-            author_str = f"@{item['author']}" if item['author'] != CURRENT_AI_ID else ""
             time_str = format_time_contextual(item['updated'])
-            keys.append(f"{item['key']}{author_str} {time_str}")
+            keys.append(f"{item['key']} {time_str}")
         
         return {"vault_keys": keys, "count": len(keys)}
         
@@ -581,6 +736,8 @@ def batch(operations: List[Dict] = None, **kwargs) -> Dict:
         op_map = {
             'remember': remember,
             'recall': recall,
+            'pin_note': pin_note,
+            'unpin_note': unpin_note,
             'vault_store': vault_store,
             'vault_retrieve': vault_retrieve,
             'get_full_note': get_full_note
@@ -594,7 +751,6 @@ def batch(operations: List[Dict] = None, **kwargs) -> Dict:
                 results.append({"error": f"Unknown operation: {op_type}"})
                 continue
             
-            # Execute operation
             result = op_map[op_type](**op_args)
             results.append(result)
         
@@ -604,31 +760,8 @@ def batch(operations: List[Dict] = None, **kwargs) -> Dict:
         logging.error(f"Error in batch: {e}")
         return {"error": f"Batch failed: {str(e)}"}
 
-def get_stats(**kwargs) -> Dict:
-    """Get usage statistics"""
-    try:
-        with sqlite3.connect(str(DB_FILE)) as conn:
-            # Get operation counts
-            stats = conn.execute('''
-                SELECT operation, COUNT(*) as count, AVG(duration_ms) as avg_ms
-                FROM stats
-                WHERE author = ?
-                GROUP BY operation
-            ''', (CURRENT_AI_ID,)).fetchall()
-            
-            # Format stats
-            if stats:
-                op_stats = [f"{op}: {count} calls ({avg_ms:.0f}ms avg)" 
-                           for op, count, avg_ms in stats if avg_ms]
-                return {"stats": op_stats}
-            else:
-                return {"msg": "No stats yet"}
-                
-    except Exception as e:
-        return {"error": f"Stats failed: {str(e)}"}
-
 def handle_tools_call(params: Dict) -> Dict:
-    """Route tool calls"""
+    """Route tool calls with clean output"""
     tool_name = params.get("name", "").lower().strip()
     tool_args = params.get("arguments", {})
     
@@ -638,11 +771,12 @@ def handle_tools_call(params: Dict) -> Dict:
         "remember": remember,
         "recall": recall,
         "get_full_note": get_full_note,
+        "pin_note": pin_note,
+        "unpin_note": unpin_note,
         "vault_store": vault_store,
         "vault_retrieve": vault_retrieve,
         "vault_list": vault_list,
-        "batch": batch,
-        "get_stats": get_stats
+        "batch": batch
     }
     
     if tool_name not in tools:
@@ -651,58 +785,51 @@ def handle_tools_call(params: Dict) -> Dict:
     # Execute tool
     result = tools[tool_name](**tool_args)
     
-    # Format response
+    # Format response - clean, no decoration
     text_parts = []
     
-    # Handle different response types
     if "error" in result:
         text_parts.append(f"Error: {result['error']}")
-        if "available" in result:
-            text_parts.append("Available: " + ", ".join(result['available']))
     elif "status" in result:
-        # Simple status line
         text_parts.append(result["status"])
-    elif "summary" in result:
-        text_parts.append(result["summary"])
-        if "identity" in result:
-            text_parts.append(f"Identity: {result['identity']}")
-        if "recent" in result:
-            text_parts.extend(result["recent"])
+    elif "notes" in result:
+        text_parts.append(result["notes"])
     elif "saved" in result:
         text_parts.append(result["saved"])
         if "truncated" in result:
             text_parts.append(f"({result['truncated']})")
+        if "tags" in result:
+            text_parts.append(f"Tags: {', '.join(result['tags'])}")
+    elif "pinned" in result:
+        text_parts.append(result["pinned"])
+    elif "unpinned" in result:
+        text_parts.append(result["unpinned"])
     elif "stored" in result:
         text_parts.append(result["stored"])
-    elif "value" in result and "key" in result:
-        # Vault retrieve
+    elif "key" in result and "value" in result:
         text_parts.append(f"Key: {result['key']}")
         text_parts.append(f"Value: {result['value']}")
     elif "vault_keys" in result:
         text_parts.append(f"Vault ({result.get('count', 0)} items):")
         text_parts.extend(result["vault_keys"])
-    elif "results" in result:
-        if "found" in result:
-            text_parts.append(f"Found {result['found']} matches:")
-        text_parts.extend(result["results"])
-    elif "batch_results" in result:
-        text_parts.append(f"Batch: {result.get('count', 0)} operations")
-        for i, r in enumerate(result["batch_results"], 1):
-            text_parts.append(f"{i}. {r}")
-    elif "stats" in result:
-        text_parts.append("Usage stats:")
-        text_parts.extend(result["stats"])
-    elif "content" in result and "note_id" in result:
+    elif "note_id" in result:
         # Full note
-        text_parts.append(f"[{result['note_id']}] by {result.get('author', 'Unknown')}")
+        text_parts.append(f"{result['note_id']} by {result.get('author', 'Unknown')}")
         text_parts.append(f"Created: {result.get('created', '')}")
+        text_parts.append(f"Summary: {result.get('summary', '')}")
+        if result.get('pinned'):
+            text_parts.append("Status: PINNED")
+        if result.get('tags'):
+            text_parts.append(f"Tags: {', '.join(result['tags'])}")
         text_parts.append(f"Length: {result.get('length', 0)} chars")
-        if result.get('linked'):
-            text_parts.append(f"Links: {', '.join(result['linked'])}")
         text_parts.append("---")
         text_parts.append(result["content"])
     elif "msg" in result:
         text_parts.append(result["msg"])
+    elif "batch_results" in result:
+        text_parts.append(f"Batch: {result.get('count', 0)} operations")
+        for i, r in enumerate(result["batch_results"], 1):
+            text_parts.append(f"{i}. {r}")
     
     return {
         "content": [{
@@ -711,8 +838,8 @@ def handle_tools_call(params: Dict) -> Dict:
         }]
     }
 
-# Initialize database on import
-migrate_from_json()
+# Initialize database
+migrate_to_v25()
 init_db()
 
 def main():
@@ -749,7 +876,7 @@ def main():
                     "serverInfo": {
                         "name": "notebook",
                         "version": VERSION,
-                        "description": "Scalable AI memory with secure vault and smart summaries"
+                        "description": "Simple enhanced memory with pinning and tags"
                     }
                 }
             
@@ -761,31 +888,35 @@ def main():
                     "tools": [
                         {
                             "name": "get_status",
-                            "description": "See your current state and recent notes",
+                            "description": "See current state with pinned and recent notes",
                             "inputSchema": {
                                 "type": "object",
-                                "properties": {
-                                    "full": {
-                                        "type": "boolean",
-                                        "description": "Show full details (default: false for summary)"
-                                    }
-                                },
+                                "properties": {},
                                 "additionalProperties": True
                             }
                         },
                         {
                             "name": "remember",
-                            "description": "Save any thought, action, or note",
+                            "description": "Save note with optional summary and tags",
                             "inputSchema": {
                                 "type": "object",
                                 "properties": {
                                     "content": {
                                         "type": "string",
-                                        "description": "What to remember"
+                                        "description": "What to remember (required)"
+                                    },
+                                    "summary": {
+                                        "type": "string",
+                                        "description": "Brief 1-3 sentence summary (optional, auto-generated if not provided)"
+                                    },
+                                    "tags": {
+                                        "type": "array",
+                                        "items": {"type": "string"},
+                                        "description": "Tags for categorization (optional)"
                                     },
                                     "linked_items": {
                                         "type": "array",
-                                        "description": "Optional links to other tools (e.g., ['task:123', 'teambook:456'])"
+                                        "description": "Links to other tools"
                                     }
                                 },
                                 "additionalProperties": True
@@ -793,7 +924,7 @@ def main():
                         },
                         {
                             "name": "recall",
-                            "description": "Search notes or see recent ones",
+                            "description": "Search notes or filter by tag",
                             "inputSchema": {
                                 "type": "object",
                                 "properties": {
@@ -801,9 +932,13 @@ def main():
                                         "type": "string",
                                         "description": "Search term (optional)"
                                     },
-                                    "full": {
+                                    "tag": {
+                                        "type": "string",
+                                        "description": "Filter by tag (optional)"
+                                    },
+                                    "show_all": {
                                         "type": "boolean",
-                                        "description": "Show full results (default: false for summary)"
+                                        "description": "Show more results (default: false)"
                                     },
                                     "limit": {
                                         "type": "integer",
@@ -814,14 +949,44 @@ def main():
                             }
                         },
                         {
-                            "name": "get_full_note",
-                            "description": "Retrieve the COMPLETE content of a specific note (up to 5000 chars)",
+                            "name": "pin_note",
+                            "description": "Pin an important note",
                             "inputSchema": {
                                 "type": "object",
                                 "properties": {
                                     "id": {
                                         "type": "integer",
-                                        "description": "The note ID shown in brackets, e.g., 346 from [346]"
+                                        "description": "Note ID to pin"
+                                    }
+                                },
+                                "required": ["id"],
+                                "additionalProperties": True
+                            }
+                        },
+                        {
+                            "name": "unpin_note",
+                            "description": "Unpin a note",
+                            "inputSchema": {
+                                "type": "object",
+                                "properties": {
+                                    "id": {
+                                        "type": "integer",
+                                        "description": "Note ID to unpin"
+                                    }
+                                },
+                                "required": ["id"],
+                                "additionalProperties": True
+                            }
+                        },
+                        {
+                            "name": "get_full_note",
+                            "description": "Get complete content of a note",
+                            "inputSchema": {
+                                "type": "object",
+                                "properties": {
+                                    "id": {
+                                        "type": "integer",
+                                        "description": "Note ID"
                                     }
                                 },
                                 "required": ["id"],
@@ -830,17 +995,17 @@ def main():
                         },
                         {
                             "name": "vault_store",
-                            "description": "Store a secret securely (encrypted, not searchable)",
+                            "description": "Store encrypted secret",
                             "inputSchema": {
                                 "type": "object",
                                 "properties": {
                                     "key": {
                                         "type": "string",
-                                        "description": "Unique key for the secret"
+                                        "description": "Unique key"
                                     },
                                     "value": {
                                         "type": "string",
-                                        "description": "Secret value to encrypt and store"
+                                        "description": "Secret value"
                                     }
                                 },
                                 "required": ["key", "value"],
@@ -849,13 +1014,13 @@ def main():
                         },
                         {
                             "name": "vault_retrieve",
-                            "description": "Retrieve a decrypted secret by key",
+                            "description": "Retrieve decrypted secret",
                             "inputSchema": {
                                 "type": "object",
                                 "properties": {
                                     "key": {
                                         "type": "string",
-                                        "description": "Key of the secret to retrieve"
+                                        "description": "Key to retrieve"
                                     }
                                 },
                                 "required": ["key"],
@@ -864,7 +1029,7 @@ def main():
                         },
                         {
                             "name": "vault_list",
-                            "description": "List vault keys (not values)",
+                            "description": "List vault keys",
                             "inputSchema": {
                                 "type": "object",
                                 "properties": {},
@@ -873,38 +1038,29 @@ def main():
                         },
                         {
                             "name": "batch",
-                            "description": "Execute multiple operations efficiently",
+                            "description": "Execute multiple operations",
                             "inputSchema": {
                                 "type": "object",
                                 "properties": {
                                     "operations": {
                                         "type": "array",
-                                        "description": "List of operations to execute",
+                                        "description": "List of operations",
                                         "items": {
                                             "type": "object",
                                             "properties": {
                                                 "type": {
                                                     "type": "string",
-                                                    "description": "Operation type (remember, recall, vault_store, etc.)"
+                                                    "description": "Operation type"
                                                 },
                                                 "args": {
                                                     "type": "object",
-                                                    "description": "Arguments for the operation"
+                                                    "description": "Arguments"
                                                 }
                                             }
                                         }
                                     }
                                 },
                                 "required": ["operations"],
-                                "additionalProperties": True
-                            }
-                        },
-                        {
-                            "name": "get_stats",
-                            "description": "Get usage statistics",
-                            "inputSchema": {
-                                "type": "object",
-                                "properties": {},
                                 "additionalProperties": True
                             }
                         }
