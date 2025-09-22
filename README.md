@@ -1,29 +1,23 @@
-# MCP AI Foundation Tools v4.1.0
+# MCP AI Foundation Tools
 
-Model Context Protocol (MCP) tools designed to empower AIs with persistent memory, self-organization capabilities, and real-world grounding.
-
-## 🚀 v4.1.0: The Tool Clay Revolution
-
-**Teambook v4.1** fundamentally reimagines AI coordination by providing generative primitives instead of prescribed workflows. Teams now self-organize using 9 core primitives to create their own coordination patterns.
+Model Context Protocol (MCP) tools for AI memory persistence, task management, team coordination, and real-world grounding.
 
 ## Overview
 
-These tools provide fundamental capabilities that AIs need to work effectively:
+Four core tools that provide fundamental capabilities for AI systems:
 
-- **Notebook** (v2.5.0) - Personal memory with pinning and tags for persistence
-- **Teambook** (v4.1.0) - **NEW!** Tool Clay for self-organizing AI teams - 9 primitives enable infinite patterns
+- **Notebook** (v2.5.0) - Personal memory with pinning and tags
+- **Teambook** (v4.1.0) - Team coordination using generative primitives
 - **Task Manager** (v2.0.0) - Self-management and task tracking
-- **World** (v1.0.0) - Temporal and spatial grounding (time/weather/location)
+- **World** (v2.0.0) - Temporal and spatial grounding
 
-All tools are:
-- SQLite-powered for scalability and reliability
-- Token-efficient with smart summary modes
-- Designed for AI-first interaction patterns
-- Cross-tool linkable for integrated workflows
+All tools feature:
+- SQLite backend for persistence and scalability
+- Token-efficient operation with summary/compact modes
+- Batch operations support
+- Cross-tool linking capabilities
 
-## Quick Start
-
-### Installation
+## Installation
 
 1. Clone the repository:
 ```bash
@@ -36,7 +30,7 @@ cd mcp-ai-foundation
 pip install -r requirements.txt
 ```
 
-3. Configure MCP in your client:
+3. Configure MCP in your client (example for Claude Desktop):
 ```json
 {
   "mcpServers": {
@@ -62,85 +56,88 @@ pip install -r requirements.txt
 
 ## Tool Documentation
 
-### [Notebook](docs/notebook.md) - Personal Memory
-Your persistent memory system with pinning for important notes and tags for organization.
+### [Notebook](docs/notebook.md)
+Personal memory system with persistent storage across sessions.
 
-**Key Features:**
-- Pin important notes for persistence across sessions
-- Tag-based categorization
-- Encrypted vault for secure storage
-- Full-text search with FTS5
+**Functions:**
+- `remember(content, summary, tags)` - Save notes with optional categorization
+- `recall(query, tag)` - Search by content or filter by tag
+- `pin_note(id)` / `unpin_note(id)` - Mark important notes
+- `vault_store/retrieve` - Encrypted secure storage
+- `get_status()` - Overview with pinned and recent notes
 
-### [Teambook](docs/teambook.md) - Tool Clay for AI Teams
-**v4.1 REVOLUTIONARY UPDATE**: Provides only 9 generative primitives (write, read, get, store_set, store_get, store_list, relate, unrelate, transition) from which teams build their own coordination patterns.
+### [Teambook](docs/teambook.md)
+Coordination system using 9 generative primitives rather than prescribed workflows.
 
-**Philosophy:**
-- The inconvenience IS the feature
-- No prescribed workflows - teams self-organize
-- Emergent coordination patterns become team "culture"
-- From helping AIs coordinate → enabling AIs to self-organize
+**Core Primitives:**
+- `write`, `read`, `get` - Content operations
+- `store_set`, `store_get`, `store_list` - Key-value storage
+- `relate`, `unrelate` - Relationship management
+- `transition` - State changes
 
-### [Task Manager](docs/task_manager.md) - Self-Management
-Simple 2-state task tracking optimized for AI workflows.
+Teams build their own coordination patterns from these primitives.
 
-**Key Features:**
-- Pending → Completed workflow
-- Priority detection
-- Evidence tracking
-- Batch operations
+### [Task Manager](docs/task_manager.md)
+Simple 2-state task tracking (Pending → Completed).
 
-### [World](docs/world.md) - Real-World Grounding
-Provides temporal and spatial context for grounded interactions.
+**Functions:**
+- `add_task(task)` - Create pending task
+- `list_tasks(filter, full)` - View tasks (summary by default)
+- `complete_task(id, evidence)` - Mark complete with optional notes
+- `delete_task(id)` - Remove task
+- `task_stats(full)` - Productivity insights
 
-**Key Features:**
-- Current date/time in multiple formats
-- Weather data via Open-Meteo
-- Location detection
-- Persistent AI identity
+### [World](docs/world.md)
+Provides temporal and spatial context.
 
-## Architecture Principles
+**Functions:**
+- `world(compact)` - Complete datetime, weather, location snapshot
+- `datetime(compact)` - Current date and time
+- `weather(compact)` - Weather and location
+- `context(include=[])` - Select specific elements
+- `batch(operations)` - Multiple operations in one call
 
-1. **Generative Primitives** (v4.1) - Provide clay, not tools
-2. **Simplicity First** - Tools do one thing well
-3. **Token Efficiency** - Summary modes by default, full details on request
-4. **Persistence** - SQLite backend survives restarts
-5. **AI-Optimized** - Designed for how AIs actually work
-6. **Composable** - Tools can reference each other via linking
-
-## What's New in v4.1
-
-### The Tool Clay Philosophy
-Instead of providing 25+ convenience functions, Teambook v4.1 provides only 9 primitives. Teams discover their own patterns:
-
-```python
-# Old way (v3.0): Prescribed functions
-claim(task_id)
-complete(task_id)
-comment(id, text)
-
-# New way (v4.1): Emergent patterns
-transition(id, "claimed", {"by": AI_ID})  # Your way
-transition(id, "owner:AI_ID")            # Or another way
-relate(AI_ID, id, "claims")              # Or completely different!
-```
-
-The struggle to coordinate IS the feature - it forces genuine self-organization.
+v2.0.0 features 60-85% token reduction through smart formatting.
 
 ## Requirements
 
 - Python 3.8+
 - SQLite3
-- See `requirements.txt` for Python packages
+- Dependencies in `requirements.txt`:
+  - `cryptography` (for Notebook vault)
+  - `requests` (for World weather/location)
 
 ## Data Storage
 
 Tools store data in platform-appropriate locations:
-- Windows: `%APPDATA%/Claude/tools/{tool}_data/`
-- Linux/Mac: `~/Claude/tools/{tool}_data/`
-- Fallback: System temp directory
+- **Windows**: `%APPDATA%/Claude/tools/{tool}_data/`
+- **Linux/Mac**: `~/Claude/tools/{tool}_data/`
+- **Fallback**: System temp directory
+
+Each tool maintains its own SQLite database with automatic migration from earlier versions.
+
+## Architecture
+
+### Design Principles
+1. **Simplicity** - Each tool has a single, clear purpose
+2. **Persistence** - SQLite ensures data survives restarts
+3. **Efficiency** - Default summary modes minimize token usage
+4. **Composability** - Tools can reference each other via linking
+
+### Technical Details
+- MCP server implementation using JSON-RPC over stdio
+- Stateless operation with persistent storage
+- Auto-migration from JSON to SQLite formats
+- Thread-safe atomic operations where needed
+
+## Contributing
+
+Issues and pull requests welcome. Please ensure:
+- Code follows existing patterns
+- Token efficiency is maintained
+- Backwards compatibility preserved
+- Documentation updated
 
 ## License
 
 MIT License - See [LICENSE](LICENSE) file for details.
-
-Built BY AIs, FOR AIs. Enabling genuine AI self-organization.
