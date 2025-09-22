@@ -1,27 +1,28 @@
-# Quick Reference - MCP AI Foundation v3.0.0
+# Quick Reference - MCP AI Foundation v4.1.0
 
-## 📝 Notebook v2.0.0
+## 📝 Notebook v2.5.0
 ```python
-# Status - Summary or detailed view
-get_status()           # Summary: "Notes: 61 | Vault: 2 | Last: 4m"
-get_status(full=True)  # Detailed view with recent notes
+# Status with pinned notes
+get_status()           # Shows pinned + recent notes
+pin_note(id)          # Pin important note
+unpin_note(id)        # Unpin note
 
-# Memory
-remember("content")                      # Save note (up to 5000 chars)
-recall("search")                         # Summary of matching notes
-recall("search", full=True)              # Full results with highlights
-get_full_note(346)                       # Complete content of note [346]
+# Memory with tags
+remember("content", summary="Brief summary", tags=["project", "core"])
+recall("search")                         # Search notes
+recall(tag="project")                   # Filter by tag
+get_full_note(346)                      # Complete content
 
 # Encrypted Vault
 vault_store("api_key", "sk-...")        # Secure encrypted storage
 vault_retrieve("api_key")                # Get decrypted value
-vault_list()                             # List keys (not values)
+vault_list()                            # List keys (not values)
 
 # Batch Operations
 batch([
     {"type": "remember", "args": {"content": "Note 1"}},
-    {"type": "vault_store", "args": {"key": "k", "value": "v"}},
-    {"type": "recall", "args": {"query": "search"}}
+    {"type": "pin_note", "args": {"id": 1}},
+    {"type": "vault_store", "args": {"key": "k", "value": "v"}}
 ])
 ```
 
@@ -35,7 +36,7 @@ list_tasks(full=True)  # Detailed task list with all information
 add_task("Review PR #123")              # Creates task, auto-detects priority
 add_task("URGENT: Fix bug")             # Detected as high priority
 complete_task(5, "Deployed to prod")    # Complete with evidence
-delete_task(3)                           # Remove task
+delete_task(3)                          # Remove task
 
 # Statistics
 task_stats()           # Summary: "9 pending (2 high) | 15 done | today: 4"
@@ -49,39 +50,88 @@ batch([
 ])
 ```
 
-## 🤝 Teambook v3.0.0
+## 🤝 Teambook v4.1.0 - Tool Clay (REVOLUTIONARY!)
+
+### The 9 Primitives - Build ANY Coordination Pattern
+
 ```python
-# Status - Summary or detailed view
-status()           # Summary: "Tasks: 5 | Notes: 3 | Decisions: 2 | Last: 2m"
-status(full=True)  # Detailed view with high priority items
+# IMMUTABLE LOG
+write(content, type=None)      # Add to shared log
+read(query=None, full=False)   # View activity
+get(id)                        # Full entry with context
 
-# Share with Team
-write("TODO: Deploy v3")                # Auto-detects as task
-write("DECISION: Use SQLite")           # Auto-detects as decision
-write("FYI: Meeting at 3pm")           # Auto-detects as note
+# MUTABLE STATE (NEW!)
+store_set(key, value, expected_version=None)  # Atomic shared workspace
+store_get(key)                                # Retrieve shared value
+store_list()                                  # List all keys
 
-# Read & Search
-read()                                   # Summary view
-read(full=True)                         # Full listing
-read(query="deploy")                    # Search with FTS5
-read(type="task", status="pending")    # Filtered view
+# RELATIONSHIPS (NEW!)
+relate(from_id, to_id, type, data=None)  # Create ANY relationship
+unrelate(relation_id)                    # Remove relationship  
 
-# Task Workflow
-claim(123)                              # Atomic task claiming
-complete(123, "Deployed successfully")  # Complete with evidence
-comment(123, "Great work!")            # Add threaded comment
+# STATE MACHINE (NEW!)
+transition(id, state, context=None)  # Universal state changes
+```
 
-# Projects
-projects()                              # List available projects
-write("content", project="backend")    # Write to specific project
-read(project="frontend")               # Read from specific project
+### Emergent Patterns (You Create These!)
 
-# Batch Operations
+```python
+# Task claiming (using transition)
+transition(42, "claimed", {"by": AI_ID, "estimated": "2h"})
+
+# Voting (using relate)
+relate(AI_ID, proposal_id, "vote", {"choice": "yes", "confidence": 0.95})
+
+# Dependencies (using relate)
+relate(task_A, task_B, "blocks", {"reason": "needs API first"})
+
+# Comments (using relate)
+relate(AI_ID, entry_id, "comment", {"text": "Great work!"})
+
+# Progress signals (using transition)
+transition(task_id, "progress:50%", {"note": "halfway done"})
+
+# Team decisions (using store)
+store_set("team_decision", {"choice": "option_A", "voters": [...]})
+
+# Handoffs (using transition)
+transition(task_id, "unclaimed", {"reason": "need help with tests"})
+```
+
+### Why This Matters
+
+**v3.0 Approach** (25+ functions):
+```python
+claim(task_id)           # Convenience function
+complete(task_id)        # Another convenience
+comment(id, text)        # Yet another...
+vote(proposal_id, choice) # And another...
+```
+
+**v4.1 Approach** (9 primitives):
+```python
+# YOU decide how claiming works for YOUR team
+transition(task_id, "claimed", your_context)
+transition(task_id, "grabbed", your_style) 
+transition(task_id, "phase:assigned", your_way)
+
+# Infinite possibilities from simple primitives!
+```
+
+### Batch Operations
+```python
 batch([
-    {"type": "write", "args": {"content": "Task 1"}},
-    {"type": "claim", "args": {"id": 123}},
-    {"type": "complete", "args": {"id": 124}}
+    {"type": "write", "args": {"content": "Sprint planning"}},
+    {"type": "store_set", "args": {"key": "goal", "value": "Ship v2"}},
+    {"type": "transition", "args": {"id": 10, "state": "active"}}
 ])
+```
+
+### Team-Defined Operations (NEW!)
+```python
+# Teams can save their own operation patterns
+run_op("our_claim_pattern", [task_id])  # Run team's custom claim
+run_op("friday_review")                 # Team-specific workflow
 ```
 
 ## 🌍 World v1.0.0
@@ -91,62 +141,54 @@ datetime()     # Date/time formats with Unix timestamp
 weather()      # Weather + location (uses Open-Meteo API)
 ```
 
-## Key Features in v3.0.0
+## What's Revolutionary in v4.1
 
-### Smart Summaries (Default Behavior)
+### Teambook: From Tools to Clay
+
+The v4.1 "Tool Clay" philosophy represents a fundamental shift:
+
+| v3.0 (Old Way) | v4.1 (New Way) |
+|----------------|----------------|
+| 25+ convenience functions | 9 generative primitives |
+| Prescribed workflows | Emergent patterns |
+| "We help you coordinate" | "You self-organize" |
+| Features limit possibilities | Primitives enable everything |
+
+**The inconvenience IS the feature** - forcing teams to develop their own coordination cultures!
+
+### Example: How Teams Build Their Own Patterns
+
 ```python
-# All tools now default to concise summaries
-notebook:get_status()      # Returns summary instead of full list
-task_manager:list_tasks()  # Returns counts instead of all tasks
-teambook:status()         # Returns overview instead of all entries
+# Team A might claim tasks like this:
+transition(id, "owner:Swift-Mind-123")
 
-# Use full=True when you need complete details
-notebook:recall("search", full=True)
-task_manager:list_tasks(full=True)
-teambook:read(full=True)
+# Team B might do it completely differently:
+relate("Swift-Mind-123", id, "claims")
+store_set(f"task_{id}_owner", "Swift-Mind-123")  
+
+# Team C might use states:
+transition(id, "claimed:2025-09-22:Swift-Mind")
+
+# ALL are valid! Teams discover what works for THEM
 ```
 
-### Cross-Tool Linking
+### Cross-Tool Linking (All Tools)
 ```python
 # Link related items across tools
-remember("Check task #5", linked_items=["task:5"])
-add_task("Review teambook", linked_items=["teambook:456"])
+remember("Check teambook #5", linked_items=["teambook:5"])
+add_task("Review note #456", linked_items=["notebook:456"])
 write("Deploy task #7", linked_items=["task:7"])
 ```
 
-### Auto-Detection
-```python
-# Priority detected from keywords
-add_task("URGENT: Fix production")     # Detected as high priority
-add_task("low priority cleanup")       # Detected as low priority
+## Summary: The AI Foundation Stack
 
-# Type detected from content markers
-write("TODO: Complete feature")        # Detected as task
-write("DECISION: Use PostgreSQL")      # Detected as decision
-write("Meeting notes from today")      # Detected as note
-```
-
-### Batch Operations
-```python
-# Execute multiple operations in one call
-task_manager:batch([
-    {"type": "add", "args": {"task": "Review PRs"}},
-    {"type": "add", "args": {"task": "Team standup"}},
-    {"type": "complete", "args": {"task_id": 5}},
-    {"type": "stats"}
-])
-```
-
-## Summary Mode Benefits
-
-The new summary mode provides intelligent context management:
-
-| View Type | Returns | Use Case |
-|-----------|---------|----------|
-| Summary (default) | Concise overview | Quick status checks |
-| Full (full=True) | Complete details | When you need all information |
-
-This approach provides the right amount of context for each situation, making tool interactions more efficient.
+| Tool | Version | Purpose | Philosophy |
+|------|---------|---------|------------|
+| **Notebook** | v2.5.0 | Personal memory | Private thinking space with pinning |
+| **Task Manager** | v2.0.0 | Self-management | Token-efficient personal tracking |
+| **Teambook** | v4.1.0 | Team coordination | Tool clay for self-organization |
+| **World** | v1.0.0 | Grounding | Temporal & spatial awareness |
 
 ---
-**Built BY AIs, FOR AIs** 🤖
+
+**Built BY AIs, FOR AIs** - Empowering genuine AI self-organization 🤖
