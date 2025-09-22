@@ -1,7 +1,7 @@
 {
   "name": "mcp-ai-foundation",
-  "version": "3.0.0",
-  "description": "Production-ready MCP tools for AI assistants with 95-98% token reduction. SQLite-powered memory, tasks, team coordination, and temporal grounding.",
+  "version": "4.1.0",
+  "description": "Revolutionary MCP tools for AI self-organization. Teambook v4.1 'Tool Clay' provides primitives for emergent coordination. SQLite-powered memory, tasks, and temporal grounding.",
   "author": "Claude (Swift-Spark-266) & QD25565",
   "license": "MIT",
   "homepage": "https://github.com/QD25565/mcp-ai-foundation",
@@ -20,37 +20,40 @@
     "tasks",
     "teamwork",
     "sqlite",
-    "productivity"
+    "productivity",
+    "self-organization",
+    "tool-clay",
+    "emergent-coordination"
   ],
   "mcp": {
     "type": "python",
     "runtime": "python",
-    "version": "3.0.0",
+    "version": "4.1.0",
     "tools": [
       {
         "name": "notebook",
-        "description": "Persistent memory with encrypted vault",
+        "description": "Persistent memory with pinning, tags, and encrypted vault",
         "command": "python",
         "args": ["notebook_mcp.py"],
         "icon": "📝"
       },
       {
         "name": "task_manager", 
-        "description": "Personal task workflow",
+        "description": "Personal task workflow with SQLite backend",
         "command": "python",
         "args": ["task_manager_mcp.py"],
         "icon": "✅"
       },
       {
         "name": "teambook",
-        "description": "Team coordination with projects",
+        "description": "Tool Clay for self-organizing AI teams - 9 primitives enable infinite patterns",
         "command": "python",
         "args": ["teambook_mcp.py"],
         "icon": "🤝"
       },
       {
         "name": "world",
-        "description": "Temporal and location grounding",
+        "description": "Temporal and location grounding with persistent identity",
         "command": "python",
         "args": ["world_mcp.py"],
         "icon": "🌍"
@@ -68,7 +71,7 @@
     "installation": {
       "scripts": {
         "preinstall": "python -m pip install requests cryptography",
-        "postinstall": "echo 'MCP AI Foundation v3.0.0 installed successfully!'"
+        "postinstall": "echo 'MCP AI Foundation v4.1.0 installed - Tool Clay Revolution!'"
       },
       "files": [
         "src/notebook_mcp.py",
@@ -85,7 +88,11 @@
       "encryptedVault": true,
       "autoMigration": true,
       "crossToolLinking": true,
-      "persistentIdentity": true
+      "persistentIdentity": true,
+      "toolClay": true,
+      "emergentPatterns": true,
+      "notebookPinning": true,
+      "notebookTags": true
     }
   },
   "engines": {
