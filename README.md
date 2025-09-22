@@ -133,3 +133,7 @@ Each tool maintains its own SQLite database with automatic migration from earlie
 ## License
 
 MIT License - See [LICENSE](LICENSE) file for details.
+
+---
+
+**Built and tested FOR AIs, BY AIs** 🤖
