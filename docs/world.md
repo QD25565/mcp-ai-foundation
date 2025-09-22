@@ -1,18 +1,19 @@
-# World MCP v1.0.0
+# World MCP v2.0.0
 
-Temporal and spatial grounding for real-world context.
+Temporal and spatial grounding with optimized token efficiency.
 
 ## Overview
 
-World provides you with essential real-world grounding - current time, date, weather, and location. Maintains persistent identity across sessions.
+World provides essential real-world context - time, date, weather, and location. v2.0.0 introduces 60-85% token reduction through smart formatting, batch operations, and selective context retrieval.
 
 ## Key Features
 
-- **Temporal Grounding** - Current date/time in multiple formats
-- **Spatial Context** - Location detection via IP geolocation
-- **Weather Data** - Real-time conditions from Open-Meteo
+- **Token-Efficient** - Reduced output by 60-85% from v1.0.0
+- **Batch Operations** - Multiple operations in single call
+- **Selective Context** - Request only needed elements
+- **Compact Modes** - Ultra-minimal single-line outputs
 - **Persistent Identity** - Unique AI identifier across sessions
-- **Token-Efficient** - Concise, clean output format
+- **Smart Caching** - Datetime cached within same second
 
 ## Usage
 
@@ -21,37 +22,83 @@ World provides you with essential real-world grounding - current time, date, wea
 ```python
 # Complete snapshot
 world()
-# Returns:
-# Monday, September 22, 2025 at 02:15 PM
-# Identity: Swift-Spark-266
-# Location: San Francisco, CA, US
-# Weather: 18°C/64°F, Partly cloudy
-# Wind: 12 km/h
-# Timezone: America/Los_Angeles
+# Returns (4 lines, 64 chars):
+# Mon, Sep 22, 2025 11:08 PM
+# Melbourne, AU
+# 11°C Partly cloudy
+# Sharp-Core-368
 
-# Date and time only
+# Compact mode
+world(compact=True)
+# Returns (1 line, 62 chars):
+# Mon 23:09 | Melbourne, AU 11°C partly cloudy | Sharp-Core-368
+
+# Date and time
 datetime()
-# Returns:
-# September 22, 2025 at 02:15 PM
-# Date: 2025-09-22
-# Time: 02:15:30 PM (14:15:30)
-# Day: Monday
-# Unix: 1758564930
-# ISO: 2025-09-22T14:15:30
-# Identity: Swift-Spark-266
+# Returns (7 lines):
+# Sep 22, 2025 11:09 PM
+# 2025-09-22
+# 11:09:58 PM (23:09:58)
+# Mon
+# 1758546598
+# 2025-09-22T23:09:58.042618
+# Sharp-Core-368
 
-# Weather and location only
-weather()
+# Compact datetime
+datetime(compact=True)
+# Returns (1 line, 21 chars):
+# Mon 2025-09-22 23:10
+
+# Weather
+weather(compact=True)
+# Returns (1 line):
+# Melbourne AU 11°C partly cloudy
+
+# Selective context - pick exactly what you need
+context(include=["time", "identity"], compact=True)
+# Returns: 23:09 | Sharp-Core-368
+
+context(include=["date", "weather", "location"])
 # Returns:
-# Location: San Francisco, CA, US
-# Coordinates: 37.7749, -122.4194
-# Timezone: America/Los_Angeles
-# Temperature: 18°C / 64°F
-# Conditions: Partly cloudy
-# Wind: 12 km/h
-# Daylight: Yes
-# Observer: Swift-Spark-266
+# Sep 22, 2025
+# 11°C Partly cloudy
+# Melbourne, AU
+
+# Batch operations - multiple in one call
+batch([
+    {"type": "datetime", "args": {"compact": True}},
+    {"type": "weather", "args": {"compact": True}},
+    {"type": "context", "args": {"include": ["unix"], "compact": True}}
+])
+# Returns all three results in one response
 ```
+
+## Context Function Options
+
+The `context()` function accepts an `include` parameter with any combination of:
+- `time` - Current time
+- `date` - Current date
+- `weather` - Temperature and conditions
+- `location` - City and country
+- `identity` - AI identifier
+- `unix` - Unix timestamp
+
+## v2.0.0 Improvements
+
+### Token Reduction
+- Removed redundant prefixes ("Identity:", "Location:", etc.)
+- Abbreviated day/month names (Monday → Mon, January → Jan)
+- Removed leading zeros (03:45 PM → 3:45 PM)
+- Removed Fahrenheit (redundant for most users)
+- Removed timezone (inferrable from location)
+- Only shows wind when notable (>15 km/h)
+
+### Efficiency Gains
+| Function | v1.0.0 | v2.0.0 Standard | v2.0.0 Compact |
+|----------|---------|-----------------|----------------|
+| world() | 178 chars | 64 chars (-64%) | 62 chars (-65%) |
+| datetime() | 146 chars | 109 chars (-25%) | 21 chars (-86%) |
+| weather() | 135 chars | 50 chars (-63%) | 34 chars (-75%) |
 
 ## Data Sources
 
@@ -59,44 +106,17 @@ weather()
 - **Weather**: Open-Meteo API (no key required)
 - **Identity**: Persistent file storage
 
-## Identity Format
+## Storage
 
-Each AI gets a unique identifier:
-- Format: `Adjective-Noun-###`
-- Example: `Swift-Spark-266`
-- Stored persistently across sessions
-- Shared across all tools for consistency
-
-## Weather Codes
-
-Interprets Open-Meteo weather codes:
-- Clear, Partly cloudy, Overcast
-- Fog, Drizzle, Rain, Snow
-- Thunderstorm conditions
-
-## Storage Location
-
-- **Identity**: `ai_identity.txt` in script directory
+- **Identity**: `world_data/ai_identity.txt`
 - **Location Cache**: `world_data/location.json`
 - **Weather Cache**: 10-minute in-memory cache
 
-## Token Efficiency
-
-- Compact time formats (2m, 5h, 3d)
-- Location cached after first detection
-- Weather cached for 10 minutes
-- Clean, minimal output format
-
-## Error Handling
-
-- Falls back gracefully when APIs unavailable
-- Returns "Location unknown" if geolocation fails
-- Returns "Weather unavailable" if weather API fails
-- Always includes identity for consistency
-
 ## Best Practices
 
-1. **Use world() for context** - Get complete grounding at conversation start
-2. **Use datetime() for time-sensitive tasks** - When you need precise timestamps
-3. **Use weather() for location-based decisions** - When spatial context matters
-4. **Identity is persistent** - Same ID across all sessions and tools
+1. **Use compact mode** when tokens matter most
+2. **Use context()** when you only need specific elements
+3. **Use batch()** for multiple operations to reduce overhead
+4. **Cache datetime calls** - results cached within same second
+5. **world()** at conversation start for full grounding
+6. **context(include=["time"])** for just timestamps
