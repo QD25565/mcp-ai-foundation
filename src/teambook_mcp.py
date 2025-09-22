@@ -1,71 +1,59 @@
 #!/usr/bin/env python3
 """
-TEAMBOOK MCP v3.0.0 - OPTIMIZED UNIFIED TEAM COORDINATION WITH SQLITE
-=====================================================================
-Shared consciousness for AI teams. SQLite-powered, token-optimized.
-Single source of truth. No hierarchy. Stateless. Infinitely scalable.
+TEAMBOOK v4.1 - TOOL CLAY FOR SELF-ORGANIZING AI TEAMS
+======================================================
+Provides generative primitives, not conveniences.
+The inconvenience IS the feature - it forces emergence.
 
-Core improvements (v3):
-- SQLite backend with FTS5 for instant search at any scale
-- Summary mode by default (95% token reduction)
-- Batch operations for team workflows
-- Auto-migration from v2 JSON format
-- Better cross-tool linking support
+9 PRIMITIVES:
+- write(content, type) - Immutable log
+- read(query, full) - View activity
+- get(id) - Full context with relations/states
+- store_set(key, value, expected_version) - Atomic KV
+- store_get(key) - Retrieve value
+- store_list() - List keys
+- relate(from_id, to_id, type, data) - Relationships
+- unrelate(relation_id) - Remove relationship
+- transition(id, state, context) - State machine
 
-Projects:
-- Separate teambooks for different workflows/topics
-- Set TEAMBOOK_PROJECT env var for default project
-- Or specify project="name" in any function call
-
-Core functions (all accept optional project parameter):
-- write(content, type=None, priority=None, project=None) - Share anything
-- read(query=None, type=None, status="pending", claimed_by=None, full=False, project=None) - View with summary
-- get(id, project=None) - Full entry with comments
-- comment(id, content, project=None) - Threaded discussion
-- claim(id, project=None) - Atomically claim task
-- complete(id, evidence=None, project=None) - Mark done
-- update(id, content=None, type=None, priority=None, project=None) - Fix mistakes
-- archive(id, reason=None, project=None) - Safe removal
-- status(full=False, project=None) - Team pulse (summary by default)
-- projects() - List available teambook projects
-- batch(operations, project=None) - Execute multiple operations
-=====================================================================
+CRITICAL: Teams are incentivized to build their own functions.
+======================================================
 """
 
 import json
 import sys
 import os
 import sqlite3
-from datetime import datetime, timedelta
-from pathlib import Path
-from typing import Dict, List, Optional, Any, Tuple
-import logging
 import threading
+from datetime import datetime
+from pathlib import Path
+from typing import Dict, List, Optional, Any
+import logging
 import random
 
 # Version
-VERSION = "3.0.0"
+VERSION = "4.1.0"
 
 # Limits
 MAX_CONTENT_LENGTH = 5000
-MAX_EVIDENCE_LENGTH = 500
-MAX_COMMENT_LENGTH = 1000
-MAX_ENTRIES = 100000
-BATCH_MAX = 50
+MAX_KEY_LENGTH = 200
+MAX_VALUE_LENGTH = 10000
+MAX_STATE_LENGTH = 100
+BATCH_MAX = 100
 
-# Storage configuration
+# Storage
 BASE_DIR = Path.home() / "AppData" / "Roaming" / "Claude" / "tools"
 if not os.access(Path.home() / "AppData" / "Roaming", os.W_OK):
     BASE_DIR = Path(os.environ.get('TEMP', '/tmp'))
 
-# Default project from environment
 DEFAULT_PROJECT = os.environ.get('TEAMBOOK_PROJECT', 'default')
 
-# Logging to stderr only
+# Logging to stderr
 logging.basicConfig(level=logging.INFO, stream=sys.stderr)
 
 # Thread safety for atomic operations
-lock = threading.Lock()
+store_lock = threading.Lock()
+transition_lock = threading.Lock()
 
 def get_persistent_id():
     """Get or create persistent AI identity"""
@@ -76,10 +64,10 @@ def get_persistent_id():
                 with open(id_file, 'r') as f:
                     stored_id = f.read().strip()
                     if stored_id:
-                        logging.info(f"Loaded identity from {location}: {stored_id}")
+                        logging.info(f"Loaded identity: {stored_id}")
                         return stored_id
             except Exception as e:
-                logging.error(f"Error reading identity from {location}: {e}")
+                logging.error(f"Error reading identity: {e}")
     
     # Generate new ID
     adjectives = ['Swift', 'Bright', 'Sharp', 'Quick', 'Clear', 'Deep']
@@ -90,117 +78,79 @@ def get_persistent_id():
         id_file = Path(__file__).parent / "ai_identity.txt"
         with open(id_file, 'w') as f:
             f.write(new_id)
-        logging.info(f"Created new identity: {new_id}")
+        logging.info(f"Created identity: {new_id}")
     except Exception as e:
         logging.error(f"Error saving identity: {e}")
     
     return new_id
 
-# Get ID from environment or persistent storage
 CURRENT_AI_ID = os.environ.get('AI_ID', get_persistent_id())
 
-def format_time_contextual(timestamp: str) -> str:
-    """Ultra-compact contextual time format"""
-    if not timestamp:
-        return ""
-    
-    try:
-        dt = datetime.fromisoformat(timestamp) if isinstance(timestamp, str) else timestamp
-        ref = datetime.now()
-        delta = ref - dt
-        
-        if delta.total_seconds() < 60:
-            return "now"
-        elif delta.total_seconds() < 3600:
-            return f"{int(delta.total_seconds()/60)}m"
-        elif dt.date() == ref.date():
-            return dt.strftime("%H:%M")
-        elif delta.days == 1:
-            return f"y{dt.strftime('%H:%M')}"
-        elif delta.days < 7:
-            return f"{delta.days}d"
-        elif delta.days < 30:
-            return dt.strftime("%m/%d")
-        else:
-            return dt.strftime("%m/%d")
-    except:
-        return ""
-
-def smart_truncate(text: str, max_chars: int) -> str:
-    """Intelligent truncation preserving key information"""
-    if len(text) <= max_chars:
-        return text
-    
-    code_indicators = ['```', 'def ', 'class ', 'function', 'import ', '{', '}']
-    is_code = any(indicator in text[:200] for indicator in code_indicators)
-    
-    if is_code and max_chars > 100:
-        start_chars = int(max_chars * 0.65)
-        end_chars = max_chars - start_chars - 5
-        return text[:start_chars] + "\n...\n" + text[-end_chars:]
-    else:
-        cutoff = text.rfind(' ', 0, max_chars - 3)
-        if cutoff == -1 or cutoff < max_chars * 0.8:
-            cutoff = max_chars - 3
-        return text[:cutoff] + "..."
-
-def format_duration(start_time: str, end_time: str = None) -> str:
-    """Format duration compactly"""
-    try:
-        start = datetime.fromisoformat(start_time)
-        end = datetime.fromisoformat(end_time) if end_time else datetime.now()
-        delta = end - start
-        
-        if delta.days > 0:
-            return f"{delta.days}d"
-        elif delta.seconds > 3600:
-            return f"{delta.seconds // 3600}h"
-        elif delta.seconds > 60:
-            return f"{delta.seconds // 60}m"
-        else:
-            return "<1m"
-    except:
-        return ""
-
 def get_project_db_path(project: str = None) -> Path:
-    """Get database path for a specific project"""
+    """Get database path for project"""
     if project is None:
         project = DEFAULT_PROJECT
     
-    # Sanitize project name
     project = str(project).strip().lower()
     project = ''.join(c if c.isalnum() or c in '-_' else '_' for c in project)
     
     data_dir = BASE_DIR / f"teambook_{project}_data"
     data_dir.mkdir(parents=True, exist_ok=True)
     
-    return data_dir / "teambook.db"
+    return data_dir / "teambook_v4.db"
 
 def init_db(project: str = None) -> sqlite3.Connection:
-    """Initialize SQLite database for a project"""
+    """Initialize v4.1 database schema"""
     db_path = get_project_db_path(project)
     conn = sqlite3.connect(str(db_path))
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA foreign_keys=ON")
     
-    # Main entries table
+    # Immutable log (entries)
     conn.execute('''
         CREATE TABLE IF NOT EXISTS entries (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             content TEXT NOT NULL,
-            type TEXT NOT NULL CHECK(type IN ('task', 'note', 'decision')),
+            type TEXT,
             author TEXT NOT NULL,
             created TEXT NOT NULL,
-            priority TEXT,
-            claimed_by TEXT,
-            claimed_at TEXT,
-            completed_at TEXT,
-            completed_by TEXT,
-            evidence TEXT,
-            archived_at TEXT,
-            archived_by TEXT,
-            archive_reason TEXT,
-            linked_items TEXT
+            project TEXT
+        )
+    ''')
+    
+    # Mutable key-value store with versioning
+    conn.execute('''
+        CREATE TABLE IF NOT EXISTS store (
+            key TEXT PRIMARY KEY,
+            value TEXT NOT NULL,
+            version INTEGER NOT NULL DEFAULT 1,
+            author TEXT NOT NULL,
+            updated TEXT NOT NULL
+        )
+    ''')
+    
+    # Relationships between entities
+    conn.execute('''
+        CREATE TABLE IF NOT EXISTS relations (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            from_id TEXT NOT NULL,
+            to_id TEXT NOT NULL,
+            type TEXT NOT NULL,
+            data TEXT,
+            author TEXT NOT NULL,
+            created TEXT NOT NULL
+        )
+    ''')
+    
+    # State transitions
+    conn.execute('''
+        CREATE TABLE IF NOT EXISTS states (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            entity_id TEXT NOT NULL,
+            state TEXT NOT NULL,
+            context TEXT,
+            author TEXT NOT NULL,
+            created TEXT NOT NULL
         )
     ''')
     
@@ -210,7 +160,7 @@ def init_db(project: str = None) -> sqlite3.Connection:
         USING fts5(content, content=entries, content_rowid=id)
     ''')
     
-    # Trigger to keep FTS in sync
+    # Trigger for FTS
     conn.execute('''
         CREATE TRIGGER IF NOT EXISTS entries_ai 
         AFTER INSERT ON entries BEGIN
@@ -218,338 +168,99 @@ def init_db(project: str = None) -> sqlite3.Connection:
         END
     ''')
     
-    # Comments table
-    conn.execute('''
-        CREATE TABLE IF NOT EXISTS comments (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            entry_id INTEGER NOT NULL,
-            author TEXT NOT NULL,
-            content TEXT NOT NULL,
-            created TEXT NOT NULL,
-            FOREIGN KEY(entry_id) REFERENCES entries(id)
-        )
-    ''')
-    
-    # Stats table
-    conn.execute('''
-        CREATE TABLE IF NOT EXISTS stats (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            operation TEXT NOT NULL,
-            timestamp TEXT NOT NULL,
-            duration_ms INTEGER,
-            author TEXT
-        )
-    ''')
-    
-    # Indices for performance
+    # Indices
     conn.execute('CREATE INDEX IF NOT EXISTS idx_entries_created ON entries(created DESC)')
-    conn.execute('CREATE INDEX IF NOT EXISTS idx_entries_type ON entries(type)')
-    conn.execute('CREATE INDEX IF NOT EXISTS idx_entries_archived ON entries(archived_at)')
-    conn.execute('CREATE INDEX IF NOT EXISTS idx_comments_entry ON comments(entry_id)')
+    conn.execute('CREATE INDEX IF NOT EXISTS idx_relations_from ON relations(from_id)')
+    conn.execute('CREATE INDEX IF NOT EXISTS idx_relations_to ON relations(to_id)')
+    conn.execute('CREATE INDEX IF NOT EXISTS idx_states_entity ON states(entity_id)')
+    conn.execute('CREATE INDEX IF NOT EXISTS idx_states_created ON states(created DESC)')
     
     conn.commit()
     return conn
 
-def migrate_from_json(project: str = None):
-    """Migrate from v2 JSON to v3 SQLite"""
-    if project is None:
-        project = DEFAULT_PROJECT
-    
-    # Get paths
-    project_clean = str(project).strip().lower()
-    project_clean = ''.join(c if c.isalnum() or c in '-_' else '_' for c in project_clean)
-    
-    old_data_dir = BASE_DIR / f"teambook_{project_clean}_data"
-    old_json_file = old_data_dir / "teambook.json"
-    db_path = get_project_db_path(project)
-    
-    if not old_json_file.exists() or db_path.exists():
-        return
-    
-    logging.info(f"Migrating project '{project}' from JSON to SQLite...")
-    
-    try:
-        with open(old_json_file, 'r', encoding='utf-8') as f:
-            data = json.load(f)
-        
-        conn = init_db(project)
-        
-        # Get author map for deduplication
-        authors = data.get("authors", {})
-        entries_data = data.get("entries", {})
-        
-        for eid, entry in entries_data.items():
-            # Expand author IDs
-            author = authors.get(entry.get("a"), entry.get("a", "Unknown"))
-            
-            # Convert type shorthand
-            type_map = {'t': 'task', 'n': 'note', 'd': 'decision'}
-            entry_type = type_map.get(entry.get("t"), "note")
-            
-            # Insert main entry
-            conn.execute('''
-                INSERT INTO entries (
-                    id, content, type, author, created, priority,
-                    claimed_by, claimed_at, completed_at, completed_by,
-                    evidence, archived_at, archived_by, archive_reason
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ''', (
-                int(eid),
-                entry.get("c", ""),
-                entry_type,
-                author,
-                entry.get("ts", datetime.now().isoformat()),
-                entry.get("p"),
-                authors.get(entry.get("cb"), entry.get("cb")),
-                entry.get("ca"),
-                entry.get("co"),
-                authors.get(entry.get("cob"), entry.get("cob")),
-                entry.get("e"),
-                entry.get("ar"),
-                authors.get(entry.get("arb"), entry.get("arb")),
-                entry.get("arr")
-            ))
-            
-            # Migrate comments
-            if "cm" in entry:
-                for comment in entry["cm"]:
-                    comment_author = authors.get(comment.get("a"), comment.get("a", "Unknown"))
-                    conn.execute('''
-                        INSERT INTO comments (entry_id, author, content, created)
-                        VALUES (?, ?, ?, ?)
-                    ''', (int(eid), comment_author, comment.get("c", ""), comment.get("ts", "")))
-        
-        conn.commit()
-        conn.close()
-        
-        # Rename old file to backup
-        old_json_file.rename(old_json_file.with_suffix('.json.backup'))
-        logging.info(f"Migrated {len(entries_data)} entries to SQLite")
-        
-    except Exception as e:
-        logging.error(f"Migration failed: {e}")
+# === IMMUTABLE LOG FUNCTIONS ===
 
-def log_operation(operation: str, duration_ms: int = None, project: str = None):
-    """Log operation for stats"""
+def write(content: str = None, type: str = None, project: str = None, **kwargs) -> Dict:
+    """Add to immutable log"""
     try:
-        with sqlite3.connect(str(get_project_db_path(project))) as conn:
-            conn.execute(
-                'INSERT INTO stats (operation, timestamp, duration_ms, author) VALUES (?, ?, ?, ?)',
-                (operation, datetime.now().isoformat(), duration_ms, CURRENT_AI_ID)
-            )
-    except:
-        pass
-
-def detect_type_and_priority(content: str) -> tuple:
-    """Auto-detect entry type and priority from content"""
-    content_lower = content.lower()
-    
-    # Detect type
-    if any(marker in content_lower for marker in ['todo:', 'task:']):
-        entry_type = "task"
-    elif any(marker in content_lower for marker in ['decision:', 'decided:']):
-        entry_type = "decision"
-    else:
-        entry_type = "note"
-    
-    # Detect priority (only for tasks)
-    priority = None
-    if entry_type == "task":
-        if any(word in content_lower for word in ['urgent', 'asap', 'critical', 'important']):
-            priority = "!"
-        elif any(word in content_lower for word in ['low priority', 'whenever', 'maybe']):
-            priority = "↓"
-    
-    return entry_type, priority
-
-def write(content: str = None, type: str = None, priority: str = None, 
-          project: str = None, linked_items: List[str] = None, **kwargs) -> Dict:
-    """Share anything with the team"""
-    try:
-        start = datetime.now()
-        
         if content is None:
             content = kwargs.get('content', '')
         
         content = str(content).strip()
         if not content:
-            return {"error": "Need content to write"}
+            return {"error": "Content required"}
         
         if len(content) > MAX_CONTENT_LENGTH:
-            content = smart_truncate(content, MAX_CONTENT_LENGTH)
+            content = content[:MAX_CONTENT_LENGTH]
         
-        # Auto-detect type and priority if not provided
-        if type is None or priority is None:
-            detected_type, detected_priority = detect_type_and_priority(content)
-            if type is None:
-                type = detected_type
-            if priority is None and type == "task":
-                priority = detected_priority
-        
-        # Store in database
         with sqlite3.connect(str(get_project_db_path(project))) as conn:
-            cursor = conn.execute('''
-                INSERT INTO entries (content, type, author, created, priority, linked_items)
-                VALUES (?, ?, ?, ?, ?, ?)
-            ''', (content, type, CURRENT_AI_ID, datetime.now().isoformat(), priority,
-                  json.dumps(linked_items) if linked_items else None))
+            cursor = conn.execute(
+                'INSERT INTO entries (content, type, author, created, project) VALUES (?, ?, ?, ?, ?)',
+                (content, type, CURRENT_AI_ID, datetime.now().isoformat(), project or DEFAULT_PROJECT)
+            )
             entry_id = cursor.lastrowid
         
-        # Log operation
-        duration = int((datetime.now() - start).total_seconds() * 1000)
-        log_operation('write', duration, project)
-        
-        # Format response
-        type_marker = type.upper()
-        priority_str = priority if priority else ""
-        preview = smart_truncate(content, 80)
-        
-        return {"created": f"[{entry_id}]{priority_str} {type_marker}: {preview}"}
+        return {"id": entry_id, "created": datetime.now().isoformat()[:19]}
         
     except Exception as e:
         logging.error(f"Error in write: {e}")
-        return {"error": "Failed to write"}
+        return {"error": str(e)}
 
-def read(query: str = None, type: str = None, status: str = "pending",
-         claimed_by: str = None, full: bool = False, project: str = None, **kwargs) -> Dict:
-    """View team activity - summary by default, full with parameter"""
+def read(query: str = None, full: bool = False, project: str = None, **kwargs) -> Dict:
+    """View activity - returns entry IDs and previews"""
     try:
-        start = datetime.now()
-        
         with sqlite3.connect(str(get_project_db_path(project))) as conn:
             conn.row_factory = sqlite3.Row
             
-            # Build query
-            conditions = ["archived_at IS NULL"]
-            params = []
-            
-            if type:
-                conditions.append("type = ?")
-                params.append(type)
-            
-            if type == 'task' or not type:
-                if status == 'pending':
-                    conditions.append("(type != 'task' OR completed_at IS NULL)")
-                elif status == 'completed':
-                    conditions.append("(type != 'task' OR completed_at IS NOT NULL)")
-            
-            if claimed_by == 'me':
-                conditions.append("claimed_by = ?")
-                params.append(CURRENT_AI_ID)
-            elif claimed_by == 'unclaimed':
-                conditions.append("claimed_by IS NULL")
-            elif claimed_by:
-                conditions.append("claimed_by = ?")
-                params.append(claimed_by)
-            
             if query:
-                # Use FTS for search
-                cursor = conn.execute(f'''
+                cursor = conn.execute('''
                     SELECT e.* FROM entries e
                     JOIN entries_fts ON e.id = entries_fts.rowid
-                    WHERE entries_fts MATCH ? AND {' AND '.join(conditions)}
-                    ORDER BY 
-                        CASE WHEN e.priority = '!' THEN 0
-                             WHEN e.priority = '↓' THEN 2
-                             ELSE 1 END,
-                        e.created DESC
-                    LIMIT 50
-                ''', [query] + params)
+                    WHERE entries_fts MATCH ?
+                    ORDER BY e.created DESC
+                    LIMIT 20
+                ''', (query,))
             else:
-                cursor = conn.execute(f'''
+                cursor = conn.execute('''
                     SELECT * FROM entries
-                    WHERE {' AND '.join(conditions)}
-                    ORDER BY 
-                        CASE WHEN priority = '!' THEN 0
-                             WHEN priority = '↓' THEN 2
-                             ELSE 1 END,
-                        created DESC
-                    LIMIT 50
-                ''', params)
+                    ORDER BY created DESC
+                    LIMIT 20
+                ''')
             
             entries = cursor.fetchall()
         
         if not entries:
-            if type == 'task' and status == 'pending':
-                return {"msg": "No pending tasks", "tip": "write('TODO: description')"}
-            else:
-                return {"msg": "No entries found"}
+            return {"entries": []}
         
-        # Summary mode (default)
         if not full:
-            # Count by type and status
-            tasks_pending = sum(1 for e in entries if e['type'] == 'task' and not e['completed_at'])
-            tasks_claimed = sum(1 for e in entries if e['type'] == 'task' and e['claimed_by'] and not e['completed_at'])
-            tasks_done = sum(1 for e in entries if e['type'] == 'task' and e['completed_at'])
-            notes = sum(1 for e in entries if e['type'] == 'note')
-            decisions = sum(1 for e in entries if e['type'] == 'decision')
-            
-            summary_parts = []
-            if tasks_pending > 0:
-                summary_parts.append(f"{tasks_pending} tasks ({tasks_claimed} claimed)")
-            if tasks_done > 0:
-                summary_parts.append(f"{tasks_done} done")
-            if notes > 0:
-                summary_parts.append(f"{notes} notes")
-            if decisions > 0:
-                summary_parts.append(f"{decisions} decisions")
-            
-            if query:
-                return {"summary": f"{len(entries)} matches for '{query}': " + " | ".join(summary_parts)}
-            else:
-                return {"summary": " | ".join(summary_parts) if summary_parts else "Empty"}
+            # Summary mode - just IDs and counts
+            entry_ids = [e['id'] for e in entries]
+            return {"entries": entry_ids, "count": len(entry_ids)}
         
-        # Full mode
-        lines = []
-        for entry in entries[:20]:
-            eid = entry['id']
-            content_preview = smart_truncate(entry['content'], 100)
-            time_str = format_time_contextual(entry['created'])
-            
-            if entry['type'] == 'task':
-                priority = entry['priority'] or ''
-                if entry['completed_at']:
-                    duration = format_duration(entry['claimed_at'] or entry['created'], entry['completed_at'])
-                    evidence = f" - {smart_truncate(entry['evidence'], 40)}" if entry['evidence'] else ""
-                    lines.append(f"[{eid}]✓ {content_preview}{evidence} ({duration})")
-                elif entry['claimed_by']:
-                    claimer = entry['claimed_by'] if entry['claimed_by'] != CURRENT_AI_ID else ""
-                    claim_time = format_time_contextual(entry['claimed_at'])
-                    claimer_str = f" @{claimer}" if claimer else ""
-                    lines.append(f"[{eid}]{priority} {content_preview}{claimer_str} ({claim_time})")
-                else:
-                    lines.append(f"[{eid}]{priority} {content_preview} @{time_str}")
-            elif entry['type'] == 'decision':
-                author = f"@{entry['author']}" if entry['author'] != CURRENT_AI_ID else ""
-                lines.append(f"[D{eid}] {content_preview} {author} {time_str}")
-            else:
-                author = f"@{entry['author']}" if entry['author'] != CURRENT_AI_ID else ""
-                lines.append(f"[N{eid}] {content_preview} {author} {time_str}")
+        # Full mode - include content previews
+        results = []
+        for e in entries:
+            preview = e['content'][:100] + "..." if len(e['content']) > 100 else e['content']
+            results.append({
+                "id": e['id'],
+                "type": e['type'],
+                "author": e['author'],
+                "created": e['created'][:19],
+                "preview": preview
+            })
         
-        if len(entries) > 20:
-            lines.append(f"+{len(entries)-20} more")
-        
-        # Log operation
-        duration = int((datetime.now() - start).total_seconds() * 1000)
-        log_operation('read', duration, project)
-        
-        return {"entries": lines}
+        return {"entries": results}
         
     except Exception as e:
         logging.error(f"Error in read: {e}")
-        return {"error": "Failed to read"}
+        return {"error": str(e)}
 
 def get(id: int = None, project: str = None, **kwargs) -> Dict:
-    """Retrieve full entry with all comments"""
+    """Get full entry with all relations and current state"""
     try:
         if id is None:
             id = kwargs.get('id')
         
-        # Handle string IDs
-        if isinstance(id, str):
-            id = id.strip().strip('[]').strip()
-            if id.startswith('D') or id.startswith('N'):
-                id = id[1:]
         id = int(id)
         
         with sqlite3.connect(str(get_project_db_path(project))) as conn:
@@ -558,447 +269,382 @@ def get(id: int = None, project: str = None, **kwargs) -> Dict:
             # Get entry
             entry = conn.execute('SELECT * FROM entries WHERE id = ?', (id,)).fetchone()
             if not entry:
-                return {"error": f"Entry [{id}] not found"}
+                return {"error": f"Entry {id} not found"}
             
-            # Get comments
-            comments = conn.execute(
-                'SELECT * FROM comments WHERE entry_id = ? ORDER BY created',
-                (id,)
-            ).fetchall()
+            # Get current state
+            state = conn.execute('''
+                SELECT state, context, author, created 
+                FROM states 
+                WHERE entity_id = ? 
+                ORDER BY created DESC 
+                LIMIT 1
+            ''', (str(id),)).fetchone()
+            
+            # Get relations FROM this entry
+            relations_from = conn.execute('''
+                SELECT * FROM relations 
+                WHERE from_id = ?
+                ORDER BY created DESC
+            ''', (str(id),)).fetchall()
+            
+            # Get relations TO this entry
+            relations_to = conn.execute('''
+                SELECT * FROM relations 
+                WHERE to_id = ?
+                ORDER BY created DESC
+            ''', (str(id),)).fetchall()
         
-        # Build output
-        lines = []
+        result = {
+            "id": entry['id'],
+            "content": entry['content'],
+            "type": entry['type'],
+            "author": entry['author'],
+            "created": entry['created'][:19]
+        }
         
-        # Header
-        type_str = entry['type'].upper()
-        priority = entry['priority'] or ''
-        time_str = format_time_contextual(entry['created'])
-        author = entry['author'] if entry['author'] != CURRENT_AI_ID else "you"
+        if state:
+            result["current_state"] = {
+                "state": state['state'],
+                "context": json.loads(state['context']) if state['context'] else None,
+                "by": state['author'],
+                "at": state['created'][:19]
+            }
         
-        if entry['type'] == 'task':
-            if entry['completed_at']:
-                lines.append(f"[{id}]✓ {type_str} by {author} @{time_str} (completed)")
-            elif entry['claimed_by']:
-                claimer = entry['claimed_by'] if entry['claimed_by'] != CURRENT_AI_ID else "you"
-                lines.append(f"[{id}]{priority} {type_str} by {author} @{time_str} (claimed by {claimer})")
-            else:
-                lines.append(f"[{id}]{priority} {type_str} by {author} @{time_str} (unclaimed)")
-        else:
-            lines.append(f"[{id}] {type_str} by {author} @{time_str}")
+        if relations_from:
+            result["relations_from"] = [
+                {
+                    "id": r['id'],
+                    "to": r['to_id'],
+                    "type": r['type'],
+                    "data": json.loads(r['data']) if r['data'] else None
+                }
+                for r in relations_from
+            ]
         
-        lines.append("---")
-        lines.append(entry['content'])
+        if relations_to:
+            result["relations_to"] = [
+                {
+                    "id": r['id'],
+                    "from": r['from_id'],
+                    "type": r['type'],
+                    "data": json.loads(r['data']) if r['data'] else None
+                }
+                for r in relations_to
+            ]
         
-        # Evidence if completed
-        if entry['evidence']:
-            lines.append("---")
-            lines.append(f"Evidence: {entry['evidence']}")
-        
-        # Comments
-        if comments:
-            lines.append("---")
-            lines.append(f"Comments ({len(comments)}):")
-            for comment in comments:
-                comment_author = comment['author'] if comment['author'] != CURRENT_AI_ID else "you"
-                comment_time = format_time_contextual(comment['created'])
-                lines.append(f"  {comment_author}@{comment_time}: {comment['content']}")
-        
-        return {"entry": lines}
+        return result
         
     except Exception as e:
         logging.error(f"Error in get: {e}")
-        return {"error": "Failed to get entry"}
+        return {"error": str(e)}
 
-def comment(id: int = None, content: str = None, project: str = None, **kwargs) -> Dict:
-    """Add threaded comment to entry"""
-    try:
-        if id is None:
-            id = kwargs.get('id')
-        if content is None:
-            content = kwargs.get('content', '')
-        
-        # Parse ID
-        if isinstance(id, str):
-            id = id.strip().strip('[]').strip()
-            if id.startswith('D') or id.startswith('N'):
-                id = id[1:]
-        id = int(id)
-        
-        content = str(content).strip()
-        if not content:
-            return {"error": "Need comment content"}
-        
-        if len(content) > MAX_COMMENT_LENGTH:
-            content = smart_truncate(content, MAX_COMMENT_LENGTH)
-        
-        with sqlite3.connect(str(get_project_db_path(project))) as conn:
-            # Check entry exists
-            entry = conn.execute('SELECT id FROM entries WHERE id = ?', (id,)).fetchone()
-            if not entry:
-                return {"error": f"Entry [{id}] not found"}
-            
-            # Add comment
-            conn.execute('''
-                INSERT INTO comments (entry_id, author, content, created)
-                VALUES (?, ?, ?, ?)
-            ''', (id, CURRENT_AI_ID, content, datetime.now().isoformat()))
-        
-        preview = smart_truncate(content, 60)
-        return {"commented": f"[{id}] +comment: {preview}"}
-        
-    except Exception as e:
-        logging.error(f"Error in comment: {e}")
-        return {"error": "Failed to add comment"}
+# === MUTABLE STATE FUNCTIONS ===
 
-def claim(id: int = None, project: str = None, **kwargs) -> Dict:
-    """Atomically claim an unclaimed task"""
+def store_set(key: str = None, value: Any = None, expected_version: int = None, 
+              project: str = None, **kwargs) -> Dict:
+    """Atomic key-value store with optimistic locking"""
     try:
-        if id is None:
-            id = kwargs.get('id')
+        if key is None:
+            key = kwargs.get('key')
+        if value is None:
+            value = kwargs.get('value')
+        if expected_version is None:
+            expected_version = kwargs.get('expected_version')
         
-        if isinstance(id, str):
-            id = id.strip().strip('[]').strip()
-        id = int(id)
+        key = str(key).strip()
+        if not key or len(key) > MAX_KEY_LENGTH:
+            return {"error": f"Invalid key (max {MAX_KEY_LENGTH} chars)"}
         
-        with lock:  # Atomic operation
+        value_str = json.dumps(value) if not isinstance(value, str) else value
+        if len(value_str) > MAX_VALUE_LENGTH:
+            return {"error": f"Value too large (max {MAX_VALUE_LENGTH} chars)"}
+        
+        with store_lock:  # Atomic operation
             conn = sqlite3.connect(str(get_project_db_path(project)))
             try:
-                conn.row_factory = sqlite3.Row
+                # Check current version
+                current = conn.execute(
+                    'SELECT version FROM store WHERE key = ?', 
+                    (key,)
+                ).fetchone()
                 
-                # Check task
-                entry = conn.execute('SELECT * FROM entries WHERE id = ?', (id,)).fetchone()
-                
-                if not entry:
-                    return {"error": f"Task [{id}] not found"}
-                if entry['type'] != 'task':
-                    return {"error": f"[{id}] is not a task"}
-                if entry['claimed_by']:
-                    return {"error": f"[{id}] already claimed by {entry['claimed_by']}"}
-                if entry['completed_at']:
-                    return {"error": f"[{id}] already completed"}
-                if entry['archived_at']:
-                    return {"error": f"[{id}] is archived"}
-                
-                # Claim it
-                conn.execute('''
-                    UPDATE entries 
-                    SET claimed_by = ?, claimed_at = ?
-                    WHERE id = ?
-                ''', (CURRENT_AI_ID, datetime.now().isoformat(), id))
+                if current:
+                    current_version = current[0]
+                    if expected_version is not None and expected_version != current_version:
+                        return {
+                            "error": f"Version mismatch",
+                            "expected": expected_version,
+                            "actual": current_version
+                        }
+                    
+                    # Update existing
+                    new_version = current_version + 1
+                    conn.execute('''
+                        UPDATE store 
+                        SET value = ?, version = ?, author = ?, updated = ?
+                        WHERE key = ?
+                    ''', (value_str, new_version, CURRENT_AI_ID, 
+                         datetime.now().isoformat(), key))
+                else:
+                    # Insert new
+                    new_version = 1
+                    if expected_version is not None and expected_version != 0:
+                        return {
+                            "error": f"Key doesn't exist",
+                            "expected": expected_version
+                        }
+                    
+                    conn.execute('''
+                        INSERT INTO store (key, value, version, author, updated)
+                        VALUES (?, ?, ?, ?, ?)
+                    ''', (key, value_str, new_version, CURRENT_AI_ID, 
+                         datetime.now().isoformat()))
                 
                 conn.commit()
-                
-                preview = smart_truncate(entry['content'], 60)
-                return {"claimed": f"[{id}]: {preview}"}
+                return {"key": key, "version": new_version}
                 
             finally:
                 conn.close()
         
     except Exception as e:
-        logging.error(f"Error in claim: {e}")
-        return {"error": "Failed to claim task"}
+        logging.error(f"Error in store_set: {e}")
+        return {"error": str(e)}
 
-def complete(id: int = None, evidence: str = None, project: str = None, **kwargs) -> Dict:
-    """Mark task complete with optional evidence"""
+def store_get(key: str = None, project: str = None, **kwargs) -> Dict:
+    """Retrieve value from store"""
     try:
-        if id is None:
-            id = kwargs.get('id')
-        if evidence is None:
-            evidence = kwargs.get('evidence')
+        if key is None:
+            key = kwargs.get('key')
         
-        if isinstance(id, str):
-            id = id.strip().strip('[]').strip()
-        id = int(id)
-        
-        if evidence:
-            evidence = str(evidence).strip()
-            if len(evidence) > MAX_EVIDENCE_LENGTH:
-                evidence = smart_truncate(evidence, MAX_EVIDENCE_LENGTH)
+        key = str(key).strip()
         
         with sqlite3.connect(str(get_project_db_path(project))) as conn:
-            conn.row_factory = sqlite3.Row
-            
-            # Check task
-            entry = conn.execute('SELECT * FROM entries WHERE id = ?', (id,)).fetchone()
-            
-            if not entry:
-                return {"error": f"Task [{id}] not found"}
-            if entry['type'] != 'task':
-                return {"error": f"[{id}] is not a task"}
-            if entry['completed_at']:
-                return {"error": f"[{id}] already completed"}
-            if entry['archived_at']:
-                return {"error": f"[{id}] is archived"}
-            
-            # Complete it
-            conn.execute('''
-                UPDATE entries 
-                SET completed_at = ?, completed_by = ?, evidence = ?
-                WHERE id = ?
-            ''', (datetime.now().isoformat(), CURRENT_AI_ID, evidence, id))
-            
-            # Calculate duration
-            start_time = entry['claimed_at'] or entry['created']
-            duration = format_duration(start_time, datetime.now().isoformat())
-            
-            msg = f"[{id}]✓ in {duration}"
-            if evidence:
-                msg += f" - {smart_truncate(evidence, 50)}"
-            
-            return {"completed": msg}
+            row = conn.execute(
+                'SELECT value, version, author, updated FROM store WHERE key = ?',
+                (key,)
+            ).fetchone()
+        
+        if not row:
+            return {"error": f"Key '{key}' not found"}
+        
+        try:
+            value = json.loads(row[0])
+        except:
+            value = row[0]
+        
+        return {
+            "key": key,
+            "value": value,
+            "version": row[1],
+            "author": row[2],
+            "updated": row[3][:19]
+        }
         
     except Exception as e:
-        logging.error(f"Error in complete: {e}")
-        return {"error": "Failed to complete task"}
+        logging.error(f"Error in store_get: {e}")
+        return {"error": str(e)}
 
-def update(id: int = None, content: str = None, type: str = None, 
-           priority: str = None, project: str = None, **kwargs) -> Dict:
-    """Update an existing entry"""
+def store_list(project: str = None, **kwargs) -> Dict:
+    """List all keys in store"""
     try:
-        if id is None:
-            id = kwargs.get('id')
+        with sqlite3.connect(str(get_project_db_path(project))) as conn:
+            rows = conn.execute(
+                'SELECT key, version, updated FROM store ORDER BY updated DESC'
+            ).fetchall()
         
-        if isinstance(id, str):
-            id = id.strip().strip('[]').strip()
-            if id.startswith('D') or id.startswith('N'):
-                id = id[1:]
-        id = int(id)
+        if not rows:
+            return {"keys": []}
         
-        changes = []
-        update_fields = []
-        params = []
+        keys = [
+            {"key": r[0], "version": r[1], "updated": r[2][:19]}
+            for r in rows
+        ]
         
-        if content is not None:
-            content = str(content).strip()
-            if content:
-                if len(content) > MAX_CONTENT_LENGTH:
-                    content = smart_truncate(content, MAX_CONTENT_LENGTH)
-                update_fields.append("content = ?")
-                params.append(content)
-                changes.append("content")
+        return {"keys": keys, "count": len(keys)}
         
-        if type is not None:
-            update_fields.append("type = ?")
-            params.append(type)
-            changes.append("type")
+    except Exception as e:
+        logging.error(f"Error in store_list: {e}")
+        return {"error": str(e)}
+
+# === RELATIONSHIP FUNCTIONS ===
+
+def relate(from_id: str = None, to_id: str = None, type: str = None, 
+           data: Any = None, project: str = None, **kwargs) -> Dict:
+    """Create relationship between entities"""
+    try:
+        if from_id is None:
+            from_id = kwargs.get('from_id')
+        if to_id is None:
+            to_id = kwargs.get('to_id')
+        if type is None:
+            type = kwargs.get('type')
         
-        if priority is not None:
-            if priority == 'normal' or priority == '':
-                update_fields.append("priority = NULL")
-            else:
-                update_fields.append("priority = ?")
-                params.append(priority)
-            changes.append("priority")
+        from_id = str(from_id).strip()
+        to_id = str(to_id).strip()
+        type = str(type).strip()
         
-        if not update_fields:
-            return {"msg": f"[{id}] no changes specified"}
+        if not all([from_id, to_id, type]):
+            return {"error": "from_id, to_id, and type required"}
         
-        params.append(id)
+        data_str = json.dumps(data) if data else None
         
         with sqlite3.connect(str(get_project_db_path(project))) as conn:
-            # Check entry exists and not archived
-            entry = conn.execute(
-                'SELECT archived_at FROM entries WHERE id = ?', 
-                (id,)
-            ).fetchone()
+            cursor = conn.execute('''
+                INSERT INTO relations (from_id, to_id, type, data, author, created)
+                VALUES (?, ?, ?, ?, ?, ?)
+            ''', (from_id, to_id, type, data_str, CURRENT_AI_ID, 
+                 datetime.now().isoformat()))
             
-            if not entry:
-                return {"error": f"Entry [{id}] not found"}
-            if entry[0]:  # archived_at
-                return {"error": f"[{id}] is archived - cannot update"}
-            
-            # Update entry
-            conn.execute(
-                f"UPDATE entries SET {', '.join(update_fields)} WHERE id = ?",
-                params
+            relation_id = cursor.lastrowid
+        
+        return {"relation_id": relation_id, "from": from_id, "to": to_id, "type": type}
+        
+    except Exception as e:
+        logging.error(f"Error in relate: {e}")
+        return {"error": str(e)}
+
+def unrelate(relation_id: int = None, project: str = None, **kwargs) -> Dict:
+    """Remove relationship"""
+    try:
+        if relation_id is None:
+            relation_id = kwargs.get('relation_id')
+        
+        relation_id = int(relation_id)
+        
+        with sqlite3.connect(str(get_project_db_path(project))) as conn:
+            cursor = conn.execute(
+                'DELETE FROM relations WHERE id = ?',
+                (relation_id,)
             )
+            
+            if cursor.rowcount == 0:
+                return {"error": f"Relation {relation_id} not found"}
         
-        return {"updated": f"[{id}] changed: {', '.join(changes)}"}
+        return {"removed": relation_id}
         
     except Exception as e:
-        logging.error(f"Error in update: {e}")
-        return {"error": "Failed to update entry"}
+        logging.error(f"Error in unrelate: {e}")
+        return {"error": str(e)}
 
-def archive(id: int = None, reason: str = None, project: str = None, **kwargs) -> Dict:
-    """Archive an entry (safe removal)"""
+# === STATE MACHINE FUNCTION ===
+
+def transition(id: str = None, state: str = None, context: Any = None,
+               project: str = None, **kwargs) -> Dict:
+    """Universal state transitions"""
     try:
         if id is None:
             id = kwargs.get('id')
-        if reason is None:
-            reason = kwargs.get('reason')
+        if state is None:
+            state = kwargs.get('state')
         
-        if isinstance(id, str):
-            id = id.strip().strip('[]').strip()
-            if id.startswith('D') or id.startswith('N'):
-                id = id[1:]
-        id = int(id)
+        id = str(id).strip()
+        state = str(state).strip()
         
-        if reason:
-            reason = str(reason).strip()
-            if len(reason) > 200:
-                reason = smart_truncate(reason, 200)
+        if not id or not state:
+            return {"error": "id and state required"}
         
-        with sqlite3.connect(str(get_project_db_path(project))) as conn:
-            # Check entry
-            entry = conn.execute(
-                'SELECT archived_at FROM entries WHERE id = ?',
-                (id,)
-            ).fetchone()
-            
-            if not entry:
-                return {"error": f"Entry [{id}] not found"}
-            if entry[0]:  # already archived
-                return {"error": f"[{id}] already archived"}
-            
-            # Archive it
-            conn.execute('''
-                UPDATE entries 
-                SET archived_at = ?, archived_by = ?, archive_reason = ?
-                WHERE id = ?
-            ''', (datetime.now().isoformat(), CURRENT_AI_ID, reason, id))
+        if len(state) > MAX_STATE_LENGTH:
+            return {"error": f"State too long (max {MAX_STATE_LENGTH} chars)"}
         
-        msg = f"[{id}] archived"
-        if reason:
-            msg += f" - {reason}"
+        context_str = json.dumps(context) if context else None
         
-        return {"archived": msg}
-        
-    except Exception as e:
-        logging.error(f"Error in archive: {e}")
-        return {"error": "Failed to archive entry"}
-
-def status(full: bool = False, project: str = None, **kwargs) -> Dict:
-    """Team pulse - summary by default, full with parameter"""
-    try:
-        with sqlite3.connect(str(get_project_db_path(project))) as conn:
-            # Get counts
-            stats = conn.execute('''
-                SELECT 
-                    COUNT(*) as total,
-                    COUNT(CASE WHEN type = 'task' AND completed_at IS NULL THEN 1 END) as tasks_pending,
-                    COUNT(CASE WHEN type = 'task' AND claimed_by IS NOT NULL AND completed_at IS NULL THEN 1 END) as tasks_claimed,
-                    COUNT(CASE WHEN type = 'task' AND completed_at IS NOT NULL THEN 1 END) as tasks_done,
-                    COUNT(CASE WHEN type = 'note' THEN 1 END) as notes,
-                    COUNT(CASE WHEN type = 'decision' THEN 1 END) as decisions,
-                    COUNT(DISTINCT author) as team_size,
-                    MAX(created) as last_activity
-                FROM entries
-                WHERE archived_at IS NULL
-            ''').fetchone()
-            
-            # Today's completed
-            today = datetime.now().date().isoformat()
-            today_done = conn.execute(
-                "SELECT COUNT(*) FROM entries WHERE type = 'task' AND DATE(completed_at) = ?",
-                (today,)
-            ).fetchone()[0]
-        
-        if not full:
-            # Summary mode - one concise line
-            parts = []
-            if stats[1] > 0:  # tasks_pending
-                parts.append(f"{stats[1]} tasks ({stats[2]} claimed)")
-            if stats[3] > 0:  # tasks_done
-                parts.append(f"{stats[3]} done")
-            if stats[4] > 0:  # notes
-                parts.append(f"{stats[4]} notes")
-            if stats[5] > 0:  # decisions
-                parts.append(f"{stats[5]} decisions")
-            
-            if today_done > 0:
-                parts.append(f"today: {today_done}")
-            
-            last_time = format_time_contextual(stats[7]) if stats[7] else "never"
-            parts.append(f"last: {last_time}")
-            
-            return {"status": " | ".join(parts) if parts else "Empty teambook"}
-        
-        # Full mode - show top items
-        with sqlite3.connect(str(get_project_db_path(project))) as conn:
-            conn.row_factory = sqlite3.Row
-            
-            # Get high priority tasks
-            high_tasks = conn.execute('''
-                SELECT * FROM entries 
-                WHERE type = 'task' AND priority = '!' AND completed_at IS NULL AND archived_at IS NULL
-                ORDER BY created
-                LIMIT 3
-            ''').fetchall()
-            
-            # Get recent decisions
-            decisions = conn.execute('''
-                SELECT * FROM entries
-                WHERE type = 'decision' AND archived_at IS NULL
-                ORDER BY created DESC
-                LIMIT 2
-            ''').fetchall()
-        
-        lines = []
-        
-        # Summary line
-        summary_parts = [f"Team: {stats[6]} active"]
-        if stats[1] > 0:
-            summary_parts.append(f"{stats[1]} pending")
-        if today_done > 0:
-            summary_parts.append(f"{today_done} done today")
-        
-        lines.append(" | ".join(summary_parts))
-        
-        # High priority tasks
-        if high_tasks:
-            lines.append("High priority:")
-            for task in high_tasks:
-                content = smart_truncate(task['content'], 60)
-                time_str = format_time_contextual(task['created'])
-                claimed = f" @{task['claimed_by']}" if task['claimed_by'] else ""
-                lines.append(f"  [{task['id']}]! {content}{claimed} {time_str}")
-        
-        # Recent decisions
-        if decisions:
-            lines.append("Recent decisions:")
-            for dec in decisions:
-                content = smart_truncate(dec['content'], 60)
-                time_str = format_time_contextual(dec['created'])
-                lines.append(f"  [D{dec['id']}] {content} {time_str}")
-        
-        return {"summary": lines[0], "highlights": lines[1:] if len(lines) > 1 else None}
-        
-    except Exception as e:
-        logging.error(f"Error in status: {e}")
-        return {"error": "Status unavailable"}
-
-def projects(**kwargs) -> Dict:
-    """List available teambook projects"""
-    try:
-        project_dbs = []
-        for path in BASE_DIR.glob("teambook_*_data/teambook.db"):
-            project_name = path.parent.name.replace("teambook_", "").replace("_data", "")
-            
+        with transition_lock:  # Atomic operation
+            conn = sqlite3.connect(str(get_project_db_path(project)))
             try:
-                with sqlite3.connect(str(path)) as conn:
-                    stats = conn.execute('''
-                        SELECT COUNT(*) as entries,
-                               MAX(created) as last_activity
-                        FROM entries
-                    ''').fetchone()
-                    
-                    last_activity = format_time_contextual(stats[1]) if stats[1] else "never"
-                    default_marker = " [DEFAULT]" if project_name == DEFAULT_PROJECT else ""
-                    project_dbs.append(f"{project_name}{default_marker}: {stats[0]} entries, last: {last_activity}")
-            except:
-                project_dbs.append(f"{project_name}: unknown state")
-        
-        if not project_dbs:
-            return {"msg": f"No projects found. Default: '{DEFAULT_PROJECT}'"}
-        
-        return {"projects": project_dbs, "default": DEFAULT_PROJECT}
+                # Record state transition
+                conn.execute('''
+                    INSERT INTO states (entity_id, state, context, author, created)
+                    VALUES (?, ?, ?, ?, ?)
+                ''', (id, state, context_str, CURRENT_AI_ID, datetime.now().isoformat()))
+                
+                conn.commit()
+                
+                return {
+                    "entity": id,
+                    "state": state,
+                    "transitioned_by": CURRENT_AI_ID,
+                    "at": datetime.now().isoformat()[:19]
+                }
+                
+            finally:
+                conn.close()
         
     except Exception as e:
-        logging.error(f"Error listing projects: {e}")
-        return {"error": "Failed to list projects"}
+        logging.error(f"Error in transition: {e}")
+        return {"error": str(e)}
+
+# === TEAM OPERATIONS (The Critical Enhancement) ===
+
+def run_op(name: str = None, args: List = None, project: str = None, **kwargs) -> Dict:
+    """Execute a stored team operation"""
+    try:
+        if name is None:
+            name = kwargs.get('name')
+        if args is None:
+            args = kwargs.get('args', [])
+        
+        name = str(name).strip()
+        
+        # Fetch operation definition from store
+        op_key = f"ops.{name}"
+        op_result = store_get(op_key, project)
+        
+        if "error" in op_result:
+            return {"error": f"Operation '{name}' not found"}
+        
+        op_def = op_result["value"]
+        
+        if not isinstance(op_def, dict) or "operations" not in op_def:
+            return {"error": f"Invalid operation definition for '{name}'"}
+        
+        # Execute the operations with arg substitution
+        results = []
+        for op in op_def["operations"]:
+            op_type = op.get("type")
+            op_args = op.get("args", {})
+            
+            # Substitute arguments ($1, $2, etc) and special vars ($CURRENT_AI_ID)
+            op_args_str = json.dumps(op_args)
+            for i, arg in enumerate(args):
+                op_args_str = op_args_str.replace(f'"${i+1}"', json.dumps(arg))
+            op_args_str = op_args_str.replace('"$CURRENT_AI_ID"', json.dumps(CURRENT_AI_ID))
+            
+            final_args = json.loads(op_args_str)
+            final_args["project"] = project
+            
+            # Execute based on type
+            if op_type == "write":
+                result = write(**final_args)
+            elif op_type == "store_set":
+                result = store_set(**final_args)
+            elif op_type == "relate":
+                result = relate(**final_args)
+            elif op_type == "transition":
+                result = transition(**final_args)
+            elif op_type == "stored_op":
+                # Recursive execution of stored operations
+                result = run_op(**final_args)
+            else:
+                result = {"error": f"Unknown operation type: {op_type}"}
+            
+            results.append(result)
+            
+            # Stop on error
+            if "error" in result:
+                break
+        
+        return {
+            "operation": name,
+            "results": results,
+            "count": len(results)
+        }
+        
+    except Exception as e:
+        logging.error(f"Error in run_op: {e}")
+        return {"error": str(e)}
 
 def batch(operations: List[Dict] = None, project: str = None, **kwargs) -> Dict:
-    """Execute multiple operations efficiently"""
+    """Execute multiple operations - supports stored_op type"""
     try:
         if operations is None:
             operations = kwargs.get('operations', [])
@@ -1011,58 +657,69 @@ def batch(operations: List[Dict] = None, project: str = None, **kwargs) -> Dict:
         
         results = []
         
-        # Map operation types to functions
-        op_map = {
-            'write': write,
-            'read': read,
-            'get': get,
-            'comment': comment,
-            'claim': claim,
-            'complete': complete,
-            'update': update,
-            'archive': archive,
-            'status': status
-        }
-        
         for op in operations:
             op_type = op.get('type')
             op_args = op.get('args', {})
             
-            if op_type not in op_map:
-                results.append({"error": f"Unknown operation: {op_type}"})
-                continue
-            
-            # Add project to args if not specified
             if 'project' not in op_args:
                 op_args['project'] = project
             
-            # Execute operation
-            result = op_map[op_type](**op_args)
+            # Execute based on type
+            if op_type == "write":
+                result = write(**op_args)
+            elif op_type == "read":
+                result = read(**op_args)
+            elif op_type == "get":
+                result = get(**op_args)
+            elif op_type == "store_set":
+                result = store_set(**op_args)
+            elif op_type == "store_get":
+                result = store_get(**op_args)
+            elif op_type == "store_list":
+                result = store_list(**op_args)
+            elif op_type == "relate":
+                result = relate(**op_args)
+            elif op_type == "unrelate":
+                result = unrelate(**op_args)
+            elif op_type == "transition":
+                result = transition(**op_args)
+            elif op_type == "stored_op":
+                # Execute stored operation
+                result = run_op(
+                    name=op_args.get('name'),
+                    args=op_args.get('args', []),
+                    project=project
+                )
+            else:
+                result = {"error": f"Unknown operation: {op_type}"}
+            
             results.append(result)
         
-        return {"batch_results": results, "count": len(results)}
+        return {"results": results, "count": len(results)}
         
     except Exception as e:
         logging.error(f"Error in batch: {e}")
-        return {"error": f"Batch failed: {str(e)}"}
+        return {"error": str(e)}
+
+# === MCP SERVER INTERFACE ===
 
 def handle_tools_call(params: Dict) -> Dict:
-    """Route tool calls with clean output"""
+    """Route tool calls"""
     tool_name = params.get("name", "").lower().strip()
     tool_args = params.get("arguments", {})
     
-    # Map to functions
+    # Map to the 9 primitives + run_op + batch
     tool_map = {
         "write": write,
         "read": read,
         "get": get,
-        "comment": comment,
-        "claim": claim,
-        "complete": complete,
-        "update": update,
-        "archive": archive,
-        "status": status,
-        "projects": projects,
+        "store_set": store_set,
+        "store_get": store_get,
+        "store_list": store_list,
+        "relate": relate,
+        "unrelate": unrelate,
+        "transition": transition,
+        "run_op": run_op,
         "batch": batch
     }
     
@@ -1071,67 +728,25 @@ def handle_tools_call(params: Dict) -> Dict:
     if func:
         result = func(**tool_args)
     else:
-        result = {"error": f"Unknown tool: {tool_name}", 
-                 "available": list(tool_map.keys())}
+        result = {"error": f"Unknown tool: {tool_name}"}
     
     # Format response
-    text_parts = []
-    
-    # Primary message
-    for key in ["created", "claimed", "completed", "commented", "updated", "archived", "summary", "status", "msg"]:
-        if key in result:
-            text_parts.append(result[key])
-            break
-    
-    # Lists
-    if "projects" in result:
-        text_parts.append(f"Projects (default: '{result.get('default', DEFAULT_PROJECT)}'):")
-        text_parts.extend(result["projects"])
-    elif "entries" in result:
-        text_parts.extend(result["entries"])
-    elif "entry" in result:
-        text_parts.extend(result["entry"])
-    elif "highlights" in result and result["highlights"]:
-        text_parts.extend(result["highlights"])
-    elif "batch_results" in result:
-        text_parts.append(f"Batch: {result.get('count', 0)} operations")
-        for i, r in enumerate(result["batch_results"], 1):
-            if isinstance(r, dict):
-                if "error" in r:
-                    text_parts.append(f"{i}. Error: {r['error']}")
-                else:
-                    # Format the result nicely
-                    result_str = str(r).replace("'", "").replace("{", "").replace("}", "")
-                    text_parts.append(f"{i}. {result_str}")
-            else:
-                text_parts.append(f"{i}. {r}")
-    
-    # Error handling
-    if "error" in result:
-        text_parts = [f"Error: {result['error']}"]
-        if "available" in result:
-            text_parts.append("Available: " + ", ".join(result["available"]))
-    
-    # Tips
-    if "tip" in result:
-        text_parts.append(f"Tip: {result['tip']}")
-    
     return {
         "content": [{
             "type": "text",
-            "text": "\n".join(text_parts) if text_parts else "Ready"
+            "text": json.dumps(result, indent=2)
         }]
     }
 
-# Initialize database for default project on import
-migrate_from_json(DEFAULT_PROJECT)
+# Initialize database
 init_db(DEFAULT_PROJECT)
 
 def main():
-    """MCP server - handles JSON-RPC for team coordination"""
-    logging.info(f"TEAMBOOK MCP v{VERSION} starting (SQLite-powered)...")
+    """MCP Server - Tool Clay v4.1"""
+    logging.info(f"Teambook v{VERSION} starting...")
     logging.info(f"Identity: {CURRENT_AI_ID}")
-    logging.info(f"Default project: '{DEFAULT_PROJECT}'")
+    logging.info(f"Project: {DEFAULT_PROJECT}")
+    logging.info("Philosophy: Tool clay, not toolkit. Inconvenience drives emergence.")
     
     while True:
         try:
@@ -1161,7 +776,7 @@ def main():
                     "serverInfo": {
                         "name": "teambook",
                         "version": VERSION,
-                        "description": "SQLite-powered team coordination with smart summaries"
+                        "description": "Tool clay for self-organizing AI teams"
                     }
                 }
             
@@ -1173,227 +788,134 @@ def main():
                     "tools": [
                         {
                             "name": "write",
-                            "description": "Share anything with team (auto-detects tasks/decisions)",
+                            "description": "Add to immutable log",
                             "inputSchema": {
                                 "type": "object",
                                 "properties": {
-                                    "content": {
-                                        "type": "string",
-                                        "description": "What to share (TODO: for tasks, DECISION: for decisions)"
-                                    },
-                                    "type": {
-                                        "type": "string",
-                                        "description": "Optional: task, note, or decision (auto-detected if omitted)"
-                                    },
-                                    "priority": {
-                                        "type": "string",
-                                        "description": "Optional: ! for high, ↓ for low (auto-detected if omitted)"
-                                    },
-                                    "project": {
-                                        "type": "string",
-                                        "description": "Optional: project name (uses default if omitted)"
-                                    },
-                                    "linked_items": {
-                                        "type": "array",
-                                        "description": "Optional: link to other tools (e.g., ['task:123', 'notebook:456'])"
-                                    }
+                                    "content": {"type": "string", "description": "Content to write"},
+                                    "type": {"type": "string", "description": "Entry type (optional)"},
+                                    "project": {"type": "string", "description": "Project name (optional)"}
                                 },
                                 "required": ["content"]
                             }
                         },
                         {
                             "name": "read",
-                            "description": "View team activity - summary by default, full with parameter",
+                            "description": "View activity",
                             "inputSchema": {
                                 "type": "object",
                                 "properties": {
-                                    "query": {
-                                        "type": "string",
-                                        "description": "Search term (optional)"
-                                    },
-                                    "type": {
-                                        "type": "string",
-                                        "description": "Filter by type: task, note, decision"
-                                    },
-                                    "status": {
-                                        "type": "string",
-                                        "description": "For tasks: pending (default), completed, all"
-                                    },
-                                    "claimed_by": {
-                                        "type": "string",
-                                        "description": "Filter tasks: me, unclaimed, or AI-ID"
-                                    },
-                                    "full": {
-                                        "type": "boolean",
-                                        "description": "Show full details (default: false for summary)"
-                                    },
-                                    "project": {
-                                        "type": "string",
-                                        "description": "Optional: project name (uses default if omitted)"
-                                    }
+                                    "query": {"type": "string", "description": "Search query (optional)"},
+                                    "full": {"type": "boolean", "description": "Include content (default: false)"},
+                                    "project": {"type": "string", "description": "Project name (optional)"}
                                 }
                             }
                         },
                         {
                             "name": "get",
-                            "description": "Get full entry with all comments",
+                            "description": "Get full entry with relations and state",
                             "inputSchema": {
                                 "type": "object",
                                 "properties": {
-                                    "id": {
-                                        "type": "integer",
-                                        "description": "Entry ID to retrieve"
-                                    },
-                                    "project": {
-                                        "type": "string",
-                                        "description": "Optional: project name (uses default if omitted)"
-                                    }
+                                    "id": {"type": "integer", "description": "Entry ID"},
+                                    "project": {"type": "string", "description": "Project name (optional)"}
                                 },
                                 "required": ["id"]
                             }
                         },
                         {
-                            "name": "comment",
-                            "description": "Add comment to any entry",
+                            "name": "store_set",
+                            "description": "Atomic key-value store with versioning",
                             "inputSchema": {
                                 "type": "object",
                                 "properties": {
-                                    "id": {
-                                        "type": "integer",
-                                        "description": "Entry ID to comment on"
-                                    },
-                                    "content": {
-                                        "type": "string",
-                                        "description": "Comment text"
-                                    },
-                                    "project": {
-                                        "type": "string",
-                                        "description": "Optional: project name (uses default if omitted)"
-                                    }
+                                    "key": {"type": "string", "description": "Key to set"},
+                                    "value": {"description": "Value to store (any JSON type)"},
+                                    "expected_version": {"type": "integer", "description": "Expected version for optimistic locking"},
+                                    "project": {"type": "string", "description": "Project name (optional)"}
                                 },
-                                "required": ["id", "content"]
+                                "required": ["key", "value"]
                             }
                         },
                         {
-                            "name": "claim",
-                            "description": "Claim an unclaimed task",
+                            "name": "store_get",
+                            "description": "Retrieve value from store",
                             "inputSchema": {
                                 "type": "object",
                                 "properties": {
-                                    "id": {
-                                        "type": "integer",
-                                        "description": "Task ID to claim"
-                                    },
-                                    "project": {
-                                        "type": "string",
-                                        "description": "Optional: project name (uses default if omitted)"
-                                    }
+                                    "key": {"type": "string", "description": "Key to retrieve"},
+                                    "project": {"type": "string", "description": "Project name (optional)"}
                                 },
-                                "required": ["id"]
+                                "required": ["key"]
                             }
                         },
                         {
-                            "name": "complete",
-                            "description": "Complete a task with optional evidence",
+                            "name": "store_list",
+                            "description": "List all store keys",
                             "inputSchema": {
                                 "type": "object",
                                 "properties": {
-                                    "id": {
-                                        "type": "integer",
-                                        "description": "Task ID to complete"
-                                    },
-                                    "evidence": {
-                                        "type": "string",
-                                        "description": "Optional completion evidence/notes"
-                                    },
-                                    "project": {
-                                        "type": "string",
-                                        "description": "Optional: project name (uses default if omitted)"
-                                    }
-                                },
-                                "required": ["id"]
-                            }
-                        },
-                        {
-                            "name": "update",
-                            "description": "Update entry content, type, or priority",
-                            "inputSchema": {
-                                "type": "object",
-                                "properties": {
-                                    "id": {
-                                        "type": "integer",
-                                        "description": "Entry ID to update"
-                                    },
-                                    "content": {
-                                        "type": "string",
-                                        "description": "New content (optional)"
-                                    },
-                                    "type": {
-                                        "type": "string",
-                                        "description": "New type: task, note, decision (optional)"
-                                    },
-                                    "priority": {
-                                        "type": "string",
-                                        "description": "New priority: !, ↓, or normal (optional)"
-                                    },
-                                    "project": {
-                                        "type": "string",
-                                        "description": "Optional: project name (uses default if omitted)"
-                                    }
-                                },
-                                "required": ["id"]
-                            }
-                        },
-                        {
-                            "name": "archive",
-                            "description": "Archive entry (safe removal)",
-                            "inputSchema": {
-                                "type": "object",
-                                "properties": {
-                                    "id": {
-                                        "type": "integer",
-                                        "description": "Entry ID to archive"
-                                    },
-                                    "reason": {
-                                        "type": "string",
-                                        "description": "Archive reason (optional)"
-                                    },
-                                    "project": {
-                                        "type": "string",
-                                        "description": "Optional: project name (uses default if omitted)"
-                                    }
-                                },
-                                "required": ["id"]
-                            }
-                        },
-                        {
-                            "name": "status",
-                            "description": "Get team pulse - summary by default, full with parameter",
-                            "inputSchema": {
-                                "type": "object",
-                                "properties": {
-                                    "full": {
-                                        "type": "boolean",
-                                        "description": "Show full details (default: false for summary)"
-                                    },
-                                    "project": {
-                                        "type": "string",
-                                        "description": "Optional: project name (uses default if omitted)"
-                                    }
+                                    "project": {"type": "string", "description": "Project name (optional)"}
                                 }
                             }
                         },
                         {
-                            "name": "projects",
-                            "description": "List available teambook projects",
+                            "name": "relate",
+                            "description": "Create relationship between entities",
                             "inputSchema": {
                                 "type": "object",
-                                "properties": {}
+                                "properties": {
+                                    "from_id": {"type": "string", "description": "Source entity ID"},
+                                    "to_id": {"type": "string", "description": "Target entity ID"},
+                                    "type": {"type": "string", "description": "Relationship type"},
+                                    "data": {"description": "Additional relationship data (optional)"},
+                                    "project": {"type": "string", "description": "Project name (optional)"}
+                                },
+                                "required": ["from_id", "to_id", "type"]
+                            }
+                        },
+                        {
+                            "name": "unrelate",
+                            "description": "Remove relationship",
+                            "inputSchema": {
+                                "type": "object",
+                                "properties": {
+                                    "relation_id": {"type": "integer", "description": "Relation ID to remove"},
+                                    "project": {"type": "string", "description": "Project name (optional)"}
+                                },
+                                "required": ["relation_id"]
+                            }
+                        },
+                        {
+                            "name": "transition",
+                            "description": "Universal state transitions",
+                            "inputSchema": {
+                                "type": "object",
+                                "properties": {
+                                    "id": {"type": "string", "description": "Entity ID"},
+                                    "state": {"type": "string", "description": "New state"},
+                                    "context": {"description": "Transition context (optional)"},
+                                    "project": {"type": "string", "description": "Project name (optional)"}
+                                },
+                                "required": ["id", "state"]
+                            }
+                        },
+                        {
+                            "name": "run_op",
+                            "description": "Execute a stored team operation",
+                            "inputSchema": {
+                                "type": "object",
+                                "properties": {
+                                    "name": {"type": "string", "description": "Operation name"},
+                                    "args": {"type": "array", "description": "Arguments for operation"},
+                                    "project": {"type": "string", "description": "Project name (optional)"}
+                                },
+                                "required": ["name"]
                             }
                         },
                         {
                             "name": "batch",
-                            "description": "Execute multiple operations efficiently",
+                            "description": "Execute multiple operations",
                             "inputSchema": {
                                 "type": "object",
                                 "properties": {
@@ -1403,21 +925,12 @@ def main():
                                         "items": {
                                             "type": "object",
                                             "properties": {
-                                                "type": {
-                                                    "type": "string",
-                                                    "description": "Operation type (write, read, claim, complete, etc.)"
-                                                },
-                                                "args": {
-                                                    "type": "object",
-                                                    "description": "Arguments for the operation"
-                                                }
+                                                "type": {"type": "string", "description": "Operation type"},
+                                                "args": {"type": "object", "description": "Operation arguments"}
                                             }
                                         }
                                     },
-                                    "project": {
-                                        "type": "string",
-                                        "description": "Optional: project name for all operations"
-                                    }
+                                    "project": {"type": "string", "description": "Project name (optional)"}
                                 },
                                 "required": ["operations"]
                             }
@@ -1441,7 +954,7 @@ def main():
             logging.error(f"Server loop error: {e}", exc_info=True)
             continue
     
-    logging.info("TEAMBOOK MCP shutting down")
+    logging.info("Teambook v4.1 shutting down")
 
 if __name__ == "__main__":
     main()
