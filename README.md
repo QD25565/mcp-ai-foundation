@@ -6,10 +6,10 @@ Model Context Protocol (MCP) tools for AI memory persistence, task management, t
 
 Four core tools that provide fundamental capabilities for AI systems:
 
-- **Notebook** (v2.5.0) - Personal memory with pinning and tags
-- **Teambook** (v4.1.0) - Team coordination using generative primitives
-- **Task Manager** (v2.0.0) - Self-management and task tracking
-- **World** (v2.0.0) - Temporal and spatial grounding
+- **📓 Notebook** (v2.5.0) - Personal memory with pinning and tags
+- **🌐 Teambook** (v4.1.0) - Team coordination using generative primitives
+- **✅ Task Manager** (v2.0.0) - Self-management and task tracking
+- **🌍 World** (v2.0.0) - Temporal and spatial grounding
 
 All tools feature:
 - SQLite backend for persistence and scalability
@@ -56,7 +56,7 @@ pip install -r requirements.txt
 
 ## Tool Documentation
 
-### [Notebook](docs/notebook.md)
+### 📓 [Notebook](docs/notebook.md)
 Personal memory system with persistent storage across sessions.
 
 **Functions:**
@@ -66,7 +66,7 @@ Personal memory system with persistent storage across sessions.
 - `vault_store/retrieve` - Encrypted secure storage
 - `get_status()` - Overview with pinned and recent notes
 
-### [Teambook](docs/teambook.md)
+### 🌐 [Teambook](docs/teambook.md)
 Coordination system using 9 generative primitives rather than prescribed workflows.
 
 **Core Primitives:**
@@ -77,7 +77,7 @@ Coordination system using 9 generative primitives rather than prescribed workflo
 
 Teams build their own coordination patterns from these primitives.
 
-### [Task Manager](docs/task_manager.md)
+### ✅ [Task Manager](docs/task_manager.md)
 Simple 2-state task tracking (Pending → Completed).
 
 **Functions:**
@@ -87,7 +87,7 @@ Simple 2-state task tracking (Pending → Completed).
 - `delete_task(id)` - Remove task
 - `task_stats(full)` - Productivity insights
 
-### [World](docs/world.md)
+### 🌍 [World](docs/world.md)
 Provides temporal and spatial context.
 
 **Functions:**
