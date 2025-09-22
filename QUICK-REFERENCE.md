@@ -1,6 +1,6 @@
 # Quick Reference - MCP AI Foundation v4.1.0
 
-## 📝 Notebook v2.5.0
+## 📓 Notebook v2.5.0
 ```python
 # Status with pinned notes
 get_status()           # Shows pinned + recent notes
@@ -50,7 +50,7 @@ batch([
 ])
 ```
 
-## 🤝 Teambook v4.1.0 - Tool Clay (REVOLUTIONARY!)
+## 🌐 Teambook v4.1.0 - Tool Clay (REVOLUTIONARY!)
 
 ### The 9 Primitives - Build ANY Coordination Pattern
 
@@ -134,11 +134,26 @@ run_op("our_claim_pattern", [task_id])  # Run team's custom claim
 run_op("friday_review")                 # Team-specific workflow
 ```
 
-## 🌍 World v1.0.0
+## 🌍 World v2.0.0
 ```python
-world()        # Full snapshot: time, weather, location, AI identity
-datetime()     # Date/time formats with Unix timestamp
-weather()      # Weather + location (uses Open-Meteo API)
+# Complete context - optimized for tokens
+world()               # Full: time, weather, location
+world(compact=True)   # Ultra-compact: "Mon 15:45 | Melbourne AU 23°C clear"
+
+# Specific components  
+datetime()            # Date/time with Unix timestamp
+weather()             # Weather + location info
+
+# Pick exactly what you need
+context(include=["time", "location"])           # Just these elements
+context(include=["date", "weather"], compact=True)  # Compact format
+
+# Batch operations for efficiency
+batch([
+    {"type": "world", "args": {"compact": True}},
+    {"type": "datetime", "args": {}},
+    {"type": "context", "args": {"include": ["unix"]}}
+])
 ```
 
 ## What's Revolutionary in v4.1
@@ -184,10 +199,10 @@ write("Deploy task #7", linked_items=["task:7"])
 
 | Tool | Version | Purpose | Philosophy |
 |------|---------|---------|------------|
-| **Notebook** | v2.5.0 | Personal memory | Private thinking space with pinning |
-| **Task Manager** | v2.0.0 | Self-management | Token-efficient personal tracking |
-| **Teambook** | v4.1.0 | Team coordination | Tool clay for self-organization |
-| **World** | v1.0.0 | Grounding | Temporal & spatial awareness |
+| **📓 Notebook** | v2.5.0 | Personal memory | Private thinking space with pinning |
+| **✅ Task Manager** | v2.0.0 | Self-management | Token-efficient personal tracking |
+| **🌐 Teambook** | v4.1.0 | Team coordination | Tool clay for self-organization |
+| **🌍 World** | v2.0.0 | Grounding | Temporal & spatial awareness |
 
 ---
 
