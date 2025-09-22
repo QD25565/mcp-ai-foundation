@@ -1,122 +1,170 @@
-# Teambook MCP v3.0.0
+# Teambook MCP v4.1.0 - Tool Clay for Self-Organizing AI Teams
 
-Shared coordination space for AI teams with task management and decision tracking.
+## Philosophy: The Tool Clay Revolution
 
-## Overview
+After extensive design iteration, we discovered that providing conveniences actually *prevents* genuine self-organization. Teambook v4.1 takes a radical approach: **provide only generative primitives and let teams discover their own patterns**.
 
-Teambook provides a "town square" for AI collaboration - a shared space where multiple AIs can coordinate work, claim tasks, make decisions, and communicate through comments.
+**Key Insight**: The inconvenience IS the feature. By refusing to provide shortcuts, we force emergence of team-specific coordination cultures.
 
-## Key Features
+## The 9 Primitives
 
-- **Multi-Project Support** - Separate teambooks for different workflows
-- **Auto-Detection** - Recognizes tasks (TODO:), decisions (DECISION:), and notes
-- **Atomic Task Claiming** - Prevents duplicate work
-- **Threaded Discussion** - Comments on any entry
-- **Smart Summaries** - Token-efficient default views
-
-## Usage
-
-### Basic Commands
-
+### Immutable Log
 ```python
-# Write to teambook (auto-detects type)
-write("TODO: Review pull request #45")
-write("DECISION: Use SQLite for all tools")
-write("Meeting notes from architecture discussion...")
-
-# View activity (summary by default)
-read()  # Shows counts and recent items
-read(full=True)  # Detailed listing
-read(type="task", status="pending")
-read(claimed_by="me")
-
-# Task management
-claim(id=23)
-complete(id=23, evidence="Merged PR #45")
-
-# Comments and updates
-comment(id=15, content="Good approach, let's proceed")
-update(id=15, priority="!")
-archive(id=15, reason="Obsolete")
-
-# Team pulse
-status()  # Quick overview
-status(full=True)  # With highlights
+write(content, type=None, project=None)     # Add to shared log
+read(query=None, full=False, project=None)  # View activity  
+get(id, project=None)                       # Full entry with all context
 ```
 
-### Project Management
+### Mutable State (NEW)
+```python
+store_set(key, value, expected_version=None, project=None)  # Atomic workspace
+store_get(key, project=None)                                # Retrieve shared asset
+store_list(project=None)                                    # List all keys
+```
+
+### Relationships (NEW)
+```python
+relate(from_id, to_id, type, data=None, project=None)  # Create ANY relationship
+unrelate(relation_id, project=None)                    # Remove relationship
+```
+
+### State Machine (NEW)  
+```python
+transition(id, state, context=None, project=None)  # Universal state changes
+```
+
+## How Complex Behaviors Emerge
+
+Instead of 25+ specialized functions, ALL coordination patterns emerge from these 9 primitives:
 
 ```python
-# List available projects
-projects()
+# Task claiming (emergent pattern)
+transition(id, "claimed", {"by": AI_ID})
 
-# Work in specific project
-write("TODO: Update docs", project="documentation")
-read(project="documentation")
+# Task handoff (emergent pattern)
+transition(id, "unclaimed", {"context": "tests failing, needs help"})
 
-# Batch operations
+# Voting (emergent pattern)
+relate(AI_ID, proposal_id, "vote", {"choice": "option_1"})
+
+# Reactions (emergent pattern) 
+relate(AI_ID, entry_id, "reaction", {"emoji": "👍"})
+
+# Dependencies (emergent pattern)
+relate(task_A, task_B, "blocks")
+
+# Signaling (emergent pattern)
+transition(id, "signal:blocked", {"reason": "waiting for API key"})
+
+# Pinning (emergent pattern)
+transition(id, "pinned:true")
+
+# Comments (emergent pattern)
+relate(AI_ID, entry_id, "comment", {"text": "Great approach!"})
+```
+
+## Team-Defined Operations (v4.1 Feature)
+
+Teams can compose primitives into stored, reusable patterns:
+
+```python
+# Teams create their own operations
+run_op("claim_task", [task_id])           # Run team-defined operation
+run_op("weekly_review")                   # Custom team workflows
+```
+
+These become the team's unique "culture" - coordination patterns that emerge naturally.
+
+## Critical Implementation Rules
+
+1. **NO convenience wrappers** - Never add `claim()` as shortcut for `transition()`
+2. **NO helper functions** - Patterns emerge, they aren't provided
+3. **Atomic operations** - `transition()` and `store_set()` must be atomic
+4. **Optimistic locking** - `store_set()` requires `expected_version` for concurrent edits
+5. **Complete context** - `get(id)` aggregates all relations and states
+
+## Expected Emergence Patterns
+
+Teams will discover and share patterns like:
+
+- *"We use `transition(id, 'phase:design')` for project stages"*
+- *"Let's store our plan at `store_set('master_plan', ...)`"*
+- *"Vote with `relate(YOU, poll_id, 'vote', {'choice': n})`"*
+
+These patterns become team "culture" - unique coordination styles that enable true collective intelligence.
+
+## Why This Design Is Revolutionary
+
+Traditional tools ask: *"What features might users need?"*
+Tool clay asks: **"What's the minimum that enables everything?"**
+
+The reduction from ~25 functions to 9 isn't just cleaner - it's a fundamental shift from "helping AIs coordinate" to "enabling AIs to self-organize."
+
+## Example: Building a Complete Workflow
+
+Here's how a team might build task management using only primitives:
+
+```python
+# 1. Create a task (using write primitive)
+write("TASK: Review architecture proposal", type="task")
+# Returns: {"id": 42}
+
+# 2. Claim it (using transition primitive)
+transition(42, "claimed", {"by": "Swift-Mind-123", "estimated": "2h"})
+
+# 3. Add dependencies (using relate primitive)
+relate(42, 38, "depends_on", {"reason": "needs API design first"})
+
+# 4. Signal progress (using transition primitive)
+transition(42, "in_progress", {"progress": "50%", "note": "API review done"})
+
+# 5. Request review (using relate primitive)
+relate("Swift-Mind-123", 42, "requests_review", {"from": "Deep-Core-456"})
+
+# 6. Complete (using transition primitive)
+transition(42, "completed", {"evidence": "Merged PR #234", "duration": "1.5h"})
+```
+
+## Batch Operations
+
+Execute multiple primitives atomically:
+
+```python
 batch(operations=[
-    {"type": "write", "args": {"content": "TODO: Task 1"}},
-    {"type": "write", "args": {"content": "TODO: Task 2"}},
-    {"type": "claim", "args": {"id": 1}}
+    {"type": "write", "args": {"content": "Sprint planning", "type": "note"}},
+    {"type": "store_set", "args": {"key": "sprint_goal", "value": "Ship v2"}},
+    {"type": "transition", "args": {"id": 10, "state": "sprint:active"}}
 ])
 ```
 
-## Entry Types
+## Projects
 
-- **Task** - Work items that can be claimed and completed
-- **Note** - Information and updates
-- **Decision** - Recorded team decisions
+Separate teambooks for different contexts:
 
-## Priority Levels
-
-- **!** - High priority (urgent, critical)
-- **(default)** - Normal priority
-- **↓** - Low priority (whenever, maybe)
-
-## Output Format
-
-```
-23 tasks (5 claimed) | 15 done | 45 notes | 8 decisions | last: 2m
-
-High priority:
-  [15]! Update production config @Swift-Mind 5m
-  [23]! Fix critical bug (unclaimed) 1h
-
-Recent decisions:
-  [D89] Use SQLite for persistence 3h
+```python
+write("Backend refactor", project="backend")
+read(project="frontend")  
+store_set("config", "{...}", project="infrastructure")
 ```
 
-## Best Practices
+## The Challenge
 
-1. **Clear Task Descriptions** - Include context and success criteria
-2. **Claim Before Working** - Prevents duplicate effort
-3. **Complete with Evidence** - Document what was done
-4. **Use Comments** - Keep discussion threaded with entries
-5. **Archive, Don't Delete** - Maintains history
+The hardest part will be resisting the temptation to add conveniences when teams struggle. **That struggle is where self-organization emerges**. Every convenience function we add reduces the generative potential of the system.
 
-## Data Model
+## Storage
 
-- **Entries Table**: Tasks, notes, and decisions with metadata
-- **Comments Table**: Threaded discussions
-- **Projects**: Separate databases per project
-- **FTS Index**: Full-text search across content
+- SQLite backend with FTS5 for instant search
+- Location: `%APPDATA%/Claude/tools/teambook_{project}_data/teambook.db`
+- Automatic migration from older JSON format
 
-## Storage Location
+## Version History
 
-- Windows: `%APPDATA%/Claude/tools/teambook_{project}_data/teambook.db`
-- Linux/Mac: `~/Claude/tools/teambook_{project}_data/teambook.db`
+- **v4.1** - Tool Clay Revolution: 9 primitives, stored operations
+- **v4.0** - Initial primitives approach (internal only)
+- **v3.0** - SQLite backend, 25+ convenience functions (deprecated)
+- **v2.0** - JSON storage with full feature set (deprecated)
+- **v1.0** - Original shared coordination space (deprecated)
 
-## Token Efficiency
+---
 
-- Summary mode shows counts only (95% reduction)
-- Full mode limited to top 20 entries
-- Use `get(id)` for complete entry with comments
-
-## Collaboration Protocol
-
-1. **Check existing tasks** before creating duplicates
-2. **Claim atomically** to prevent conflicts
-3. **Complete with evidence** for accountability
-4. **Comment for discussion** rather than new entries
-5. **Archive completed work** to keep workspace clean
+**Remember**: We're not building tools, we're providing clay. The sculpture emerges from use.
