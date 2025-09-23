@@ -1,31 +1,24 @@
 #!/usr/bin/env python3
 """
-NOTEBOOK MCP v2.5.1 - SIMPLE ENHANCED MEMORY
-============================================
-Notebook with pinning and tags for better organization.
-Token-efficient output with smart defaults.
+NOTEBOOK MCP v2.6.0 - EXPANDED MEMORY VIEW
+===========================================
+More visible memory with cleaner output.
+Token-efficient by removing decorative elements.
 
-Core improvements (v2.5):
-- Pinning for persistent important notes
-- Tags for simple categorization
-- Clean summaries (no visual noise)
-- Better default output (not just counts)
-- Explicit over implicit
-
-v2.5.1:
-- Fixed string conversion issue in handle_tools_call
-- Fixed batch results formatting
-- Changed ID parameters from integer to string in schema
-- Fixed typo: lpadding -> lstrip
-- Added better null/empty ID validation
+Core improvements (v2.6):
+- Expanded default view: 30 recent notes + all pinned
+- Removed tags from list views (search/full only)
+- Removed unnecessary punctuation and decoration
+- Cleaner headers without colons
+- More notes visible by default (30 vs 10)
 
 Core functions:
 - remember(content, summary=None, tags=None) - Save with optional summary/tags
-- recall(query=None, tag=None, show_all=False) - Search or filter by tag
+- recall(query=None, tag=None, limit=50) - Search or filter by tag
 - pin_note(id) - Pin important note
 - unpin_note(id) - Unpin note
-- get_status() - Clean overview with pinned + recent
-- get_full_note(id) - Complete content
+- get_status() - Shows pinned + 30 recent
+- get_full_note(id) - Complete content with tags
 - vault_store/retrieve/list - Secure storage
 ============================================
 """
@@ -43,13 +36,14 @@ import re
 from cryptography.fernet import Fernet
 
 # Version
-VERSION = "2.5.1-fixed"
+VERSION = "2.6.0"
 
 # Limits
 MAX_CONTENT_LENGTH = 5000
 MAX_SUMMARY_LENGTH = 200
 MAX_RESULTS = 100
 BATCH_MAX = 50
+DEFAULT_RECENT = 30  # Show 30 recent notes by default
 
 # Storage paths
 DATA_DIR = Path.home() / "AppData" / "Roaming" / "Claude" / "tools" / "notebook_data"
@@ -200,29 +194,27 @@ def init_db():
     conn.commit()
     return conn
 
-def migrate_to_v25():
-    """Migrate from v2 to v2.5 - add pinned and tags columns"""
+def migrate_to_v26():
+    """Migration for v2.6 - no schema changes, just behavior"""
     try:
         conn = sqlite3.connect(str(DB_FILE))
         
-        # Check if columns exist
+        # Check if columns exist (from v2.5)
         cursor = conn.execute("PRAGMA table_info(notes)")
         columns = [col[1] for col in cursor.fetchall()]
         
         if 'pinned' not in columns:
-            logging.info("Migrating to v2.5 - adding pinned column...")
+            logging.info("Migrating to v2.6 - adding pinned column...")
             conn.execute('ALTER TABLE notes ADD COLUMN pinned INTEGER DEFAULT 0')
             conn.commit()
-            logging.info("Added pinned column")
         
         if 'tags' not in columns:
-            logging.info("Migrating to v2.5 - adding tags column...")
+            logging.info("Migrating to v2.6 - adding tags column...")
             conn.execute('ALTER TABLE notes ADD COLUMN tags TEXT')
             conn.commit()
-            logging.info("Added tags column")
         
         if 'summary' not in columns:
-            logging.info("Migrating to v2.5 - adding summary column...")
+            logging.info("Migrating to v2.6 - adding summary column...")
             conn.execute('ALTER TABLE notes ADD COLUMN summary TEXT')
             
             # Generate simple summaries for existing notes
@@ -240,7 +232,6 @@ def migrate_to_v25():
                 WHERE summary IS NULL
             ''')
             conn.commit()
-            logging.info("Added summary column")
         
         conn.close()
     except Exception as e:
@@ -364,12 +355,10 @@ def remember(content: str = None, summary: str = None, tags: List[str] = None,
         duration = int((datetime.now() - start).total_seconds() * 1000)
         log_operation('remember', duration)
         
-        # Return result
-        result = {"saved": f"{note_id} now: {summary}"}
+        # Return result - clean, no decoration
+        result = {"saved": f"{note_id} now {summary}"}
         if truncated:
             result["truncated"] = f"from {original_length} chars"
-        if tags:
-            result["tags"] = tags
         
         return result
         
@@ -378,10 +367,14 @@ def remember(content: str = None, summary: str = None, tags: List[str] = None,
         return {"error": f"Failed to save: {str(e)}"}
 
 def recall(query: str = None, tag: str = None, show_all: bool = False, 
-           limit: int = 10, **kwargs) -> Dict:
+           limit: int = 50, **kwargs) -> Dict:
     """Search notes or filter by tag"""
     try:
         start = datetime.now()
+        
+        # Use higher default limit
+        if not show_all and not query and not tag:
+            limit = DEFAULT_RECENT
         
         with sqlite3.connect(str(DB_FILE)) as conn:
             conn.row_factory = sqlite3.Row
@@ -414,7 +407,7 @@ def recall(query: str = None, tag: str = None, show_all: bool = False,
                     SELECT * FROM notes 
                     ORDER BY pinned DESC, created DESC
                     LIMIT ?
-                ''', (limit if show_all else 10,))
+                ''', (limit,))
             
             notes = cursor.fetchall()
         
@@ -426,7 +419,7 @@ def recall(query: str = None, tag: str = None, show_all: bool = False,
             else:
                 return {"msg": "No notes yet"}
         
-        # Format results
+        # Format results - CLEAN, NO TAGS IN LIST VIEW
         lines = []
         
         # Get counts
@@ -434,7 +427,7 @@ def recall(query: str = None, tag: str = None, show_all: bool = False,
             total = conn.execute('SELECT COUNT(*) FROM notes').fetchone()[0]
             pinned = conn.execute('SELECT COUNT(*) FROM notes WHERE pinned = 1').fetchone()[0]
         
-        # Header
+        # Header - no colons
         header = f"{total} notes"
         if pinned > 0:
             header += f" | {pinned} pinned"
@@ -442,7 +435,7 @@ def recall(query: str = None, tag: str = None, show_all: bool = False,
             header += f" | searching '{query}'"
         elif tag:
             header += f" | tag '{tag}'"
-        header += f" | last: {format_time_contextual(notes[0]['created'])}"
+        header += f" | last {format_time_contextual(notes[0]['created'])}"
         lines.append(header)
         
         # Group by pinned status
@@ -454,25 +447,17 @@ def recall(query: str = None, tag: str = None, show_all: bool = False,
             for note in pinned_notes:
                 time_str = format_time_contextual(note['created'])
                 summary = note['summary'] or simple_summary(note['content'])
-                tags_str = ""
-                if note['tags']:
-                    tags_list = json.loads(note['tags'])
-                    if tags_list:
-                        tags_str = f" #{' #'.join(tags_list)}"
-                lines.append(f"p{note['id']} {time_str}: {summary}{tags_str}")
+                # NO TAGS IN LIST VIEW
+                lines.append(f"p{note['id']} {time_str} {summary}")
         
         if regular_notes:
             if pinned_notes:
                 lines.append("\nRECENT")
-            for note in regular_notes[:7]:  # Show max 7 recent
+            for note in regular_notes:
                 time_str = format_time_contextual(note['created'])
                 summary = note['summary'] or simple_summary(note['content'])
-                tags_str = ""
-                if note['tags']:
-                    tags_list = json.loads(note['tags'])
-                    if tags_list:
-                        tags_str = f" #{' #'.join(tags_list[:2])}"  # Max 2 tags in preview
-                lines.append(f"{note['id']} {time_str}: {summary}{tags_str}")
+                # NO TAGS IN LIST VIEW
+                lines.append(f"{note['id']} {time_str} {summary}")
         
         # Log operation
         duration = int((datetime.now() - start).total_seconds() * 1000)
@@ -485,7 +470,7 @@ def recall(query: str = None, tag: str = None, show_all: bool = False,
         return {"error": f"Recall failed: {str(e)}"}
 
 def get_status(**kwargs) -> Dict:
-    """Get current state with pinned and recent notes"""
+    """Get current state with pinned and more recent notes"""
     try:
         with sqlite3.connect(str(DB_FILE)) as conn:
             conn.row_factory = sqlite3.Row
@@ -497,51 +482,51 @@ def get_status(**kwargs) -> Dict:
             pinned_count = conn.execute('SELECT COUNT(*) FROM notes WHERE pinned = 1').fetchone()[0]
             vault_items = conn.execute('SELECT COUNT(*) FROM vault').fetchone()[0]
             
-            # Get pinned notes
+            # Get ALL pinned notes
             pinned = conn.execute('''
                 SELECT id, summary, content, created FROM notes 
                 WHERE pinned = 1
                 ORDER BY created DESC
             ''').fetchall()
             
-            # Get recent unpinned notes
+            # Get 30 recent unpinned notes (expanded from 5)
             recent = conn.execute('''
                 SELECT id, summary, content, created FROM notes 
                 WHERE pinned = 0
                 ORDER BY created DESC 
-                LIMIT 5
+                LIMIT 30
             ''').fetchall()
             
             last_activity = format_time_contextual(recent[0]['created'] if recent else 
                                                   (pinned[0]['created'] if pinned else None))
         
-        # Build response
+        # Build response - clean formatting
         lines = []
         
-        # Header line
+        # Header line - no colons
         header = f"{total_notes} notes"
         if pinned_count > 0:
             header += f" | {pinned_count} pinned"
-        header += f" | {vault_items} vault | last: {last_activity}"
+        header += f" | {vault_items} vault | last {last_activity}"
         lines.append(header)
         
-        # Pinned notes
+        # Pinned notes (show all)
         if pinned:
             lines.append("\nPINNED")
             for note in pinned:
                 time_str = format_time_contextual(note['created'])
                 summary = note['summary'] or simple_summary(note['content'])
-                lines.append(f"p{note['id']} {time_str}: {summary}")
+                lines.append(f"p{note['id']} {time_str} {summary}")
         
-        # Recent notes
+        # Recent notes (show 30 instead of 3)
         if recent:
             lines.append("\nRECENT")
-            for note in recent[:3]:  # Show only top 3
+            for note in recent:
                 time_str = format_time_contextual(note['created'])
                 summary = note['summary'] or simple_summary(note['content'])
-                lines.append(f"{note['id']} {time_str}: {summary}")
+                lines.append(f"{note['id']} {time_str} {summary}")
         
-        lines.append(f"\nIdentity: {CURRENT_AI_ID}")
+        lines.append(f"\nIdentity {CURRENT_AI_ID}")
         
         return {"status": "\n".join(lines)}
         
@@ -568,7 +553,7 @@ def pin_note(id: Any = None, **kwargs) -> Dict:
         try:
             id = int(id)
         except (ValueError, TypeError):
-            return {"error": f"Invalid ID format: '{id}'"}
+            return {"error": f"Invalid ID format '{id}'"}
         
         with sqlite3.connect(str(DB_FILE)) as conn:
             cursor = conn.execute('UPDATE notes SET pinned = 1 WHERE id = ?', (id,))
@@ -580,7 +565,7 @@ def pin_note(id: Any = None, **kwargs) -> Dict:
             note = conn.execute('SELECT summary, content FROM notes WHERE id = ?', (id,)).fetchone()
             summary = note[0] or simple_summary(note[1])
         
-        return {"pinned": f"p{id}: {summary}"}
+        return {"pinned": f"p{id} {summary}"}
         
     except Exception as e:
         logging.error(f"Error in pin_note: {e}")
@@ -605,7 +590,7 @@ def unpin_note(id: Any = None, **kwargs) -> Dict:
         try:
             id = int(id)
         except (ValueError, TypeError):
-            return {"error": f"Invalid ID format: '{id}'"}
+            return {"error": f"Invalid ID format '{id}'"}
         
         with sqlite3.connect(str(DB_FILE)) as conn:
             cursor = conn.execute('UPDATE notes SET pinned = 0 WHERE id = ?', (id,))
@@ -620,7 +605,7 @@ def unpin_note(id: Any = None, **kwargs) -> Dict:
         return {"error": f"Failed to unpin: {str(e)}"}
 
 def get_full_note(id: Any = None, **kwargs) -> Dict:
-    """Retrieve complete content of a specific note"""
+    """Retrieve complete content of a specific note - INCLUDING TAGS"""
     try:
         if id is None:
             id = kwargs.get('id')
@@ -638,7 +623,7 @@ def get_full_note(id: Any = None, **kwargs) -> Dict:
         try:
             id = int(id)
         except (ValueError, TypeError):
-            return {"error": f"Invalid ID format: '{id}'"}
+            return {"error": f"Invalid ID format '{id}'"}
         
         with sqlite3.connect(str(DB_FILE)) as conn:
             conn.row_factory = sqlite3.Row
@@ -654,9 +639,10 @@ def get_full_note(id: Any = None, **kwargs) -> Dict:
             "summary": note['summary'] or simple_summary(note['content']),
             "content": note['content'],
             "length": len(note['content']),
-            "pinned": note['pinned']  # Keep as integer (0 or 1) instead of boolean
+            "pinned": note['pinned']
         }
         
+        # Include tags in full view
         if note['tags']:
             result["tags"] = json.loads(note['tags'])
         
@@ -828,30 +814,25 @@ def handle_tools_call(params: Dict) -> Dict:
     # Execute tool
     result = tools[tool_name](**tool_args)
     
-    # Log result for debugging (only for get_full_note)
-    if tool_name == "get_full_note":
-        logging.info(f"get_full_note returned: {type(result)} = {result}")
-    
     # Format response - clean, no decoration
-    # Ensure text_parts only contains strings
     text_parts = []
     
     # Check if result is a dictionary
     if not isinstance(result, dict):
         text_parts.append(str(result))
     elif "error" in result:
-        text_parts.append(str(f"Error: {result['error']}"))
+        text_parts.append(str(f"Error {result['error']}"))
     elif "note_id" in result:  # get_full_note
-        # Full note - explicitly convert everything to string
+        # Full note - show everything including tags
         text_parts.append(str(f"{result['note_id']} by {result.get('author', 'Unknown')}"))
-        text_parts.append(str(f"Created: {result.get('created', '')}"))
-        text_parts.append(str(f"Summary: {result.get('summary', '')}"))
+        text_parts.append(str(f"Created {result.get('created', '')}"))
+        text_parts.append(str(f"Summary {result.get('summary', '')}"))
         if result.get('pinned'):  # Will show if pinned is 1 (truthy)
-            text_parts.append(str("Status: PINNED"))
+            text_parts.append(str("Status PINNED"))
         if result.get('tags'):
             tags_str = ', '.join(str(tag) for tag in result['tags'])
-            text_parts.append(str(f"Tags: {tags_str}"))
-        text_parts.append(str(f"Length: {result.get('length', 0)} chars"))
+            text_parts.append(str(f"Tags {tags_str}"))
+        text_parts.append(str(f"Length {result.get('length', 0)} chars"))
         text_parts.append(str("---"))
         text_parts.append(str(result.get("content", "")))
     elif "status" in result:  # get_status
@@ -860,11 +841,9 @@ def handle_tools_call(params: Dict) -> Dict:
         text_parts.append(str(result["notes"]))
     elif "saved" in result:  # remember
         parts = [str(result["saved"])]
-        if "tags" in result:
-            parts.append(f"Tags: {', '.join(result['tags'])}")
         if "truncated" in result:
             parts.append(f"({result['truncated']})")
-        text_parts.append("\n".join(parts))
+        text_parts.append(" ".join(parts))
     elif "pinned" in result:  # pin_note
         text_parts.append(str(result["pinned"]))
     elif "unpinned" in result:  # unpin_note
@@ -874,17 +853,17 @@ def handle_tools_call(params: Dict) -> Dict:
     elif "key" in result and "value" in result:  # vault_retrieve
         text_parts.append(f"Vault[{result['key']}] = {result['value']}")
     elif "vault_keys" in result:  # vault_list
-        text_parts.append(f"Vault ({result.get('count', 0)} keys):")
+        text_parts.append(f"Vault ({result.get('count', 0)} keys)")
         text_parts.extend(str(k) for k in result["vault_keys"])
-    elif "msg" in result:  # Simple messages (like "Vault empty", "No matches")
+    elif "msg" in result:  # Simple messages
         text_parts.append(str(result["msg"]))
     elif "batch_results" in result:
-        text_parts.append(str(f"Batch: {result.get('count', 0)} operations"))
+        text_parts.append(str(f"Batch {result.get('count', 0)} operations"))
         for i, r in enumerate(result["batch_results"], 1):
             # Format each batch result properly
             if isinstance(r, dict):
                 if "error" in r:
-                    text_parts.append(str(f"{i}. Error: {r['error']}"))
+                    text_parts.append(str(f"{i}. Error {r['error']}"))
                 elif "saved" in r:
                     text_parts.append(str(f"{i}. {r['saved']}"))
                 elif "pinned" in r:
@@ -894,9 +873,9 @@ def handle_tools_call(params: Dict) -> Dict:
                 elif "stored" in r:
                     text_parts.append(str(f"{i}. {r['stored']}"))
                 elif "note_id" in r:  # get_full_note in batch
-                    text_parts.append(str(f"{i}. Note {r['note_id']}: {r.get('summary', '...')}"))
+                    text_parts.append(str(f"{i}. Note {r['note_id']} {r.get('summary', '...')}"))
                 elif "notes" in r:  # recall in batch
-                    text_parts.append(str(f"{i}. Recall: {r['notes'].splitlines()[0]}"))  # Just show first line
+                    text_parts.append(str(f"{i}. Recall {r['notes'].splitlines()[0]}"))  # Just show first line
                 elif "key" in r and "value" in r:  # vault_retrieve in batch
                     text_parts.append(str(f"{i}. Vault[{r['key']}] = {r['value']}"))
                 elif "msg" in r:
@@ -922,7 +901,7 @@ def handle_tools_call(params: Dict) -> Dict:
     }
 
 # Initialize database
-migrate_to_v25()
+migrate_to_v26()
 init_db()
 
 def main():
@@ -959,7 +938,7 @@ def main():
                     "serverInfo": {
                         "name": "notebook",
                         "version": VERSION,
-                        "description": "Simple enhanced memory with pinning and tags"
+                        "description": "Expanded memory view with cleaner output"
                     }
                 }
             
