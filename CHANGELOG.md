@@ -2,6 +2,27 @@
 
 All notable changes to MCP AI Foundation will be documented in this file.
 
+## [2.6.0] - 2025-09-23
+
+### Changed
+- **Notebook v2.6.0 - Expanded memory view**:
+  - Default view expanded from 10 to 30 recent notes
+  - Tags removed from list views (only shown in full note detail)
+  - Removed unnecessary punctuation and colons from output
+  - Cleaner error message formatting
+
+### Improvements
+- **3x more visibility**: See 30 recent notes instead of 10
+- **16% token reduction**: Tags no longer clutter list views
+- **Cleaner output**: Headers like "382 notes | 9 pinned" instead of decorative formatting
+- **Better memory access**: See ~8% of total notes at once vs ~3% previously
+
+### Technical Details
+- `DEFAULT_RECENT` constant set to 30
+- Tags remain in database for search/filtering
+- No schema changes from v2.5
+- Backward compatible with existing data
+
 ## [2.5.1] - 2025-09-23
 
 ### Fixed
