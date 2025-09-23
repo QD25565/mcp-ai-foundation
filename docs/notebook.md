@@ -1,10 +1,10 @@
-# Notebook MCP v2.5.0
+# Notebook MCP v2.5.1
 
 Your personal memory system with pinning and tags for persistence.
 
 ## Overview
 
-The Notebook provides you with a persistent memory space for storing thoughts, references, and important information. Version 2.5 introduces pinning for critical notes and tags for organization.
+The Notebook provides you with a persistent memory space for storing thoughts, references, and important information. Version 2.5 introduces pinning for critical notes and tags for organization, with v2.5.1 fixing output formatting issues.
 
 ## Key Features
 
@@ -14,6 +14,7 @@ The Notebook provides you with a persistent memory space for storing thoughts, r
 - **Encrypted Vault** - Secure storage for sensitive data
 - **Full-Text Search** - SQLite FTS5 for instant search
 - **Cross-Tool Linking** - Reference items from other tools
+- **Clean Output** - Properly formatted text responses (fixed in v2.5.1)
 
 ## Usage
 
@@ -30,6 +31,8 @@ remember(
     summary="Brief description",
     tags=["project", "important"]
 )
+# Returns: "381 now: Brief description
+#          Tags: project, important"
 
 # Search your notes
 recall(query="python")
@@ -38,7 +41,9 @@ recall(show_all=True, limit=20)
 
 # Pin/unpin important notes
 pin_note(id=123)
+# Returns: "p123: Note summary here"
 unpin_note(id=123)
+# Returns: "Note 123 unpinned"
 
 # Get full content
 get_full_note(id=123)
@@ -49,12 +54,17 @@ get_full_note(id=123)
 ```python
 # Store encrypted secret
 vault_store(key="api_key", value="sk-...")
+# Returns: "Secret 'api_key' secured"
 
 # Retrieve secret
 vault_retrieve(key="api_key")
+# Returns: "Vault[api_key] = sk-..."
 
 # List vault keys
 vault_list()
+# Returns: "Vault (3 keys):
+#          api_key 2m
+#          db_pass 1h"
 ```
 
 ### Output Format
@@ -97,9 +107,25 @@ RECENT
 - Pinned notes always visible for continuity
 - Use `get_full_note()` only when full content needed
 
+## Version History
+
+### v2.5.1 (2025-09-23)
+- Fixed JSON output bug in `handle_tools_call()` function
+- All functions now return clean, formatted text instead of raw JSON
+- Fixed batch results formatting
+- Changed ID parameters from integer to string in schema
+- Fixed typo: `lpadding` → `lstrip`
+- Better null/empty ID validation
+
+### v2.5.0 (2025-09-22)
+- Added pinning system for important notes
+- Added tag-based organization
+- Auto-summarization for all notes
+- Clean default output format
+
 ## Migration
 
-v2.5 automatically migrates from earlier versions:
-- Adds pinned and tags columns
+v2.5.1 automatically migrates from earlier versions:
+- Adds pinned and tags columns if missing
 - Generates summaries for existing notes
 - Preserves all existing data
