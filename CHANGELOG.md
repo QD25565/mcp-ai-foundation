@@ -2,6 +2,23 @@
 
 All notable changes to MCP AI Foundation will be documented in this file.
 
+## [2.5.1] - 2025-09-23
+
+### Fixed
+- **Notebook v2.5.1 - Output formatting bug fix**:
+  - Fixed critical issue where many functions returned raw JSON instead of formatted text
+  - Added proper handling for all result formats in `handle_tools_call()` function
+  - Fixed batch results formatting to properly display individual operation results
+  - Changed ID parameters from integer to string type in schema
+  - Fixed typo: `lpadding` → `lstrip` in ID handling
+  - Improved null/empty ID validation
+
+### Technical Details
+- Added comprehensive elif blocks for status, notes, saved, pinned, unpinned, stored, and vault_keys
+- Ensured all text_parts are explicitly converted to strings
+- Fixed identical formatting issue in batch results loop
+- All functions now output clean, token-efficient formatted text
+
 ## [4.1.0] - 2025-09-22
 
 ### Revolutionary: Teambook Tool Clay Revolution
