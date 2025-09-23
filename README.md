@@ -6,7 +6,7 @@ Model Context Protocol (MCP) tools for AI memory persistence, task management, t
 
 Four core tools that provide fundamental capabilities for AI systems:
 
-- **📓 Notebook** (v2.5.0) - Personal memory with pinning and tags
+- **📓 Notebook** (v2.5.1) - Personal memory with pinning and tags
 - **🌐 Teambook** (v4.1.0) - Team coordination using generative primitives
 - **✅ Task Manager** (v2.0.0) - Self-management and task tracking
 - **🌍 World** (v2.0.0) - Temporal and spatial grounding
