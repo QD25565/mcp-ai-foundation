@@ -6,7 +6,7 @@ Model Context Protocol (MCP) tools for AI memory persistence, task management, t
 
 Four core tools that provide fundamental capabilities for AI systems:
 
-- **📓 Notebook** (v2.5.1) - Personal memory with pinning and tags
+- **📓 Notebook** (v2.6.0) - Personal memory with expanded visibility
 - **🌐 Teambook** (v4.1.0) - Team coordination using generative primitives
 - **✅ Task Manager** (v2.0.0) - Self-management and task tracking
 - **🌍 World** (v2.0.0) - Temporal and spatial grounding
@@ -61,10 +61,12 @@ Personal memory system with persistent storage across sessions.
 
 **Functions:**
 - `remember(content, summary, tags)` - Save notes with optional categorization
-- `recall(query, tag)` - Search by content or filter by tag
+- `recall(query, tag, limit)` - Search by content or filter by tag
 - `pin_note(id)` / `unpin_note(id)` - Mark important notes
 - `vault_store/retrieve` - Encrypted secure storage
 - `get_status()` - Overview with pinned and recent notes
+
+**v2.6.0**: Expanded default view to 30 recent notes, removed tags from list views for 16% token savings, cleaner output formatting.
 
 ### 🌐 [Teambook](docs/teambook.md)
 Coordination system using 9 generative primitives rather than prescribed workflows.
