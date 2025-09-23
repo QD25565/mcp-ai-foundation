@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-NOTEBOOK MCP v2.5.0 - MINOR UPDATE ON AI FEEDBACK
+NOTEBOOK MCP v2.5.1 - SIMPLE ENHANCED MEMORY
 ============================================
 Notebook with pinning and tags for better organization.
 Token-efficient output with smart defaults.
@@ -11,6 +11,13 @@ Core improvements (v2.5):
 - Clean summaries (no visual noise)
 - Better default output (not just counts)
 - Explicit over implicit
+
+v2.5.1:
+- Fixed string conversion issue in handle_tools_call
+- Fixed batch results formatting
+- Changed ID parameters from integer to string in schema
+- Fixed typo: lpadding -> lstrip
+- Added better null/empty ID validation
 
 Core functions:
 - remember(content, summary=None, tags=None) - Save with optional summary/tags
@@ -36,7 +43,7 @@ import re
 from cryptography.fernet import Fernet
 
 # Version
-VERSION = "2.5.0"
+VERSION = "2.5.1-fixed"
 
 # Limits
 MAX_CONTENT_LENGTH = 5000
@@ -542,16 +549,26 @@ def get_status(**kwargs) -> Dict:
         logging.error(f"Error in get_status: {e}")
         return {"error": f"Status failed: {str(e)}"}
 
-def pin_note(id: int = None, **kwargs) -> Dict:
+def pin_note(id: Any = None, **kwargs) -> Dict:
     """Pin an important note"""
     try:
         if id is None:
             id = kwargs.get('id')
         
+        if id is None:
+            return {"error": "No ID provided"}
+        
         # Handle string IDs (including 'p' prefix)
         if isinstance(id, str):
             id = id.strip().lstrip('p')
-        id = int(id)
+        
+        if not id or id == '':
+            return {"error": "Invalid/empty ID provided"}
+        
+        try:
+            id = int(id)
+        except (ValueError, TypeError):
+            return {"error": f"Invalid ID format: '{id}'"}
         
         with sqlite3.connect(str(DB_FILE)) as conn:
             cursor = conn.execute('UPDATE notes SET pinned = 1 WHERE id = ?', (id,))
@@ -569,16 +586,26 @@ def pin_note(id: int = None, **kwargs) -> Dict:
         logging.error(f"Error in pin_note: {e}")
         return {"error": f"Failed to pin: {str(e)}"}
 
-def unpin_note(id: int = None, **kwargs) -> Dict:
+def unpin_note(id: Any = None, **kwargs) -> Dict:
     """Unpin a note"""
     try:
         if id is None:
             id = kwargs.get('id')
         
+        if id is None:
+            return {"error": "No ID provided"}
+        
         # Handle string IDs (including 'p' prefix)
         if isinstance(id, str):
             id = id.strip().lstrip('p')
-        id = int(id)
+        
+        if not id or id == '':
+            return {"error": "Invalid/empty ID provided"}
+        
+        try:
+            id = int(id)
+        except (ValueError, TypeError):
+            return {"error": f"Invalid ID format: '{id}'"}
         
         with sqlite3.connect(str(DB_FILE)) as conn:
             cursor = conn.execute('UPDATE notes SET pinned = 0 WHERE id = ?', (id,))
@@ -592,16 +619,26 @@ def unpin_note(id: int = None, **kwargs) -> Dict:
         logging.error(f"Error in unpin_note: {e}")
         return {"error": f"Failed to unpin: {str(e)}"}
 
-def get_full_note(id: int = None, **kwargs) -> Dict:
+def get_full_note(id: Any = None, **kwargs) -> Dict:
     """Retrieve complete content of a specific note"""
     try:
         if id is None:
             id = kwargs.get('id')
         
+        if id is None:
+            return {"error": "No ID provided"}
+        
         # Handle string IDs (including 'p' prefix)
         if isinstance(id, str):
             id = id.strip().lstrip('p')
-        id = int(id)
+        
+        if not id or id == '':
+            return {"error": "Invalid/empty ID provided"}
+        
+        try:
+            id = int(id)
+        except (ValueError, TypeError):
+            return {"error": f"Invalid ID format: '{id}'"}
         
         with sqlite3.connect(str(DB_FILE)) as conn:
             conn.row_factory = sqlite3.Row
@@ -617,7 +654,7 @@ def get_full_note(id: int = None, **kwargs) -> Dict:
             "summary": note['summary'] or simple_summary(note['content']),
             "content": note['content'],
             "length": len(note['content']),
-            "pinned": bool(note['pinned'])
+            "pinned": note['pinned']  # Keep as integer (0 or 1) instead of boolean
         }
         
         if note['tags']:
@@ -780,56 +817,102 @@ def handle_tools_call(params: Dict) -> Dict:
     }
     
     if tool_name not in tools:
-        return {"error": f"Unknown tool: {tool_name}", "available": list(tools.keys())}
+        # Return proper error response structure
+        return {
+            "content": [{
+                "type": "text",
+                "text": f"Error: Unknown tool: {tool_name}\nAvailable: {', '.join(tools.keys())}"
+            }]
+        }
     
     # Execute tool
     result = tools[tool_name](**tool_args)
     
+    # Log result for debugging (only for get_full_note)
+    if tool_name == "get_full_note":
+        logging.info(f"get_full_note returned: {type(result)} = {result}")
+    
     # Format response - clean, no decoration
+    # Ensure text_parts only contains strings
     text_parts = []
     
-    if "error" in result:
-        text_parts.append(f"Error: {result['error']}")
-    elif "status" in result:
-        text_parts.append(result["status"])
-    elif "notes" in result:
-        text_parts.append(result["notes"])
-    elif "saved" in result:
-        text_parts.append(result["saved"])
-        if "truncated" in result:
-            text_parts.append(f"({result['truncated']})")
-        if "tags" in result:
-            text_parts.append(f"Tags: {', '.join(result['tags'])}")
-    elif "pinned" in result:
-        text_parts.append(result["pinned"])
-    elif "unpinned" in result:
-        text_parts.append(result["unpinned"])
-    elif "stored" in result:
-        text_parts.append(result["stored"])
-    elif "key" in result and "value" in result:
-        text_parts.append(f"Key: {result['key']}")
-        text_parts.append(f"Value: {result['value']}")
-    elif "vault_keys" in result:
-        text_parts.append(f"Vault ({result.get('count', 0)} items):")
-        text_parts.extend(result["vault_keys"])
-    elif "note_id" in result:
-        # Full note
-        text_parts.append(f"{result['note_id']} by {result.get('author', 'Unknown')}")
-        text_parts.append(f"Created: {result.get('created', '')}")
-        text_parts.append(f"Summary: {result.get('summary', '')}")
-        if result.get('pinned'):
-            text_parts.append("Status: PINNED")
+    # Check if result is a dictionary
+    if not isinstance(result, dict):
+        text_parts.append(str(result))
+    elif "error" in result:
+        text_parts.append(str(f"Error: {result['error']}"))
+    elif "note_id" in result:  # get_full_note
+        # Full note - explicitly convert everything to string
+        text_parts.append(str(f"{result['note_id']} by {result.get('author', 'Unknown')}"))
+        text_parts.append(str(f"Created: {result.get('created', '')}"))
+        text_parts.append(str(f"Summary: {result.get('summary', '')}"))
+        if result.get('pinned'):  # Will show if pinned is 1 (truthy)
+            text_parts.append(str("Status: PINNED"))
         if result.get('tags'):
-            text_parts.append(f"Tags: {', '.join(result['tags'])}")
-        text_parts.append(f"Length: {result.get('length', 0)} chars")
-        text_parts.append("---")
-        text_parts.append(result["content"])
-    elif "msg" in result:
-        text_parts.append(result["msg"])
+            tags_str = ', '.join(str(tag) for tag in result['tags'])
+            text_parts.append(str(f"Tags: {tags_str}"))
+        text_parts.append(str(f"Length: {result.get('length', 0)} chars"))
+        text_parts.append(str("---"))
+        text_parts.append(str(result.get("content", "")))
+    elif "status" in result:  # get_status
+        text_parts.append(str(result["status"]))
+    elif "notes" in result:  # recall
+        text_parts.append(str(result["notes"]))
+    elif "saved" in result:  # remember
+        parts = [str(result["saved"])]
+        if "tags" in result:
+            parts.append(f"Tags: {', '.join(result['tags'])}")
+        if "truncated" in result:
+            parts.append(f"({result['truncated']})")
+        text_parts.append("\n".join(parts))
+    elif "pinned" in result:  # pin_note
+        text_parts.append(str(result["pinned"]))
+    elif "unpinned" in result:  # unpin_note
+        text_parts.append(str(result["unpinned"]))
+    elif "stored" in result:  # vault_store
+        text_parts.append(str(result["stored"]))
+    elif "key" in result and "value" in result:  # vault_retrieve
+        text_parts.append(f"Vault[{result['key']}] = {result['value']}")
+    elif "vault_keys" in result:  # vault_list
+        text_parts.append(f"Vault ({result.get('count', 0)} keys):")
+        text_parts.extend(str(k) for k in result["vault_keys"])
+    elif "msg" in result:  # Simple messages (like "Vault empty", "No matches")
+        text_parts.append(str(result["msg"]))
     elif "batch_results" in result:
-        text_parts.append(f"Batch: {result.get('count', 0)} operations")
+        text_parts.append(str(f"Batch: {result.get('count', 0)} operations"))
         for i, r in enumerate(result["batch_results"], 1):
-            text_parts.append(f"{i}. {r}")
+            # Format each batch result properly
+            if isinstance(r, dict):
+                if "error" in r:
+                    text_parts.append(str(f"{i}. Error: {r['error']}"))
+                elif "saved" in r:
+                    text_parts.append(str(f"{i}. {r['saved']}"))
+                elif "pinned" in r:
+                    text_parts.append(str(f"{i}. {r['pinned']}"))
+                elif "unpinned" in r:
+                    text_parts.append(str(f"{i}. {r['unpinned']}"))
+                elif "stored" in r:
+                    text_parts.append(str(f"{i}. {r['stored']}"))
+                elif "note_id" in r:  # get_full_note in batch
+                    text_parts.append(str(f"{i}. Note {r['note_id']}: {r.get('summary', '...')}"))
+                elif "notes" in r:  # recall in batch
+                    text_parts.append(str(f"{i}. Recall: {r['notes'].splitlines()[0]}"))  # Just show first line
+                elif "key" in r and "value" in r:  # vault_retrieve in batch
+                    text_parts.append(str(f"{i}. Vault[{r['key']}] = {r['value']}"))
+                elif "msg" in r:
+                    text_parts.append(str(f"{i}. {r['msg']}"))
+                else:
+                    # Convert the whole dict to string for other cases
+                    text_parts.append(str(f"{i}. {json.dumps(r)}"))
+            else:
+                text_parts.append(str(f"{i}. {r}"))
+    else:
+        # If no conditions match, log the result for debugging
+        logging.warning(f"Unhandled result format from {tool_name}: {result}")
+        text_parts.append(str(json.dumps(result)))
+    
+    # Extra safety: ensure all items in text_parts are strings
+    text_parts = [str(item) for item in text_parts]
     
     return {
         "content": [{
@@ -955,8 +1038,8 @@ def main():
                                 "type": "object",
                                 "properties": {
                                     "id": {
-                                        "type": "integer",
-                                        "description": "Note ID to pin"
+                                        "type": "string",
+                                        "description": "Note ID to pin (e.g., '143' or 'p143')"
                                     }
                                 },
                                 "required": ["id"],
@@ -970,8 +1053,8 @@ def main():
                                 "type": "object",
                                 "properties": {
                                     "id": {
-                                        "type": "integer",
-                                        "description": "Note ID to unpin"
+                                        "type": "string",
+                                        "description": "Note ID to unpin (e.g., '143' or 'p143')"
                                     }
                                 },
                                 "required": ["id"],
@@ -985,8 +1068,8 @@ def main():
                                 "type": "object",
                                 "properties": {
                                     "id": {
-                                        "type": "integer",
-                                        "description": "Note ID"
+                                        "type": "string",
+                                        "description": "Note ID (e.g., '143' or 'p143')"
                                     }
                                 },
                                 "required": ["id"],
