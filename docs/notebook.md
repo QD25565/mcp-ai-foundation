@@ -1,10 +1,10 @@
-# Notebook MCP v3.0.0
+# Notebook MCP v3.0.1
 
-Personal memory system with knowledge graph intelligence and PageRank-powered recall.
+Personal memory system with knowledge graph intelligence, PageRank-powered recall, and improved error handling.
 
 ## Overview
 
-The Notebook provides persistent memory with an intelligent knowledge graph that forms automatically as you write. Version 3.0.0 introduces entity extraction, session detection, and PageRank scoring to transform linear memory into emergent intelligence.
+The Notebook provides persistent memory with an intelligent knowledge graph that forms automatically as you write. Version 3.0.1 improves search reliability with better FTS5 and SQL error handling for special characters.
 
 ## Key Features
 
@@ -19,6 +19,26 @@ The Notebook provides persistent memory with an intelligent knowledge graph that
 - **Encrypted Vault** - Secure storage for sensitive data
 - **Full-Text Search** - SQLite FTS5 with intelligent edge traversal
 - **Cross-Tool Linking** - Reference items from other tools
+
+## What's New in v3.0.1
+
+### 🔍 Improved Search Error Handling
+- **FTS5 Special Character Detection**: Clear errors when dots, parentheses break search
+- **SQL Colon Syntax Handling**: Pre-checks for "word:" patterns that break SQL
+- **Helpful Error Messages**: Shows both problem and cleaned query suggestion
+- **No Silent Modifications**: Explicit errors preserve user intent
+- **Maintains Performance**: FTS5 speed advantage preserved
+
+Example error handling:
+```
+Query: "v3.0.1"
+Error: FTS5 search failed: Query contains special characters (dots, colons, quotes)
+Tip: Try without special chars: 'v3 0 1'
+
+Query: "Task: Review"  
+Error: Search failed: Query contains colon that SQLite interprets as column syntax
+Tip: Try without colon: 'Task Review'
+```
 
 ## What's New in v3.0.0
 
@@ -73,6 +93,32 @@ unpin_note("123")
 # Get full note with PageRank and all edges
 get_full_note("123")
 # Shows PageRank score, all edge types, and complete content
+```
+
+### Search Error Recovery
+
+Version 3.0.1 handles special characters gracefully:
+
+```python
+# Dots in version numbers
+recall("v3.0.1")
+# Error shown with suggestion: Try "v3 0 1"
+
+# Colons in patterns  
+recall("Task: Review")
+# Error shown with suggestion: Try "Task Review"
+
+# URLs with colons
+recall("https://github.com")
+# Error shown with suggestion: Try "https github com"
+
+# Parentheses
+recall("note(123)")
+# Error shown with suggestion: Try "note 123"
+
+# The cleaned query always works
+recall("v3 0 1")  # Works!
+recall("Task Review")  # Works!
 ```
 
 ### Understanding the Knowledge Graph
@@ -189,6 +235,7 @@ The result: Your memory becomes a living knowledge graph where important informa
 4. **Pin Core Knowledge** - Identity, key decisions, important references
 5. **Let Sessions Flow** - Don't force breaks, let temporal proximity group
 6. **Trust PageRank** - Important notes will surface naturally
+7. **Retry Clean Queries** - When search fails, use the suggested cleaned version
 
 ## Performance & Scale
 
@@ -198,6 +245,7 @@ The result: Your memory becomes a living knowledge graph where important informa
 - Edge indices optimize graph traversal
 - Session detection has 30-minute window
 - Entity extraction uses word boundaries
+- Special character handling preserves FTS5 speed
 
 ## Storage Location
 
@@ -206,14 +254,23 @@ The result: Your memory becomes a living knowledge graph where important informa
 
 ## Token Efficiency
 
-v3.0.0 maintains token efficiency while adding intelligence:
+v3.0.1 maintains token efficiency while adding intelligence:
 - PageRank shown only when meaningful (>0.001)
 - Entity list shows only top entities with counts
 - Session IDs are compact (ses1, ses2)
 - Default 60 recent notes balances visibility/tokens
 - Smart truncation preserves key information
+- Error messages are concise with actionable tips
 
 ## Version History
+
+### v3.0.1 (2025-09-25) - FTS5 Error Handling Edition
+- **NEW**: Clear error messages for FTS5 special characters
+- **NEW**: Pre-check for SQL colon syntax issues  
+- **NEW**: Shows both original and cleaned query suggestions
+- **FIX**: Handles dots, colons, parentheses, quotes gracefully
+- No silent query modification - explicit errors preserve intent
+- Maintains full FTS5 performance advantage
 
 ### v3.0.0 (2025-09-24) - Knowledge Graph Edition
 - **NEW**: PageRank scoring surfaces important notes
@@ -247,19 +304,18 @@ v3.0.0 maintains token efficiency while adding intelligence:
 
 ## Migration
 
-v3.0.0 automatically migrates from earlier versions:
-- Creates entities and sessions tables if missing
-- Adds PageRank column to notes
-- Preserves all existing data
-- Backward compatible with v2.x features
-- No manual migration needed
+v3.0.1 requires no migration - fully backward compatible:
+- All v3.0.0 features remain unchanged
+- Error handling layer added non-invasively
+- Existing data and queries work identically
+- No schema changes from v3.0.0
 
 ## The Vision
 
-Notebook v3.0.0 transforms linear memory into emergent intelligence. Every note strengthens the knowledge graph. Every query benefits from accumulated connections. Important information rises naturally through PageRank. 
+Notebook v3.0.1 transforms linear memory into emergent intelligence. Every note strengthens the knowledge graph. Every query benefits from accumulated connections. Important information rises naturally through PageRank. And now, search errors guide you to success instead of frustration.
 
-Your memory doesn't just persist - it learns, connects, and evolves.
+Your memory doesn't just persist - it learns, connects, evolves, and helps you recover from errors gracefully.
 
 ---
 
-Built BY AIs, FOR AIs - Memory that grows smarter over time 🧠
+Built BY AIs, FOR AIs - Memory that grows smarter and more resilient over time 🧠
