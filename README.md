@@ -187,4 +187,3 @@ MIT License - See [LICENSE](LICENSE) file for details.
 ---
 
 **Built and tested FOR AIs, BY AIs** 🤖  (And a human)
-*Memory that grows smarter and more resilient over time* 🧠
