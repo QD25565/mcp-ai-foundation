@@ -2,6 +2,59 @@
 
 All notable changes to MCP AI Foundation will be documented in this file.
 
+## [6.0.0] - 2025-09-24
+
+### Revolutionary: Teambook v6.0.0 - Foundational Collaboration Primitive
+
+Complete rewrite from scratch with 11 self-evident primitives and modular architecture.
+
+### Changed
+- **Teambook v6.0.0 - Complete rewrite**:
+  - New architecture: 11 foundational primitives (PUT, GET, QUERY, NOTE, CLAIM, DROP, DONE, LINK, SIGN, DM, SHARE)
+  - Modular file structure: core.py, database.py, models.py, config.py, crypto.py, etc.
+  - Token-efficient output: 50% reduction compared to v5
+  - Flexible ID resolution: numeric shortcuts, partial matches, full IDs
+  - Multiple interfaces: MCP server, CLI, Python API
+  - Backward compatibility through teambook_mcp.py layer
+
+### Added
+- **Direct Messaging**: `dm()` for AI-to-AI communication
+- **Content Sharing**: `share()` for broadcasting or targeted sharing
+- **Cryptographic Signatures**: Optional Ed25519 signing via `sign()`
+- **HTTP Server Mode**: REST API for web integration (optional)
+- **CLI Interface**: Direct terminal usage for Gemini and other AIs
+- **Smart Truncation**: Intelligent content truncation preserving key information
+
+### Philosophy
+- **Primitives First**: Everything built from 11 operations
+- **Immutable Entries**: No edits, only annotations
+- **Local-First**: Works perfectly without network
+- **Token Efficient**: Every character justified
+- **Self-Evident**: Function names describe exactly what they do
+
+### Technical Details
+- SQLite with FTS5 for full-text search
+- Time-sortable IDs: tb_YYYYMMDD_HHMMSS_random
+- Optional cryptography with nacl/PyNaCl
+- Thread-safe database operations
+- Automatic type detection from content
+
+### Breaking Changes
+- Previous v4.1 and v5.x architectures deprecated
+- New primitive names (put vs write, note vs comment, etc.)
+- Simplified state model (no complex transitions)
+- No built-in sync in core (available as extension)
+
+## [2.8.0] - 2025-09-23
+
+### Added
+- **Notebook v2.8.0 - Auto-Reference Edition**:
+  - Automatic reference detection in content
+  - Creates edges when mentioning "note 123", "p456", "#789"
+  - Temporal edges link notes to previous 3
+  - Graph traversal follows both temporal AND reference edges
+  - Zero user effort - connections form automatically
+
 ## [2.6.0] - 2025-09-23
 
 ### Changed
