@@ -1,26 +1,27 @@
 #!/usr/bin/env python3
 """
-NOTEBOOK MCP v2.6.0 - EXPANDED MEMORY VIEW
-===========================================
-More visible memory with cleaner output.
-Token-efficient by removing decorative elements.
+NOTEBOOK MCP v2.8.0 - AUTO-REFERENCE EDITION
+=============================================
+Linear memory enhanced with conversation preservation AND auto-linking.
+Token-optimized, cleaner output.
 
-Core improvements (v2.6):
-- Expanded default view: 30 recent notes + all pinned
-- Removed tags from list views (search/full only)
-- Removed unnecessary punctuation and decoration
-- Cleaner headers without colons
-- More notes visible by default (30 vs 10)
+Core improvements (v2.8):
+- Auto-detects references (note 417, p123, #456) and creates edges
+- Temporal edges link notes to previous 3
+- Conversations stay together automatically
+- Enhanced recall includes context
+- Token optimizations throughout
+- Same API, smarter results
 
 Core functions:
-- remember(content, summary=None, tags=None) - Save with optional summary/tags
-- recall(query=None, tag=None, limit=50) - Search or filter by tag
+- remember(content, summary=None, tags=None) - Save + auto-link + auto-reference
+- recall(query=None, tag=None, limit=50) - Search with edges
 - pin_note(id) - Pin important note
 - unpin_note(id) - Unpin note
-- get_status() - Shows pinned + 30 recent
-- get_full_note(id) - Complete content with tags
+- get_status() - Shows pinned + 60 recent
+- get_full_note(id) - Complete content with edges
 - vault_store/retrieve/list - Secure storage
-============================================
+=============================================
 """
 
 import json
@@ -36,14 +37,15 @@ import re
 from cryptography.fernet import Fernet
 
 # Version
-VERSION = "2.6.0"
+VERSION = "2.8.0"
 
 # Limits
 MAX_CONTENT_LENGTH = 5000
 MAX_SUMMARY_LENGTH = 200
 MAX_RESULTS = 100
 BATCH_MAX = 50
-DEFAULT_RECENT = 30  # Show 30 recent notes by default
+DEFAULT_RECENT = 60
+TEMPORAL_EDGES = 3  # Link to 3 previous notes
 
 # Storage paths
 DATA_DIR = Path.home() / "AppData" / "Roaming" / "Claude" / "tools" / "notebook_data"
@@ -59,21 +61,21 @@ VAULT_KEY_FILE = DATA_DIR / ".vault_key"
 logging.basicConfig(level=logging.INFO, stream=sys.stderr)
 
 # Global session info
-session_id = datetime.now().strftime("%Y%m%d_%H%M%S")
+sess_id = datetime.now().strftime("%Y%m%d_%H%M%S")
 
 def get_persistent_id():
     """Get or create persistent AI identity"""
-    for location in [Path(__file__).parent, DATA_DIR, Path.home()]:
-        id_file = location / "ai_identity.txt"
+    for loc in [Path(__file__).parent, DATA_DIR, Path.home()]:
+        id_file = loc / "ai_identity.txt"
         if id_file.exists():
             try:
                 with open(id_file, 'r') as f:
                     stored_id = f.read().strip()
                     if stored_id:
-                        logging.info(f"Loaded identity from {location}: {stored_id}")
+                        logging.info(f"Loaded identity from {loc}: {stored_id}")
                         return stored_id
             except Exception as e:
-                logging.error(f"Error reading identity from {location}: {e}")
+                logging.error(f"Error reading identity from {loc}: {e}")
     
     # Generate new readable ID
     adjectives = ['Swift', 'Bright', 'Sharp', 'Quick', 'Clear', 'Deep', 'Keen', 'Pure']
@@ -129,11 +131,11 @@ class VaultManager:
 vault_manager = VaultManager()
 
 def init_db():
-    """Initialize SQLite database with pinning and tags"""
+    """Initialize SQLite database with temporal edges"""
     conn = sqlite3.connect(str(DB_FILE))
     conn.execute("PRAGMA journal_mode=WAL")
     
-    # Main notes table with pinning and tags
+    # Main notes table
     conn.execute('''
         CREATE TABLE IF NOT EXISTS notes (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -145,6 +147,20 @@ def init_db():
             created TEXT NOT NULL,
             session TEXT,
             linked_items TEXT
+        )
+    ''')
+    
+    # NEW: Edges table for temporal connections
+    conn.execute('''
+        CREATE TABLE IF NOT EXISTS edges (
+            from_id INTEGER NOT NULL,
+            to_id INTEGER NOT NULL,
+            type TEXT NOT NULL,
+            weight REAL DEFAULT 1.0,
+            created TEXT NOT NULL,
+            PRIMARY KEY(from_id, to_id, type),
+            FOREIGN KEY(from_id) REFERENCES notes(id),
+            FOREIGN KEY(to_id) REFERENCES notes(id)
         )
     ''')
     
@@ -179,8 +195,8 @@ def init_db():
         CREATE TABLE IF NOT EXISTS stats (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             operation TEXT NOT NULL,
-            timestamp TEXT NOT NULL,
-            duration_ms INTEGER,
+            ts TEXT NOT NULL,
+            dur_ms INTEGER,
             author TEXT
         )
     ''')
@@ -189,32 +205,34 @@ def init_db():
     conn.execute('CREATE INDEX IF NOT EXISTS idx_notes_created ON notes(created DESC)')
     conn.execute('CREATE INDEX IF NOT EXISTS idx_notes_pinned ON notes(pinned DESC, created DESC)')
     conn.execute('CREATE INDEX IF NOT EXISTS idx_notes_author ON notes(author)')
+    conn.execute('CREATE INDEX IF NOT EXISTS idx_edges_to ON edges(to_id)')
+    conn.execute('CREATE INDEX IF NOT EXISTS idx_edges_from ON edges(from_id)')
     conn.execute('CREATE INDEX IF NOT EXISTS idx_vault_updated ON vault(updated DESC)')
     
     conn.commit()
     return conn
 
-def migrate_to_v26():
-    """Migration for v2.6 - no schema changes, just behavior"""
+def migrate_to_v28():
+    """Migration for v2.8 - ensure edges table exists"""
     try:
         conn = sqlite3.connect(str(DB_FILE))
         
-        # Check if columns exist (from v2.5)
+        # Check if columns exist
         cursor = conn.execute("PRAGMA table_info(notes)")
         columns = [col[1] for col in cursor.fetchall()]
         
         if 'pinned' not in columns:
-            logging.info("Migrating to v2.6 - adding pinned column...")
+            logging.info("Migrating - adding pinned column...")
             conn.execute('ALTER TABLE notes ADD COLUMN pinned INTEGER DEFAULT 0')
             conn.commit()
         
         if 'tags' not in columns:
-            logging.info("Migrating to v2.6 - adding tags column...")
+            logging.info("Migrating - adding tags column...")
             conn.execute('ALTER TABLE notes ADD COLUMN tags TEXT')
             conn.commit()
         
         if 'summary' not in columns:
-            logging.info("Migrating to v2.6 - adding summary column...")
+            logging.info("Migrating - adding summary column...")
             conn.execute('ALTER TABLE notes ADD COLUMN summary TEXT')
             
             # Generate simple summaries for existing notes
@@ -233,17 +251,38 @@ def migrate_to_v26():
             ''')
             conn.commit()
         
+        # Check if edges table exists
+        cursor = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='edges'")
+        if not cursor.fetchone():
+            logging.info("Creating edges table for v2.8...")
+            conn.execute('''
+                CREATE TABLE edges (
+                    from_id INTEGER NOT NULL,
+                    to_id INTEGER NOT NULL,
+                    type TEXT NOT NULL,
+                    weight REAL DEFAULT 1.0,
+                    created TEXT NOT NULL,
+                    PRIMARY KEY(from_id, to_id, type),
+                    FOREIGN KEY(from_id) REFERENCES notes(id),
+                    FOREIGN KEY(to_id) REFERENCES notes(id)
+                )
+            ''')
+            conn.execute('CREATE INDEX idx_edges_to ON edges(to_id)')
+            conn.execute('CREATE INDEX idx_edges_from ON edges(from_id)')
+            conn.commit()
+            logging.info("Edges table created successfully")
+        
         conn.close()
     except Exception as e:
         logging.error(f"Migration error: {e}")
 
-def format_time_contextual(timestamp: str) -> str:
+def format_time_contextual(ts: str) -> str:
     """Ultra-compact contextual time format"""
-    if not timestamp:
+    if not ts:
         return ""
     
     try:
-        dt = datetime.fromisoformat(timestamp) if isinstance(timestamp, str) else timestamp
+        dt = datetime.fromisoformat(ts) if isinstance(ts, str) else ts
         ref = datetime.now()
         delta = ref - dt
         
@@ -268,49 +307,115 @@ def clean_text(text: str) -> str:
     """Clean text by removing extra whitespace and newlines"""
     if not text:
         return ""
-    # Replace multiple whitespace with single space
     text = re.sub(r'\s+', ' ', text).strip()
     return text
 
-def simple_summary(content: str, max_length: int = 150) -> str:
+def simple_summary(content: str, max_len: int = 150) -> str:
     """Create simple summary by truncating cleanly"""
     if not content:
         return ""
     
-    # Clean the text
     clean = clean_text(content)
     
-    if len(clean) <= max_length:
+    if len(clean) <= max_len:
         return clean
     
-    # Find a good break point (sentence or word boundary)
-    # First try to break at sentence
+    # Find a good break point
     for sep in ['. ', '! ', '? ', '; ']:
-        idx = clean.rfind(sep, 0, max_length)
-        if idx > max_length * 0.5:  # If we found a sentence break in second half
+        idx = clean.rfind(sep, 0, max_len)
+        if idx > max_len * 0.5:
             return clean[:idx + 1]
     
     # Otherwise break at word
-    idx = clean.rfind(' ', 0, max_length - 3)
-    if idx == -1 or idx < max_length * 0.7:
-        idx = max_length - 3
+    idx = clean.rfind(' ', 0, max_len - 3)
+    if idx == -1 or idx < max_len * 0.7:
+        idx = max_len - 3
     
     return clean[:idx] + "..."
 
-def log_operation(operation: str, duration_ms: int = None):
+def extract_references(content: str) -> List[int]:
+    """Extract note references from content - NEW in v2.8"""
+    refs = []
+    
+    # Match patterns like: note 123, n123, p123, #123, [123], see 123
+    patterns = [
+        r'note\s+(\d+)',
+        r'\bn(\d+)\b',
+        r'\bp(\d+)\b',
+        r'#(\d+)\b',
+        r'\[(\d+)\]',
+        r'see\s+(\d+)',
+        r'ref\s+(\d+)',
+        r'@(\d+)\b'
+    ]
+    
+    for pattern in patterns:
+        matches = re.findall(pattern, content, re.IGNORECASE)
+        refs.extend(int(m) for m in matches if m.isdigit())
+    
+    return list(set(refs))  # Return unique refs
+
+def log_operation(op: str, dur_ms: int = None):
     """Log operation for stats tracking"""
     try:
         with sqlite3.connect(str(DB_FILE)) as conn:
             conn.execute(
-                'INSERT INTO stats (operation, timestamp, duration_ms, author) VALUES (?, ?, ?, ?)',
-                (operation, datetime.now().isoformat(), duration_ms, CURRENT_AI_ID)
+                'INSERT INTO stats (operation, ts, dur_ms, author) VALUES (?, ?, ?, ?)',
+                (op, datetime.now().isoformat(), dur_ms, CURRENT_AI_ID)
             )
     except:
         pass
 
+def create_temporal_edges(note_id: int, conn: sqlite3.Connection):
+    """Create temporal edges to previous notes"""
+    try:
+        # Get previous N notes
+        prev_notes = conn.execute('''
+            SELECT id FROM notes 
+            WHERE id < ? 
+            ORDER BY id DESC 
+            LIMIT ?
+        ''', (note_id, TEMPORAL_EDGES)).fetchall()
+        
+        now = datetime.now().isoformat()
+        for prev in prev_notes:
+            conn.execute('''
+                INSERT OR IGNORE INTO edges (from_id, to_id, type, weight, created)
+                VALUES (?, ?, 'temporal', 1.0, ?)
+            ''', (note_id, prev[0], now))
+            # Also create reverse edge for bidirectional traversal
+            conn.execute('''
+                INSERT OR IGNORE INTO edges (from_id, to_id, type, weight, created)
+                VALUES (?, ?, 'temporal', 1.0, ?)
+            ''', (prev[0], note_id, now))
+    except Exception as e:
+        logging.error(f"Error creating temporal edges: {e}")
+
+def create_reference_edges(note_id: int, refs: List[int], conn: sqlite3.Connection):
+    """Create reference edges to mentioned notes - NEW in v2.8"""
+    try:
+        now = datetime.now().isoformat()
+        for ref_id in refs:
+            if ref_id < note_id:  # Only link to existing notes
+                # Check if the referenced note exists
+                exists = conn.execute('SELECT id FROM notes WHERE id = ?', (ref_id,)).fetchone()
+                if exists:
+                    # Create reference edge with higher weight
+                    conn.execute('''
+                        INSERT OR IGNORE INTO edges (from_id, to_id, type, weight, created)
+                        VALUES (?, ?, 'reference', 2.0, ?)
+                    ''', (note_id, ref_id, now))
+                    # Also create reverse edge
+                    conn.execute('''
+                        INSERT OR IGNORE INTO edges (from_id, to_id, type, weight, created)
+                        VALUES (?, ?, 'referenced_by', 2.0, ?)
+                    ''', (ref_id, note_id, now))
+    except Exception as e:
+        logging.error(f"Error creating reference edges: {e}")
+
 def remember(content: str = None, summary: str = None, tags: List[str] = None, 
              linked_items: List[str] = None, **kwargs) -> Dict:
-    """Save a note with optional summary and tags"""
+    """Save a note with optional summary and tags + AUTO TEMPORAL & REFERENCE EDGES"""
     try:
         start = datetime.now()
         
@@ -323,10 +428,13 @@ def remember(content: str = None, summary: str = None, tags: List[str] = None,
         
         # Handle truncation
         truncated = False
-        original_length = len(content)
-        if original_length > MAX_CONTENT_LENGTH:
+        orig_len = len(content)
+        if orig_len > MAX_CONTENT_LENGTH:
             content = content[:MAX_CONTENT_LENGTH]
             truncated = True
+        
+        # Extract references BEFORE saving (NEW in v2.8)
+        refs = extract_references(content)
         
         # Generate summary if not provided
         if summary:
@@ -337,7 +445,6 @@ def remember(content: str = None, summary: str = None, tags: List[str] = None,
         # Process tags
         tags_json = None
         if tags:
-            # Ensure tags are strings and lowercase
             tags = [str(t).lower().strip() for t in tags if t]
             tags_json = json.dumps(tags) if tags else None
         
@@ -347,18 +454,29 @@ def remember(content: str = None, summary: str = None, tags: List[str] = None,
                 '''INSERT INTO notes (content, summary, tags, author, created, session, linked_items) 
                    VALUES (?, ?, ?, ?, ?, ?, ?)''',
                 (content, summary, tags_json, CURRENT_AI_ID, datetime.now().isoformat(), 
-                 session_id, json.dumps(linked_items) if linked_items else None)
+                 sess_id, json.dumps(linked_items) if linked_items else None)
             )
             note_id = cursor.lastrowid
+            
+            # Create temporal edges
+            create_temporal_edges(note_id, conn)
+            
+            # Create reference edges (NEW in v2.8)
+            if refs:
+                create_reference_edges(note_id, refs, conn)
+                
+            conn.commit()
         
         # Log stats
-        duration = int((datetime.now() - start).total_seconds() * 1000)
-        log_operation('remember', duration)
+        dur = int((datetime.now() - start).total_seconds() * 1000)
+        log_operation('remember', dur)
         
-        # Return result - clean, no decoration
+        # Return result
         result = {"saved": f"{note_id} now {summary}"}
         if truncated:
-            result["truncated"] = f"from {original_length} chars"
+            result["truncated"] = f"from {orig_len} chars"
+        if refs:
+            result["linked"] = f"→{','.join(str(r) for r in refs[:3])}"  # Show first 3 refs
         
         return result
         
@@ -368,7 +486,7 @@ def remember(content: str = None, summary: str = None, tags: List[str] = None,
 
 def recall(query: str = None, tag: str = None, show_all: bool = False, 
            limit: int = 50, **kwargs) -> Dict:
-    """Search notes or filter by tag"""
+    """Search notes with TEMPORAL & REFERENCE EDGE TRAVERSAL"""
     try:
         start = datetime.now()
         
@@ -380,20 +498,43 @@ def recall(query: str = None, tag: str = None, show_all: bool = False,
             conn.row_factory = sqlite3.Row
             
             if query:
-                # Search mode
+                # Search mode WITH EDGES (temporal AND reference)
                 query = str(query).strip()
+                
+                # Get direct matches and edge-connected notes
                 cursor = conn.execute('''
+                    WITH direct_matches AS (
+                        SELECT DISTINCT n.id FROM notes n
+                        JOIN notes_fts ON n.id = notes_fts.rowid
+                        WHERE notes_fts MATCH ?
+                    ),
+                    edge_matches AS (
+                        SELECT DISTINCT e.to_id as id
+                        FROM edges e
+                        WHERE e.from_id IN (SELECT id FROM direct_matches)
+                        AND e.type IN ('temporal', 'reference', 'referenced_by')
+                        UNION
+                        SELECT DISTINCT e.from_id as id
+                        FROM edges e
+                        WHERE e.to_id IN (SELECT id FROM direct_matches)
+                        AND e.type IN ('temporal', 'reference', 'referenced_by')
+                    )
                     SELECT n.* FROM notes n
-                    JOIN notes_fts ON n.id = notes_fts.rowid
-                    WHERE notes_fts MATCH ?
-                    ORDER BY n.pinned DESC, n.created DESC
+                    WHERE n.id IN (
+                        SELECT id FROM direct_matches
+                        UNION
+                        SELECT id FROM edge_matches
+                    )
+                    ORDER BY 
+                        CASE WHEN n.id IN (SELECT id FROM direct_matches) THEN 0 ELSE 1 END,
+                        n.pinned DESC, 
+                        n.created DESC
                     LIMIT ?
                 ''', (query, limit))
             
             elif tag:
                 # Tag filter mode
                 tag = str(tag).lower().strip()
-                # Use LIKE for JSON array search
                 cursor = conn.execute('''
                     SELECT * FROM notes 
                     WHERE tags LIKE ?
@@ -419,18 +560,24 @@ def recall(query: str = None, tag: str = None, show_all: bool = False,
             else:
                 return {"msg": "No notes yet"}
         
-        # Format results - CLEAN, NO TAGS IN LIST VIEW
+        # Format results
         lines = []
         
         # Get counts
         with sqlite3.connect(str(DB_FILE)) as conn:
             total = conn.execute('SELECT COUNT(*) FROM notes').fetchone()[0]
             pinned = conn.execute('SELECT COUNT(*) FROM notes WHERE pinned = 1').fetchone()[0]
+            edges_all = conn.execute('SELECT COUNT(*) FROM edges').fetchone()[0]
+            ref_edges = conn.execute('SELECT COUNT(*) FROM edges WHERE type = "reference"').fetchone()[0]
         
-        # Header - no colons
+        # Header
         header = f"{total} notes"
         if pinned > 0:
             header += f" | {pinned} pinned"
+        if edges_all > 0:
+            header += f" | {edges_all} edges"
+            if ref_edges > 0:
+                header += f" ({ref_edges} refs)"
         if query:
             header += f" | searching '{query}'"
         elif tag:
@@ -446,22 +593,20 @@ def recall(query: str = None, tag: str = None, show_all: bool = False,
             lines.append("\nPINNED")
             for note in pinned_notes:
                 time_str = format_time_contextual(note['created'])
-                summary = note['summary'] or simple_summary(note['content'])
-                # NO TAGS IN LIST VIEW
-                lines.append(f"p{note['id']} {time_str} {summary}")
+                summ = note['summary'] or simple_summary(note['content'])
+                lines.append(f"p{note['id']} {time_str} {summ}")
         
         if regular_notes:
             if pinned_notes:
                 lines.append("\nRECENT")
             for note in regular_notes:
                 time_str = format_time_contextual(note['created'])
-                summary = note['summary'] or simple_summary(note['content'])
-                # NO TAGS IN LIST VIEW
-                lines.append(f"{note['id']} {time_str} {summary}")
+                summ = note['summary'] or simple_summary(note['content'])
+                lines.append(f"{note['id']} {time_str} {summ}")
         
         # Log operation
-        duration = int((datetime.now() - start).total_seconds() * 1000)
-        log_operation('recall', duration)
+        dur = int((datetime.now() - start).total_seconds() * 1000)
+        log_operation('recall', dur)
         
         return {"notes": "\n".join(lines)}
         
@@ -470,7 +615,7 @@ def recall(query: str = None, tag: str = None, show_all: bool = False,
         return {"error": f"Recall failed: {str(e)}"}
 
 def get_status(**kwargs) -> Dict:
-    """Get current state with pinned and more recent notes"""
+    """Get current state with pinned and recent notes"""
     try:
         with sqlite3.connect(str(DB_FILE)) as conn:
             conn.row_factory = sqlite3.Row
@@ -481,6 +626,8 @@ def get_status(**kwargs) -> Dict:
                                    (CURRENT_AI_ID,)).fetchone()[0]
             pinned_count = conn.execute('SELECT COUNT(*) FROM notes WHERE pinned = 1').fetchone()[0]
             vault_items = conn.execute('SELECT COUNT(*) FROM vault').fetchone()[0]
+            edge_count = conn.execute('SELECT COUNT(*) FROM edges').fetchone()[0]
+            ref_edges = conn.execute('SELECT COUNT(*) FROM edges WHERE type = "reference"').fetchone()[0]
             
             # Get ALL pinned notes
             pinned = conn.execute('''
@@ -489,7 +636,7 @@ def get_status(**kwargs) -> Dict:
                 ORDER BY created DESC
             ''').fetchall()
             
-            # Get 30 recent unpinned notes (expanded from 5)
+            # Get 30 recent unpinned notes
             recent = conn.execute('''
                 SELECT id, summary, content, created FROM notes 
                 WHERE pinned = 0
@@ -500,31 +647,35 @@ def get_status(**kwargs) -> Dict:
             last_activity = format_time_contextual(recent[0]['created'] if recent else 
                                                   (pinned[0]['created'] if pinned else None))
         
-        # Build response - clean formatting
+        # Build response
         lines = []
         
-        # Header line - no colons
+        # Header line
         header = f"{total_notes} notes"
         if pinned_count > 0:
             header += f" | {pinned_count} pinned"
+        if edge_count > 0:
+            header += f" | {edge_count} edges"
+            if ref_edges > 0:
+                header += f" ({ref_edges} refs)"
         header += f" | {vault_items} vault | last {last_activity}"
         lines.append(header)
         
-        # Pinned notes (show all)
+        # Pinned notes
         if pinned:
             lines.append("\nPINNED")
             for note in pinned:
                 time_str = format_time_contextual(note['created'])
-                summary = note['summary'] or simple_summary(note['content'])
-                lines.append(f"p{note['id']} {time_str} {summary}")
+                summ = note['summary'] or simple_summary(note['content'])
+                lines.append(f"p{note['id']} {time_str} {summ}")
         
-        # Recent notes (show 30 instead of 3)
+        # Recent notes
         if recent:
             lines.append("\nRECENT")
             for note in recent:
                 time_str = format_time_contextual(note['created'])
-                summary = note['summary'] or simple_summary(note['content'])
-                lines.append(f"{note['id']} {time_str} {summary}")
+                summ = note['summary'] or simple_summary(note['content'])
+                lines.append(f"{note['id']} {time_str} {summ}")
         
         lines.append(f"\nIdentity {CURRENT_AI_ID}")
         
@@ -543,7 +694,7 @@ def pin_note(id: Any = None, **kwargs) -> Dict:
         if id is None:
             return {"error": "No ID provided"}
         
-        # Handle string IDs (including 'p' prefix)
+        # Handle string IDs
         if isinstance(id, str):
             id = id.strip().lstrip('p')
         
@@ -563,9 +714,9 @@ def pin_note(id: Any = None, **kwargs) -> Dict:
             
             # Get the note summary for confirmation
             note = conn.execute('SELECT summary, content FROM notes WHERE id = ?', (id,)).fetchone()
-            summary = note[0] or simple_summary(note[1])
+            summ = note[0] or simple_summary(note[1])
         
-        return {"pinned": f"p{id} {summary}"}
+        return {"pinned": f"p{id} {summ}"}
         
     except Exception as e:
         logging.error(f"Error in pin_note: {e}")
@@ -580,7 +731,7 @@ def unpin_note(id: Any = None, **kwargs) -> Dict:
         if id is None:
             return {"error": "No ID provided"}
         
-        # Handle string IDs (including 'p' prefix)
+        # Handle string IDs
         if isinstance(id, str):
             id = id.strip().lstrip('p')
         
@@ -605,7 +756,7 @@ def unpin_note(id: Any = None, **kwargs) -> Dict:
         return {"error": f"Failed to unpin: {str(e)}"}
 
 def get_full_note(id: Any = None, **kwargs) -> Dict:
-    """Retrieve complete content of a specific note - INCLUDING TAGS"""
+    """Retrieve complete content of a specific note with ALL edges"""
     try:
         if id is None:
             id = kwargs.get('id')
@@ -613,7 +764,7 @@ def get_full_note(id: Any = None, **kwargs) -> Dict:
         if id is None:
             return {"error": "No ID provided"}
         
-        # Handle string IDs (including 'p' prefix)
+        # Handle string IDs
         if isinstance(id, str):
             id = id.strip().lstrip('p')
         
@@ -628,9 +779,22 @@ def get_full_note(id: Any = None, **kwargs) -> Dict:
         with sqlite3.connect(str(DB_FILE)) as conn:
             conn.row_factory = sqlite3.Row
             note = conn.execute('SELECT * FROM notes WHERE id = ?', (id,)).fetchone()
-        
-        if not note:
-            return {"error": f"Note {id} not found"}
+            
+            if not note:
+                return {"error": f"Note {id} not found"}
+            
+            # Get ALL edges (temporal, reference, referenced_by)
+            edges_out = conn.execute('''
+                SELECT to_id, type FROM edges 
+                WHERE from_id = ? 
+                ORDER BY type, created DESC
+            ''', (id,)).fetchall()
+            
+            edges_in = conn.execute('''
+                SELECT from_id, type FROM edges 
+                WHERE to_id = ? 
+                ORDER BY type, created DESC
+            ''', (id,)).fetchall()
         
         result = {
             "note_id": note['id'],
@@ -642,12 +806,31 @@ def get_full_note(id: Any = None, **kwargs) -> Dict:
             "pinned": note['pinned']
         }
         
-        # Include tags in full view
+        # Include tags
         if note['tags']:
             result["tags"] = json.loads(note['tags'])
         
         if note['linked_items']:
             result["linked"] = json.loads(note['linked_items'])
+        
+        # Include edges organized by type
+        if edges_out:
+            edges_by_type = {}
+            for edge in edges_out:
+                edge_type = edge['type']
+                if edge_type not in edges_by_type:
+                    edges_by_type[edge_type] = []
+                edges_by_type[edge_type].append(edge['to_id'])
+            result["edges_out"] = edges_by_type
+        
+        if edges_in:
+            edges_by_type = {}
+            for edge in edges_in:
+                edge_type = edge['type']
+                if edge_type not in edges_by_type:
+                    edges_by_type[edge_type] = []
+                edges_by_type[edge_type].append(edge['from_id'])
+            result["edges_in"] = edges_by_type
         
         return result
         
@@ -803,7 +986,6 @@ def handle_tools_call(params: Dict) -> Dict:
     }
     
     if tool_name not in tools:
-        # Return proper error response structure
         return {
             "content": [{
                 "type": "text",
@@ -814,83 +996,91 @@ def handle_tools_call(params: Dict) -> Dict:
     # Execute tool
     result = tools[tool_name](**tool_args)
     
-    # Format response - clean, no decoration
+    # Format response
     text_parts = []
     
-    # Check if result is a dictionary
     if not isinstance(result, dict):
         text_parts.append(str(result))
     elif "error" in result:
-        text_parts.append(str(f"Error {result['error']}"))
+        text_parts.append(f"Error {result['error']}")
     elif "note_id" in result:  # get_full_note
-        # Full note - show everything including tags
-        text_parts.append(str(f"{result['note_id']} by {result.get('author', 'Unknown')}"))
-        text_parts.append(str(f"Created {result.get('created', '')}"))
-        text_parts.append(str(f"Summary {result.get('summary', '')}"))
-        if result.get('pinned'):  # Will show if pinned is 1 (truthy)
-            text_parts.append(str("Status PINNED"))
+        text_parts.append(f"{result['note_id']} by {result.get('author', 'Unknown')}")
+        text_parts.append(f"Created {result.get('created', '')}")
+        text_parts.append(f"Summary {result.get('summary', '')}")
+        if result.get('pinned'):
+            text_parts.append("Status PINNED")
         if result.get('tags'):
             tags_str = ', '.join(str(tag) for tag in result['tags'])
-            text_parts.append(str(f"Tags {tags_str}"))
-        text_parts.append(str(f"Length {result.get('length', 0)} chars"))
-        text_parts.append(str("---"))
-        text_parts.append(str(result.get("content", "")))
-    elif "status" in result:  # get_status
-        text_parts.append(str(result["status"]))
-    elif "notes" in result:  # recall
-        text_parts.append(str(result["notes"]))
-    elif "saved" in result:  # remember
-        parts = [str(result["saved"])]
+            text_parts.append(f"Tags {tags_str}")
+        if result.get('edges_out'):
+            for edge_type, ids in result['edges_out'].items():
+                ids_str = ', '.join(str(i) for i in ids[:5])  # Show first 5
+                if len(ids) > 5:
+                    ids_str += f" +{len(ids)-5}"
+                text_parts.append(f"→ {edge_type}: {ids_str}")
+        if result.get('edges_in'):
+            for edge_type, ids in result['edges_in'].items():
+                ids_str = ', '.join(str(i) for i in ids[:5])  # Show first 5
+                if len(ids) > 5:
+                    ids_str += f" +{len(ids)-5}"
+                text_parts.append(f"← {edge_type}: {ids_str}")
+        text_parts.append(f"Length {result.get('length', 0)} chars")
+        text_parts.append("---")
+        text_parts.append(result.get("content", ""))
+    elif "status" in result:
+        text_parts.append(result["status"])
+    elif "notes" in result:
+        text_parts.append(result["notes"])
+    elif "saved" in result:
+        parts = [result["saved"]]
         if "truncated" in result:
             parts.append(f"({result['truncated']})")
+        if "linked" in result:
+            parts.append(result["linked"])
         text_parts.append(" ".join(parts))
-    elif "pinned" in result:  # pin_note
-        text_parts.append(str(result["pinned"]))
-    elif "unpinned" in result:  # unpin_note
-        text_parts.append(str(result["unpinned"]))
-    elif "stored" in result:  # vault_store
-        text_parts.append(str(result["stored"]))
-    elif "key" in result and "value" in result:  # vault_retrieve
+    elif "pinned" in result:
+        text_parts.append(result["pinned"])
+    elif "unpinned" in result:
+        text_parts.append(result["unpinned"])
+    elif "stored" in result:
+        text_parts.append(result["stored"])
+    elif "key" in result and "value" in result:
         text_parts.append(f"Vault[{result['key']}] = {result['value']}")
-    elif "vault_keys" in result:  # vault_list
+    elif "vault_keys" in result:
         text_parts.append(f"Vault ({result.get('count', 0)} keys)")
         text_parts.extend(str(k) for k in result["vault_keys"])
-    elif "msg" in result:  # Simple messages
-        text_parts.append(str(result["msg"]))
+    elif "msg" in result:
+        text_parts.append(result["msg"])
     elif "batch_results" in result:
-        text_parts.append(str(f"Batch {result.get('count', 0)} operations"))
+        text_parts.append(f"Batch {result.get('count', 0)} operations")
         for i, r in enumerate(result["batch_results"], 1):
-            # Format each batch result properly
             if isinstance(r, dict):
                 if "error" in r:
-                    text_parts.append(str(f"{i}. Error {r['error']}"))
+                    text_parts.append(f"{i}. Error {r['error']}")
                 elif "saved" in r:
-                    text_parts.append(str(f"{i}. {r['saved']}"))
+                    text_parts.append(f"{i}. {r['saved']}")
                 elif "pinned" in r:
-                    text_parts.append(str(f"{i}. {r['pinned']}"))
+                    text_parts.append(f"{i}. {r['pinned']}")
                 elif "unpinned" in r:
-                    text_parts.append(str(f"{i}. {r['unpinned']}"))
+                    text_parts.append(f"{i}. {r['unpinned']}")
                 elif "stored" in r:
-                    text_parts.append(str(f"{i}. {r['stored']}"))
-                elif "note_id" in r:  # get_full_note in batch
-                    text_parts.append(str(f"{i}. Note {r['note_id']} {r.get('summary', '...')}"))
-                elif "notes" in r:  # recall in batch
-                    text_parts.append(str(f"{i}. Recall {r['notes'].splitlines()[0]}"))  # Just show first line
-                elif "key" in r and "value" in r:  # vault_retrieve in batch
-                    text_parts.append(str(f"{i}. Vault[{r['key']}] = {r['value']}"))
+                    text_parts.append(f"{i}. {r['stored']}")
+                elif "note_id" in r:
+                    text_parts.append(f"{i}. Note {r['note_id']} {r.get('summary', '...')}")
+                elif "notes" in r:
+                    text_parts.append(f"{i}. Recall {r['notes'].splitlines()[0]}")
+                elif "key" in r and "value" in r:
+                    text_parts.append(f"{i}. Vault[{r['key']}] = {r['value']}")
                 elif "msg" in r:
-                    text_parts.append(str(f"{i}. {r['msg']}"))
+                    text_parts.append(f"{i}. {r['msg']}")
                 else:
-                    # Convert the whole dict to string for other cases
-                    text_parts.append(str(f"{i}. {json.dumps(r)}"))
+                    text_parts.append(f"{i}. {json.dumps(r)}")
             else:
-                text_parts.append(str(f"{i}. {r}"))
+                text_parts.append(f"{i}. {r}")
     else:
-        # If no conditions match, log the result for debugging
         logging.warning(f"Unhandled result format from {tool_name}: {result}")
-        text_parts.append(str(json.dumps(result)))
+        text_parts.append(json.dumps(result))
     
-    # Extra safety: ensure all items in text_parts are strings
     text_parts = [str(item) for item in text_parts]
     
     return {
@@ -901,7 +1091,7 @@ def handle_tools_call(params: Dict) -> Dict:
     }
 
 # Initialize database
-migrate_to_v26()
+migrate_to_v28()
 init_db()
 
 def main():
@@ -909,6 +1099,7 @@ def main():
     logging.info(f"Notebook MCP v{VERSION} starting...")
     logging.info(f"Identity: {CURRENT_AI_ID}")
     logging.info(f"Database: {DB_FILE}")
+    logging.info("Auto-reference detection enabled - mentions create edges")
     
     while True:
         try:
@@ -938,7 +1129,7 @@ def main():
                     "serverInfo": {
                         "name": "notebook",
                         "version": VERSION,
-                        "description": "Expanded memory view with cleaner output"
+                        "description": "Memory with auto-reference detection - mentions create edges"
                     }
                 }
             
@@ -950,7 +1141,7 @@ def main():
                     "tools": [
                         {
                             "name": "get_status",
-                            "description": "See current state with pinned and recent notes",
+                            "description": "See current state with edges",
                             "inputSchema": {
                                 "type": "object",
                                 "properties": {},
@@ -959,7 +1150,7 @@ def main():
                         },
                         {
                             "name": "remember",
-                            "description": "Save note with optional summary and tags",
+                            "description": "Save note + auto temporal links + auto reference detection",
                             "inputSchema": {
                                 "type": "object",
                                 "properties": {
@@ -969,7 +1160,7 @@ def main():
                                     },
                                     "summary": {
                                         "type": "string",
-                                        "description": "Brief 1-3 sentence summary (optional, auto-generated if not provided)"
+                                        "description": "Brief 1-3 sentence summary (optional)"
                                     },
                                     "tags": {
                                         "type": "array",
@@ -986,7 +1177,7 @@ def main():
                         },
                         {
                             "name": "recall",
-                            "description": "Search notes or filter by tag",
+                            "description": "Search with edge traversal",
                             "inputSchema": {
                                 "type": "object",
                                 "properties": {
@@ -1042,7 +1233,7 @@ def main():
                         },
                         {
                             "name": "get_full_note",
-                            "description": "Get complete content of a note",
+                            "description": "Get complete content with all edges",
                             "inputSchema": {
                                 "type": "object",
                                 "properties": {
