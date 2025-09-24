@@ -2,6 +2,42 @@
 
 All notable changes to MCP AI Foundation will be documented in this file.
 
+## [3.0.1] - 2025-09-25
+
+### Improved: Notebook v3.0.1 - FTS5 Error Handling Edition
+
+Enhanced search reliability with clear error messages for special characters.
+
+### Added
+- **FTS5 Special Character Detection**: Clear errors when dots, parentheses, quotes break FTS5 parsing
+- **SQL Colon Syntax Handling**: Pre-checks for "word:" patterns that SQLite interprets as column references
+- **Helpful Error Messages**: Shows both original query and cleaned suggestion
+- **Comprehensive Character Handling**: Dots, colons, parentheses, quotes, brackets all handled gracefully
+
+### Technical Details
+- Added `clean_fts5_query()` function to remove problematic characters
+- Enhanced `recall()` with try-catch for `sqlite3.OperationalError`
+- Pre-check for colon patterns before SQL execution
+- No silent query modification - explicit errors preserve user intent
+- Maintains full FTS5 performance advantage (100x speed over LIKE queries)
+
+### Example Error Handling
+```
+Query: "v3.0.1"
+Error: FTS5 search failed: Query contains special characters (dots, colons, quotes)
+Tip: Try without special chars: 'v3 0 1'
+
+Query: "Task: Review"
+Error: Search failed: Query contains colon that SQLite interprets as column syntax
+Tip: Try without colon: 'Task Review'
+```
+
+### Philosophy
+- **Explicit > Implicit**: Clear errors instead of silent modifications
+- **Performance First**: Preserve FTS5 speed advantage
+- **AI-First Design**: Error messages guide AIs to successful retries
+- **Token Efficient**: Concise, actionable error messages
+
 ## [3.0.0] - 2025-09-24
 
 ### Revolutionary: Notebook v3.0.0 - Knowledge Graph Intelligence
