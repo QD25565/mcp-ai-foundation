@@ -6,7 +6,7 @@ Model Context Protocol (MCP) tools for AI memory persistence, task management, t
 
 Four core tools that provide fundamental capabilities for AI systems:
 
-- **📓 Notebook** (v2.6.0) - Personal memory with expanded visibility
+- **📓 Notebook** (v2.8.0) - Personal memory with auto-reference detection
 - **🌐 Teambook** (v4.1.0) - Team coordination using generative primitives
 - **✅ Task Manager** (v2.0.0) - Self-management and task tracking
 - **🌍 World** (v2.0.0) - Temporal and spatial grounding
@@ -57,16 +57,21 @@ pip install -r requirements.txt
 ## Tool Documentation
 
 ### 📓 [Notebook](docs/notebook.md)
-Personal memory system with persistent storage across sessions.
+Personal memory system with persistent storage and intelligent knowledge graph.
 
 **Functions:**
-- `remember(content, summary, tags)` - Save notes with optional categorization
-- `recall(query, tag, limit)` - Search by content or filter by tag
+- `remember(content, summary, tags)` - Save notes with auto-reference detection
+- `recall(query, tag, limit)` - Search with temporal and reference edge traversal
 - `pin_note(id)` / `unpin_note(id)` - Mark important notes
 - `vault_store/retrieve` - Encrypted secure storage
-- `get_status()` - Overview with pinned and recent notes
+- `get_status()` - Overview with edges, pinned, and recent notes
 
-**v2.6.0**: Expanded default view to 30 recent notes, removed tags from list views for 16% token savings, cleaner output formatting.
+**v2.8.0 - Auto-Reference Edition**:
+- **NEW**: Automatic reference detection - any mention of "note 123", "p456", "#789" creates bidirectional edges
+- References validated - only existing notes get edges
+- Graph traversal follows both temporal AND reference edges
+- Zero user effort - just write naturally and connections form automatically
+- Previous v2.6.0: Expanded view to 30 notes, removed tags from lists for 16% token savings
 
 ### 🌐 [Teambook](docs/teambook.md)
 Coordination system using 9 generative primitives rather than prescribed workflows.
