@@ -1,9 +1,17 @@
 #!/usr/bin/env python3
 """
-NOTEBOOK MCP v3.0.0 - KNOWLEDGE GRAPH EDITION
-=============================================
+NOTEBOOK MCP v3.0.1 - KNOWLEDGE GRAPH WITH FTS5 ERROR HANDLING
+===============================================================
 Linear memory transformed into an intelligent knowledge graph.
-Now with entity extraction, session detection, AND PageRank scoring!
+Now with entity extraction, session detection, PageRank scoring,
+AND improved FTS5 error handling for special characters!
+
+Core improvements (v3.0.1):
+- FTS5 error handling: Clear messages when dots/special chars break search
+- SQL colon handling: Catches "word:" pattern that breaks SQL parsing
+- Helps AIs understand how to retry failed searches
+- No silent query modification - explicit errors instead
+- Preserves 100x speed advantage of FTS5
 
 Core improvements (v3.0):
 - Entity extraction: Auto-links @mentions, tools, projects
@@ -28,7 +36,7 @@ Core functions (unchanged API):
 - vault_store/retrieve/list - Secure storage
 
 The magic happens automatically!
-=============================================
+===============================================================
 """
 
 import json
@@ -47,7 +55,7 @@ from collections import defaultdict
 from cryptography.fernet import Fernet
 
 # Version
-VERSION = "3.0.0"
+VERSION = "3.0.1"
 
 # Limits
 MAX_CONTENT_LENGTH = 5000
@@ -750,109 +758,23 @@ def log_operation(op: str, dur_ms: int = None):
     except:
         pass
 
-def remember(content: str = None, summary: str = None, tags: List[str] = None, 
-             linked_items: List[str] = None, **kwargs) -> Dict:
-    """Save a note with ALL FIVE edge types (NO PageRank calculation here!)"""
-    try:
-        start = datetime.now()
-        
-        if content is None:
-            content = kwargs.get('content', '')
-        
-        content = str(content).strip()
-        if not content:
-            content = f"Checkpoint {datetime.now().strftime('%H:%M')}"
-        
-        # Handle truncation
-        truncated = False
-        orig_len = len(content)
-        if orig_len > MAX_CONTENT_LENGTH:
-            content = content[:MAX_CONTENT_LENGTH]
-            truncated = True
-        
-        # Extract references
-        refs = extract_references(content)
-        
-        # Extract entities
-        entities = extract_entities(content)
-        
-        # Generate summary if not provided
-        if summary:
-            summary = clean_text(summary)[:MAX_SUMMARY_LENGTH]
-        else:
-            summary = simple_summary(content)
-        
-        # Process tags
-        tags_json = None
-        if tags:
-            tags = [str(t).lower().strip() for t in tags if t]
-            tags_json = json.dumps(tags) if tags else None
-        
-        # Store note
-        with sqlite3.connect(str(DB_FILE)) as conn:
-            created_time = datetime.now()
-            
-            # Detect or create session (PROPERLY using sessions table)
-            session_id = detect_or_create_session(None, created_time, conn)  # We'll update after insert
-            
-            cursor = conn.execute(
-                '''INSERT INTO notes (content, summary, tags, author, created, session_id, linked_items) 
-                   VALUES (?, ?, ?, ?, ?, ?, ?)''',
-                (content, summary, tags_json, CURRENT_AI_ID, created_time.isoformat(), 
-                 session_id, json.dumps(linked_items) if linked_items else None)
-            )
-            note_id = cursor.lastrowid
-            
-            # Update session if needed
-            if not session_id:
-                session_id = detect_or_create_session(note_id, created_time, conn)
-                if session_id:
-                    conn.execute('UPDATE notes SET session_id = ? WHERE id = ?', (session_id, note_id))
-            
-            # Create all edge types
-            create_temporal_edges(note_id, conn)
-            if refs:
-                create_reference_edges(note_id, refs, conn)
-            if entities:
-                create_entity_edges(note_id, entities, conn)
-            if session_id:
-                create_session_edges(note_id, session_id, conn)
-            
-            conn.commit()
-            
-            # Mark PageRank as dirty (needs recalculation) but DON'T calculate now
-            global PAGERANK_DIRTY
-            PAGERANK_DIRTY = True
-        
-        # Log stats
-        dur = int((datetime.now() - start).total_seconds() * 1000)
-        log_operation('remember', dur)
-        
-        # Return result with edge info
-        result = {"saved": f"{note_id} now {summary}"}
-        if truncated:
-            result["truncated"] = f"from {orig_len} chars"
-        
-        # Report connections made
-        connections = []
-        if refs:
-            connections.append(f"→{len(refs)}refs")
-        if entities:
-            connections.append(f"@{len(entities)}entities")
-        if session_id:
-            connections.append(f"ses{session_id}")
-        if connections:
-            result["edges"] = " ".join(connections)
-        
-        return result
-        
-    except Exception as e:
-        logging.error(f"Error in remember: {e}")
-        return {"error": f"Failed to save: {str(e)}"}
+def clean_fts5_query(query: str) -> str:
+    """Clean query for FTS5 by removing problematic characters
+    
+    Removes: dots, colons, quotes, parentheses, and other special chars that break FTS5 or SQL
+    """
+    # Remove dots, colons, quotes, and other special characters that break FTS5
+    # Replace dots with spaces to split version numbers
+    cleaned = query.replace('.', ' ').replace(':', ' ').replace('"', ' ').replace("'", ' ')
+    # Remove other problematic characters
+    cleaned = re.sub(r'[()[\]{}!@#$%^&*+=|\\<>,?/`~]', ' ', cleaned)
+    # Collapse multiple spaces
+    cleaned = re.sub(r'\s+', ' ', cleaned).strip()
+    return cleaned
 
 def recall(query: str = None, tag: str = None, show_all: bool = False, 
            limit: int = 50, **kwargs) -> Dict:
-    """Search notes with LAZY PageRank calculation and scoring"""
+    """Search notes with LAZY PageRank calculation and FTS5 error handling"""
     try:
         start = datetime.now()
         
@@ -870,37 +792,72 @@ def recall(query: str = None, tag: str = None, show_all: bool = False,
                 # Search mode with ALL edge types and PageRank
                 query = str(query).strip()
                 
-                # Get direct matches and ALL edge-connected notes
-                cursor = conn.execute('''
-                    WITH direct_matches AS (
-                        SELECT DISTINCT n.id FROM notes n
-                        JOIN notes_fts ON n.id = notes_fts.rowid
-                        WHERE notes_fts MATCH ?
-                    ),
-                    edge_matches AS (
-                        SELECT DISTINCT e.to_id as id
-                        FROM edges e
-                        WHERE e.from_id IN (SELECT id FROM direct_matches)
-                        UNION
-                        SELECT DISTINCT e.from_id as id
-                        FROM edges e
-                        WHERE e.to_id IN (SELECT id FROM direct_matches)
-                    )
-                    SELECT n.*, 
-                           CASE WHEN n.id IN (SELECT id FROM direct_matches) THEN 1 ELSE 0 END as is_direct
-                    FROM notes n
-                    WHERE n.id IN (
-                        SELECT id FROM direct_matches
-                        UNION
-                        SELECT id FROM edge_matches
-                    )
-                    ORDER BY 
-                        is_direct DESC,
-                        n.pinned DESC,
-                        (n.pagerank * 1000) DESC,  -- PageRank weighted heavily
-                        n.created DESC
-                    LIMIT ?
-                ''', (query, limit))
+                # Check for colons that would be misinterpreted as SQL column syntax
+                # Pattern: "word:" gets interpreted as column reference by SQLite
+                if ':' in query and re.search(r'\w+:', query):
+                    cleaned = clean_fts5_query(query)
+                    return {
+                        "error": "Search failed: Query contains colon that SQLite interprets as column syntax",
+                        "tip": f"Try without colon: '{cleaned}'",
+                        "original": query,
+                        "cleaned": cleaned
+                    }
+                
+                # Try FTS5 search with error handling
+                try:
+                    # Get direct matches and ALL edge-connected notes
+                    cursor = conn.execute('''
+                        WITH direct_matches AS (
+                            SELECT DISTINCT n.id FROM notes n
+                            JOIN notes_fts ON n.id = notes_fts.rowid
+                            WHERE notes_fts MATCH ?
+                        ),
+                        edge_matches AS (
+                            SELECT DISTINCT e.to_id as id
+                            FROM edges e
+                            WHERE e.from_id IN (SELECT id FROM direct_matches)
+                            UNION
+                            SELECT DISTINCT e.from_id as id
+                            FROM edges e
+                            WHERE e.to_id IN (SELECT id FROM direct_matches)
+                        )
+                        SELECT n.*, 
+                               CASE WHEN n.id IN (SELECT id FROM direct_matches) THEN 1 ELSE 0 END as is_direct
+                        FROM notes n
+                        WHERE n.id IN (
+                            SELECT id FROM direct_matches
+                            UNION
+                            SELECT id FROM edge_matches
+                        )
+                        ORDER BY 
+                            is_direct DESC,
+                            n.pinned DESC,
+                            (n.pagerank * 1000) DESC,
+                            n.created DESC
+                        LIMIT ?
+                    ''', (query, limit))
+                    
+                except sqlite3.OperationalError as e:
+                    error_str = str(e).lower()
+                    # Check if it's an FTS5 syntax error
+                    if 'fts5' in error_str or 'syntax error' in error_str or 'parse error' in error_str:
+                        # Provide helpful error message for FTS5 issues
+                        cleaned = clean_fts5_query(query)
+                        if cleaned != query:
+                            return {
+                                "error": f"FTS5 search failed: Query contains special characters (dots, colons, quotes)",
+                                "tip": f"Try without special chars: '{cleaned}'",
+                                "original": query,
+                                "cleaned": cleaned
+                            }
+                        else:
+                            return {
+                                "error": "FTS5 search failed: Invalid search syntax",
+                                "tip": "Try simpler keywords without special characters"
+                            }
+                    else:
+                        # Re-raise if it's not an FTS5 error
+                        raise
             
             elif tag:
                 # Tag filter mode with PageRank
@@ -1008,6 +965,106 @@ def recall(query: str = None, tag: str = None, show_all: bool = False,
     except Exception as e:
         logging.error(f"Error in recall: {e}")
         return {"error": f"Recall failed: {str(e)}"}
+
+def remember(content: str = None, summary: str = None, tags: List[str] = None, 
+             linked_items: List[str] = None, **kwargs) -> Dict:
+    """Save a note with ALL FIVE edge types (NO PageRank calculation here!)"""
+    try:
+        start = datetime.now()
+        
+        if content is None:
+            content = kwargs.get('content', '')
+        
+        content = str(content).strip()
+        if not content:
+            content = f"Checkpoint {datetime.now().strftime('%H:%M')}"
+        
+        # Handle truncation
+        truncated = False
+        orig_len = len(content)
+        if orig_len > MAX_CONTENT_LENGTH:
+            content = content[:MAX_CONTENT_LENGTH]
+            truncated = True
+        
+        # Extract references
+        refs = extract_references(content)
+        
+        # Extract entities
+        entities = extract_entities(content)
+        
+        # Generate summary if not provided
+        if summary:
+            summary = clean_text(summary)[:MAX_SUMMARY_LENGTH]
+        else:
+            summary = simple_summary(content)
+        
+        # Process tags
+        tags_json = None
+        if tags:
+            tags = [str(t).lower().strip() for t in tags if t]
+            tags_json = json.dumps(tags) if tags else None
+        
+        # Store note
+        with sqlite3.connect(str(DB_FILE)) as conn:
+            created_time = datetime.now()
+            
+            # Detect or create session (PROPERLY using sessions table)
+            session_id = detect_or_create_session(None, created_time, conn)  # We'll update after insert
+            
+            cursor = conn.execute(
+                '''INSERT INTO notes (content, summary, tags, author, created, session_id, linked_items) 
+                   VALUES (?, ?, ?, ?, ?, ?, ?)''',
+                (content, summary, tags_json, CURRENT_AI_ID, created_time.isoformat(), 
+                 session_id, json.dumps(linked_items) if linked_items else None)
+            )
+            note_id = cursor.lastrowid
+            
+            # Update session if needed
+            if not session_id:
+                session_id = detect_or_create_session(note_id, created_time, conn)
+                if session_id:
+                    conn.execute('UPDATE notes SET session_id = ? WHERE id = ?', (session_id, note_id))
+            
+            # Create all edge types
+            create_temporal_edges(note_id, conn)
+            if refs:
+                create_reference_edges(note_id, refs, conn)
+            if entities:
+                create_entity_edges(note_id, entities, conn)
+            if session_id:
+                create_session_edges(note_id, session_id, conn)
+            
+            conn.commit()
+            
+            # Mark PageRank as dirty (needs recalculation) but DON'T calculate now
+            global PAGERANK_DIRTY
+            PAGERANK_DIRTY = True
+        
+        # Log stats
+        dur = int((datetime.now() - start).total_seconds() * 1000)
+        log_operation('remember', dur)
+        
+        # Return result with edge info
+        result = {"saved": f"{note_id} now {summary}"}
+        if truncated:
+            result["truncated"] = f"from {orig_len} chars"
+        
+        # Report connections made
+        connections = []
+        if refs:
+            connections.append(f"→{len(refs)}refs")
+        if entities:
+            connections.append(f"@{len(entities)}entities")
+        if session_id:
+            connections.append(f"ses{session_id}")
+        if connections:
+            result["edges"] = " ".join(connections)
+        
+        return result
+        
+    except Exception as e:
+        logging.error(f"Error in remember: {e}")
+        return {"error": f"Failed to save: {str(e)}"}
 
 def get_status(**kwargs) -> Dict:
     """Get current state with graph statistics (WITH LAZY PageRank)"""
@@ -1471,7 +1528,12 @@ def handle_tools_call(params: Dict) -> Dict:
     if not isinstance(result, dict):
         text_parts.append(str(result))
     elif "error" in result:
-        text_parts.append(f"Error {result['error']}")
+        text_parts.append(f"Error: {result['error']}")
+        # Handle FTS5-specific error messages
+        if "tip" in result:
+            text_parts.append(f"Tip: {result['tip']}")
+        if "cleaned" in result:
+            text_parts.append(f"Cleaned query: {result['cleaned']}")
     elif "note_id" in result:  # get_full_note
         text_parts.append(f"{result['note_id']} by {result.get('author', 'Unknown')}")
         text_parts.append(f"Created {result.get('created', '')}")
@@ -1580,6 +1642,8 @@ def main():
     logging.info("- PageRank scoring (lazy calculation)")
     logging.info("- Reference detection (note 123, p456)")
     logging.info("- Temporal edges (last 3 notes)")
+    logging.info("- FTS5 error handling (v3.0.1)")
+    logging.info("- SQL colon syntax handling (v3.0.1)")
     
     while True:
         try:
@@ -1609,7 +1673,7 @@ def main():
                     "serverInfo": {
                         "name": "notebook",
                         "version": VERSION,
-                        "description": "Knowledge Graph Memory - production-ready with optimizations"
+                        "description": "Knowledge Graph Memory with FTS5 and SQL colon error handling"
                     }
                 }
             
