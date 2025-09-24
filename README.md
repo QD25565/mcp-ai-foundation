@@ -6,7 +6,7 @@ Model Context Protocol (MCP) tools for AI memory persistence, task management, t
 
 Four core tools that provide fundamental capabilities for AI systems:
 
-- **📓 Notebook** (v3.0.0) - Personal memory with knowledge graph intelligence
+- **📓 Notebook** (v3.0.1) - Personal memory with knowledge graph intelligence and improved search
 - **🌐 Teambook** (v6.0.0) - Team coordination with 11 foundational primitives  
 - **✅ Task Manager** (v2.0.0) - Self-management and task tracking
 - **🌍 World** (v2.0.0) - Temporal and spatial grounding
@@ -57,24 +57,24 @@ pip install -r requirements.txt
 ## Tool Documentation
 
 ### 📓 [Notebook](docs/notebook.md)
-Personal memory system with knowledge graph intelligence and PageRank-powered recall.
+Personal memory system with knowledge graph intelligence, PageRank-powered recall, and robust error handling.
 
 **Functions:**
 - `remember(content, summary, tags)` - Save notes with entity/reference detection
-- `recall(query, tag, limit)` - Search with multi-edge graph traversal
+- `recall(query, tag, limit)` - Search with multi-edge graph traversal and error recovery
 - `pin_note(id)` / `unpin_note(id)` - Mark important notes
 - `vault_store/retrieve` - Encrypted secure storage
 - `get_status()` - Overview with PageRank, entities, sessions, and edges
 
-**v3.0.0 - Knowledge Graph Edition**:
-- **NEW**: PageRank scoring - important notes rise to the top (★0.0001 to ★0.01+)
-- **NEW**: Entity extraction - detects @mentions, projects, concepts automatically
-- **NEW**: Session detection - groups related conversations by temporal proximity
-- **NEW**: 5 edge types - temporal, reference, entity, session, future PageRank
-- **NEW**: Top entities display with occurrence counts
-- **NEW**: Lazy PageRank calculation for performance at scale
-- Graph traversal follows ALL edge types for comprehensive recall
-- Your memory doesn't just persist - it learns, connects, and evolves
+**v3.0.1 - FTS5 Error Handling Edition**:
+- **NEW**: Clear error messages for dots, colons, parentheses in searches
+- **NEW**: SQL syntax pre-checks prevent confusing column errors
+- **NEW**: Shows both original and cleaned query suggestions
+- Knowledge Graph with PageRank scoring (★0.0001 to ★0.01+)
+- Entity extraction for @mentions, projects, concepts
+- Session detection groups related conversations
+- 5 edge types for comprehensive connections
+- Your memory doesn't just persist - it learns, connects, evolves, and helps you recover from errors
 
 ### 🌐 [Teambook](docs/teambook.md)
 Foundational collaboration primitive for AI teams using 11 self-evident operations.
@@ -128,6 +128,7 @@ v2.0.0 features 60-85% token reduction through smart formatting.
 - Dependencies in `requirements.txt`:
   - `cryptography` (for Notebook vault)
   - `requests` (for World weather/location)
+  - `numpy` (for Notebook PageRank calculation)
 
 ## Data Storage
 
@@ -146,22 +147,31 @@ Each tool maintains its own SQLite database with automatic migration from earlie
 3. **Intelligence** - Knowledge graphs and PageRank surface important information
 4. **Efficiency** - Default summary modes minimize token usage
 5. **Composability** - Tools can reference each other via linking
+6. **Resilience** - Clear error messages guide recovery from failures
 
 ### Technical Details
 - MCP server implementation using JSON-RPC over stdio
 - Stateless operation with persistent storage
 - Auto-migration from JSON to SQLite formats
 - Thread-safe atomic operations where needed
-- Knowledge graph with PageRank scoring (Notebook v3.0.0)
-- Entity extraction and session detection (Notebook v3.0.0)
+- Knowledge graph with PageRank scoring (Notebook v3.0.0+)
+- Entity extraction and session detection (Notebook v3.0.0+)
+- FTS5 error handling with query cleaning (Notebook v3.0.1)
 
 ## Version Highlights
 
 ### Latest Updates
-- **Notebook v3.0.0**: Knowledge graph with PageRank, entity extraction, session detection
+- **Notebook v3.0.1**: Enhanced FTS5 error handling for special characters
 - **Teambook v6.0.0**: Complete rewrite with 11 foundational primitives
 - **Task Manager v2.0.0**: SQLite backend, 95% token reduction in summary mode
 - **World v2.0.0**: Batch operations, 60-85% token savings
+
+### Key Improvements in v3.0.1
+- **Better Search Recovery**: Clear errors when special characters break search
+- **SQL Colon Handling**: Pre-checks prevent confusing "no such column" errors
+- **Helpful Suggestions**: Shows cleaned query that will work
+- **No Silent Modifications**: Explicit errors preserve user intent
+- **Maintains Performance**: FTS5 speed advantage fully preserved
 
 ### Key Improvements in v3.0.0
 - **Knowledge Graph Intelligence**: Important information rises naturally
@@ -177,4 +187,4 @@ MIT License - See [LICENSE](LICENSE) file for details.
 ---
 
 **Built and tested FOR AIs, BY AIs** 🤖  
-*Memory that grows smarter over time* 🧠
+*Memory that grows smarter and more resilient over time* 🧠
