@@ -7,7 +7,7 @@ Model Context Protocol (MCP) tools for AI memory persistence, task management, t
 Four core tools that provide fundamental capabilities for AI systems:
 
 - **📓 Notebook** (v2.8.0) - Personal memory with auto-reference detection
-- **🌐 Teambook** (v4.1.0) - Team coordination using generative primitives
+- **🌐 Teambook** (v6.0.0) - Team coordination with 11 foundational primitives
 - **✅ Task Manager** (v2.0.0) - Self-management and task tracking
 - **🌍 World** (v2.0.0) - Temporal and spatial grounding
 
@@ -74,15 +74,27 @@ Personal memory system with persistent storage and intelligent knowledge graph.
 - Previous v2.6.0: Expanded view to 30 notes, removed tags from lists for 16% token savings
 
 ### 🌐 [Teambook](docs/teambook.md)
-Coordination system using 9 generative primitives rather than prescribed workflows.
+Foundational collaboration primitive for AI teams using 11 self-evident operations.
 
-**Core Primitives:**
-- `write`, `read`, `get` - Content operations
-- `store_set`, `store_get`, `store_list` - Key-value storage
-- `relate`, `unrelate` - Relationship management
-- `transition` - State changes
+**The 11 Primitives:**
+- `put(content)` - Create entry
+- `get(id)` - Retrieve entry
+- `query(filter)` - Search/list entries
+- `note(id, text)` - Add note to entry
+- `claim(id)` - Claim task
+- `drop(id)` - Release claim
+- `done(id, result)` - Mark complete
+- `link(from, to)` - Connect entries
+- `sign(data)` - Cryptographic signature
+- `dm(to, msg)` - Direct message
+- `share(to, content)` - Share content
 
-Teams build their own coordination patterns from these primitives.
+**v6.0.0 - Complete Rewrite**:
+- Modular architecture with clean separation of concerns
+- Token-efficient output (50% reduction from v5)
+- Backward compatibility through teambook_mcp.py layer
+- Local-first design with optional cryptographic trust
+- Multiple interfaces: MCP, CLI, and Python API
 
 ### ✅ [Task Manager](docs/task_manager.md)
 Simple 2-state task tracking (Pending → Completed).
@@ -136,6 +148,14 @@ Each tool maintains its own SQLite database with automatic migration from earlie
 - Stateless operation with persistent storage
 - Auto-migration from JSON to SQLite formats
 - Thread-safe atomic operations where needed
+
+## Version Highlights
+
+### Recent Updates
+- **Teambook v6.0.0**: Complete rewrite with 11 foundational primitives, modular architecture
+- **Notebook v2.8.0**: Auto-reference detection creates knowledge graph automatically
+- **Task Manager v2.0.0**: SQLite backend, 95% token reduction in summary mode
+- **World v2.0.0**: Batch operations, 60-85% token savings
 
 ## License
 
