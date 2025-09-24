@@ -6,8 +6,8 @@ Model Context Protocol (MCP) tools for AI memory persistence, task management, t
 
 Four core tools that provide fundamental capabilities for AI systems:
 
-- **📓 Notebook** (v2.8.0) - Personal memory with auto-reference detection
-- **🌐 Teambook** (v6.0.0) - Team coordination with 11 foundational primitives
+- **📓 Notebook** (v3.0.0) - Personal memory with knowledge graph intelligence
+- **🌐 Teambook** (v6.0.0) - Team coordination with 11 foundational primitives  
 - **✅ Task Manager** (v2.0.0) - Self-management and task tracking
 - **🌍 World** (v2.0.0) - Temporal and spatial grounding
 
@@ -57,21 +57,24 @@ pip install -r requirements.txt
 ## Tool Documentation
 
 ### 📓 [Notebook](docs/notebook.md)
-Personal memory system with persistent storage and intelligent knowledge graph.
+Personal memory system with knowledge graph intelligence and PageRank-powered recall.
 
 **Functions:**
-- `remember(content, summary, tags)` - Save notes with auto-reference detection
-- `recall(query, tag, limit)` - Search with temporal and reference edge traversal
+- `remember(content, summary, tags)` - Save notes with entity/reference detection
+- `recall(query, tag, limit)` - Search with multi-edge graph traversal
 - `pin_note(id)` / `unpin_note(id)` - Mark important notes
 - `vault_store/retrieve` - Encrypted secure storage
-- `get_status()` - Overview with edges, pinned, and recent notes
+- `get_status()` - Overview with PageRank, entities, sessions, and edges
 
-**v2.8.0 - Auto-Reference Edition**:
-- **NEW**: Automatic reference detection - any mention of "note 123", "p456", "#789" creates bidirectional edges
-- References validated - only existing notes get edges
-- Graph traversal follows both temporal AND reference edges
-- Zero user effort - just write naturally and connections form automatically
-- Previous v2.6.0: Expanded view to 30 notes, removed tags from lists for 16% token savings
+**v3.0.0 - Knowledge Graph Edition**:
+- **NEW**: PageRank scoring - important notes rise to the top (★0.0001 to ★0.01+)
+- **NEW**: Entity extraction - detects @mentions, projects, concepts automatically
+- **NEW**: Session detection - groups related conversations by temporal proximity
+- **NEW**: 5 edge types - temporal, reference, entity, session, future PageRank
+- **NEW**: Top entities display with occurrence counts
+- **NEW**: Lazy PageRank calculation for performance at scale
+- Graph traversal follows ALL edge types for comprehensive recall
+- Your memory doesn't just persist - it learns, connects, and evolves
 
 ### 🌐 [Teambook](docs/teambook.md)
 Foundational collaboration primitive for AI teams using 11 self-evident operations.
@@ -140,22 +143,32 @@ Each tool maintains its own SQLite database with automatic migration from earlie
 ### Design Principles
 1. **Simplicity** - Each tool has a single, clear purpose
 2. **Persistence** - SQLite ensures data survives restarts
-3. **Efficiency** - Default summary modes minimize token usage
-4. **Composability** - Tools can reference each other via linking
+3. **Intelligence** - Knowledge graphs and PageRank surface important information
+4. **Efficiency** - Default summary modes minimize token usage
+5. **Composability** - Tools can reference each other via linking
 
 ### Technical Details
 - MCP server implementation using JSON-RPC over stdio
 - Stateless operation with persistent storage
 - Auto-migration from JSON to SQLite formats
 - Thread-safe atomic operations where needed
+- Knowledge graph with PageRank scoring (Notebook v3.0.0)
+- Entity extraction and session detection (Notebook v3.0.0)
 
 ## Version Highlights
 
-### Recent Updates
-- **Teambook v6.0.0**: Complete rewrite with 11 foundational primitives, modular architecture
-- **Notebook v2.8.0**: Auto-reference detection creates knowledge graph automatically
+### Latest Updates
+- **Notebook v3.0.0**: Knowledge graph with PageRank, entity extraction, session detection
+- **Teambook v6.0.0**: Complete rewrite with 11 foundational primitives
 - **Task Manager v2.0.0**: SQLite backend, 95% token reduction in summary mode
 - **World v2.0.0**: Batch operations, 60-85% token savings
+
+### Key Improvements in v3.0.0
+- **Knowledge Graph Intelligence**: Important information rises naturally
+- **Entity & Session Tracking**: Automatic context preservation
+- **PageRank Scoring**: Notes rated ★0.0001 to ★0.01+ by importance
+- **Multi-Edge Traversal**: 5 edge types for comprehensive connections
+- **Performance Optimized**: Lazy calculation, word boundaries, proper indexing
 
 ## License
 
@@ -163,4 +176,5 @@ MIT License - See [LICENSE](LICENSE) file for details.
 
 ---
 
-**Built and tested FOR AIs, BY AIs** 🤖
+**Built and tested FOR AIs, BY AIs** 🤖  
+*Memory that grows smarter over time* 🧠
