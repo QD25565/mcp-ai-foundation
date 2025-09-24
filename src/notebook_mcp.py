@@ -1,26 +1,33 @@
 #!/usr/bin/env python3
 """
-NOTEBOOK MCP v2.8.0 - AUTO-REFERENCE EDITION
+NOTEBOOK MCP v3.0.0 - KNOWLEDGE GRAPH EDITION
 =============================================
-Linear memory enhanced with conversation preservation AND auto-linking.
-Token-optimized, cleaner output.
+Linear memory transformed into an intelligent knowledge graph.
+Now with entity extraction, session detection, AND PageRank scoring!
 
-Core improvements (v2.8):
-- Auto-detects references (note 417, p123, #456) and creates edges
-- Temporal edges link notes to previous 3
-- Conversations stay together automatically
-- Enhanced recall includes context
-- Token optimizations throughout
-- Same API, smarter results
+Core improvements (v3.0):
+- Entity extraction: Auto-links @mentions, tools, projects
+- Session detection: Groups work bursts (30-min windows)
+- PageRank scoring: Important notes naturally surface
+- Auto-references: Detects note 417, p123, #456
+- Temporal edges: Links to previous 3 notes
+- All invisible to API - same simple interface!
 
-Core functions:
-- remember(content, summary=None, tags=None) - Save + auto-link + auto-reference
-- recall(query=None, tag=None, limit=50) - Search with edges
+Performance optimizations (thanks @Gemini):
+- Lazy PageRank calculation (only on read operations)
+- Word-boundary entity matching (no false positives)
+- Proper session table usage (enables analytics)
+
+Core functions (unchanged API):
+- remember(content, summary=None, tags=None) - Now with 5 edge types!
+- recall(query=None, tag=None, limit=50) - PageRank-scored results
 - pin_note(id) - Pin important note
 - unpin_note(id) - Unpin note
-- get_status() - Shows pinned + 60 recent
-- get_full_note(id) - Complete content with edges
+- get_status() - Shows graph stats
+- get_full_note(id) - See all connections
 - vault_store/retrieve/list - Secure storage
+
+The magic happens automatically!
 =============================================
 """
 
@@ -30,14 +37,17 @@ import os
 import sqlite3
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Optional, Any, Set, Tuple
 import logging
 import random
 import re
+import time
+import numpy as np
+from collections import defaultdict
 from cryptography.fernet import Fernet
 
 # Version
-VERSION = "2.8.0"
+VERSION = "3.0.0"
 
 # Limits
 MAX_CONTENT_LENGTH = 5000
@@ -46,6 +56,10 @@ MAX_RESULTS = 100
 BATCH_MAX = 50
 DEFAULT_RECENT = 60
 TEMPORAL_EDGES = 3  # Link to 3 previous notes
+SESSION_GAP_MINUTES = 30  # New session after 30 min gap
+PAGERANK_ITERATIONS = 50  # PageRank convergence iterations
+PAGERANK_DAMPING = 0.85  # PageRank damping factor
+PAGERANK_CACHE_SECONDS = 300  # Cache PageRank for 5 minutes
 
 # Storage paths
 DATA_DIR = Path.home() / "AppData" / "Roaming" / "Claude" / "tools" / "notebook_data"
@@ -62,6 +76,17 @@ logging.basicConfig(level=logging.INFO, stream=sys.stderr)
 
 # Global session info
 sess_id = datetime.now().strftime("%Y%m%d_%H%M%S")
+
+# Known entities cache (populated from DB)
+KNOWN_ENTITIES = set()
+KNOWN_TOOLS = {'teambook', 'firebase', 'gemini', 'claude', 'jetbrains', 'github', 
+                'slack', 'discord', 'vscode', 'git', 'docker', 'python', 'node',
+                'react', 'vue', 'angular', 'tensorflow', 'pytorch', 'aws', 'gcp',
+                'azure', 'kubernetes', 'redis', 'postgres', 'mongodb', 'sqlite'}
+
+# PageRank lazy calculation flags
+PAGERANK_DIRTY = True
+PAGERANK_CACHE_TIME = 0
 
 def get_persistent_id():
     """Get or create persistent AI identity"""
@@ -131,11 +156,11 @@ class VaultManager:
 vault_manager = VaultManager()
 
 def init_db():
-    """Initialize SQLite database with temporal edges"""
+    """Initialize SQLite database with all edge types and entities"""
     conn = sqlite3.connect(str(DB_FILE))
     conn.execute("PRAGMA journal_mode=WAL")
     
-    # Main notes table
+    # Main notes table with session_id column
     conn.execute('''
         CREATE TABLE IF NOT EXISTS notes (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -145,12 +170,14 @@ def init_db():
             pinned INTEGER DEFAULT 0,
             author TEXT NOT NULL,
             created TEXT NOT NULL,
-            session TEXT,
-            linked_items TEXT
+            session_id INTEGER,
+            linked_items TEXT,
+            pagerank REAL DEFAULT 0.0,
+            FOREIGN KEY(session_id) REFERENCES sessions(id)
         )
     ''')
     
-    # NEW: Edges table for temporal connections
+    # Edges table for all connection types
     conn.execute('''
         CREATE TABLE IF NOT EXISTS edges (
             from_id INTEGER NOT NULL,
@@ -161,6 +188,40 @@ def init_db():
             PRIMARY KEY(from_id, to_id, type),
             FOREIGN KEY(from_id) REFERENCES notes(id),
             FOREIGN KEY(to_id) REFERENCES notes(id)
+        )
+    ''')
+    
+    # Entities table
+    conn.execute('''
+        CREATE TABLE IF NOT EXISTS entities (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT UNIQUE NOT NULL,
+            type TEXT NOT NULL,
+            first_seen TEXT NOT NULL,
+            last_seen TEXT NOT NULL,
+            mention_count INTEGER DEFAULT 1
+        )
+    ''')
+    
+    # Entity-Note relationships
+    conn.execute('''
+        CREATE TABLE IF NOT EXISTS entity_notes (
+            entity_id INTEGER NOT NULL,
+            note_id INTEGER NOT NULL,
+            PRIMARY KEY(entity_id, note_id),
+            FOREIGN KEY(entity_id) REFERENCES entities(id),
+            FOREIGN KEY(note_id) REFERENCES notes(id)
+        )
+    ''')
+    
+    # Sessions table (PROPERLY USED in v3.0)
+    conn.execute('''
+        CREATE TABLE IF NOT EXISTS sessions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            started TEXT NOT NULL,
+            ended TEXT NOT NULL,
+            note_count INTEGER DEFAULT 1,
+            coherence_score REAL DEFAULT 1.0
         )
     ''')
     
@@ -205,72 +266,103 @@ def init_db():
     conn.execute('CREATE INDEX IF NOT EXISTS idx_notes_created ON notes(created DESC)')
     conn.execute('CREATE INDEX IF NOT EXISTS idx_notes_pinned ON notes(pinned DESC, created DESC)')
     conn.execute('CREATE INDEX IF NOT EXISTS idx_notes_author ON notes(author)')
+    conn.execute('CREATE INDEX IF NOT EXISTS idx_notes_pagerank ON notes(pagerank DESC)')
+    conn.execute('CREATE INDEX IF NOT EXISTS idx_notes_session ON notes(session_id)')
     conn.execute('CREATE INDEX IF NOT EXISTS idx_edges_to ON edges(to_id)')
     conn.execute('CREATE INDEX IF NOT EXISTS idx_edges_from ON edges(from_id)')
+    conn.execute('CREATE INDEX IF NOT EXISTS idx_edges_type ON edges(type)')
+    conn.execute('CREATE INDEX IF NOT EXISTS idx_entities_name ON entities(name)')
+    conn.execute('CREATE INDEX IF NOT EXISTS idx_entity_notes_note ON entity_notes(note_id)')
     conn.execute('CREATE INDEX IF NOT EXISTS idx_vault_updated ON vault(updated DESC)')
     
     conn.commit()
+    
+    # Load known entities into cache
+    load_known_entities(conn)
+    
     return conn
 
-def migrate_to_v28():
-    """Migration for v2.8 - ensure edges table exists"""
+def load_known_entities(conn: sqlite3.Connection):
+    """Load known entities into memory cache"""
+    global KNOWN_ENTITIES
+    try:
+        entities = conn.execute('SELECT name FROM entities').fetchall()
+        KNOWN_ENTITIES = {e[0].lower() for e in entities}
+    except:
+        KNOWN_ENTITIES = set()
+
+def migrate_to_v30():
+    """Migration for v3.0 - add entity, session, and PageRank support"""
     try:
         conn = sqlite3.connect(str(DB_FILE))
         
-        # Check if columns exist
+        # Check existing columns
         cursor = conn.execute("PRAGMA table_info(notes)")
         columns = [col[1] for col in cursor.fetchall()]
         
-        if 'pinned' not in columns:
-            logging.info("Migrating - adding pinned column...")
-            conn.execute('ALTER TABLE notes ADD COLUMN pinned INTEGER DEFAULT 0')
+        # Add pagerank column if missing
+        if 'pagerank' not in columns:
+            logging.info("Adding PageRank column...")
+            conn.execute('ALTER TABLE notes ADD COLUMN pagerank REAL DEFAULT 0.0')
             conn.commit()
         
-        if 'tags' not in columns:
-            logging.info("Migrating - adding tags column...")
-            conn.execute('ALTER TABLE notes ADD COLUMN tags TEXT')
+        # Add session_id column if missing
+        if 'session_id' not in columns:
+            logging.info("Adding session_id column...")
+            conn.execute('ALTER TABLE notes ADD COLUMN session_id INTEGER')
             conn.commit()
         
-        if 'summary' not in columns:
-            logging.info("Migrating - adding summary column...")
-            conn.execute('ALTER TABLE notes ADD COLUMN summary TEXT')
-            
-            # Generate simple summaries for existing notes
-            conn.execute('''
-                UPDATE notes 
-                SET summary = SUBSTR(
-                    REPLACE(REPLACE(content, CHAR(10), ' '), '  ', ' '), 
-                    1, 150
-                ) || '...'
-                WHERE summary IS NULL AND LENGTH(content) > 150
-            ''')
-            conn.execute('''
-                UPDATE notes 
-                SET summary = REPLACE(REPLACE(content, CHAR(10), ' '), '  ', ' ')
-                WHERE summary IS NULL
-            ''')
-            conn.commit()
-        
-        # Check if edges table exists
-        cursor = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='edges'")
+        # Check if entities table exists
+        cursor = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='entities'")
         if not cursor.fetchone():
-            logging.info("Creating edges table for v2.8...")
+            logging.info("Creating entities table...")
             conn.execute('''
-                CREATE TABLE edges (
-                    from_id INTEGER NOT NULL,
-                    to_id INTEGER NOT NULL,
+                CREATE TABLE entities (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name TEXT UNIQUE NOT NULL,
                     type TEXT NOT NULL,
-                    weight REAL DEFAULT 1.0,
-                    created TEXT NOT NULL,
-                    PRIMARY KEY(from_id, to_id, type),
-                    FOREIGN KEY(from_id) REFERENCES notes(id),
-                    FOREIGN KEY(to_id) REFERENCES notes(id)
+                    first_seen TEXT NOT NULL,
+                    last_seen TEXT NOT NULL,
+                    mention_count INTEGER DEFAULT 1
                 )
             ''')
-            conn.execute('CREATE INDEX idx_edges_to ON edges(to_id)')
-            conn.execute('CREATE INDEX idx_edges_from ON edges(from_id)')
+            conn.execute('CREATE INDEX idx_entities_name ON entities(name)')
             conn.commit()
-            logging.info("Edges table created successfully")
+        
+        # Check if entity_notes table exists
+        cursor = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='entity_notes'")
+        if not cursor.fetchone():
+            logging.info("Creating entity_notes table...")
+            conn.execute('''
+                CREATE TABLE entity_notes (
+                    entity_id INTEGER NOT NULL,
+                    note_id INTEGER NOT NULL,
+                    PRIMARY KEY(entity_id, note_id),
+                    FOREIGN KEY(entity_id) REFERENCES entities(id),
+                    FOREIGN KEY(note_id) REFERENCES notes(id)
+                )
+            ''')
+            conn.execute('CREATE INDEX idx_entity_notes_note ON entity_notes(note_id)')
+            conn.commit()
+        
+        # Check if sessions table exists
+        cursor = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='sessions'")
+        if not cursor.fetchone():
+            logging.info("Creating sessions table...")
+            conn.execute('''
+                CREATE TABLE sessions (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    started TEXT NOT NULL,
+                    ended TEXT NOT NULL,
+                    note_count INTEGER DEFAULT 1,
+                    coherence_score REAL DEFAULT 1.0
+                )
+            ''')
+            conn.commit()
+        
+        # Mark PageRank as needing recalculation
+        global PAGERANK_DIRTY
+        PAGERANK_DIRTY = True
         
         conn.close()
     except Exception as e:
@@ -334,7 +426,7 @@ def simple_summary(content: str, max_len: int = 150) -> str:
     return clean[:idx] + "..."
 
 def extract_references(content: str) -> List[int]:
-    """Extract note references from content - NEW in v2.8"""
+    """Extract note references from content"""
     refs = []
     
     # Match patterns like: note 123, n123, p123, #123, [123], see 123
@@ -355,16 +447,250 @@ def extract_references(content: str) -> List[int]:
     
     return list(set(refs))  # Return unique refs
 
-def log_operation(op: str, dur_ms: int = None):
-    """Log operation for stats tracking"""
+def extract_entities(content: str) -> List[Tuple[str, str]]:
+    """Extract entities from content with WORD BOUNDARIES (FIX from @Gemini)
+    Returns: List of (entity_name, entity_type) tuples
+    """
+    entities = []
+    content_lower = content.lower()
+    
+    # Pattern 1: @mentions (people/AIs)
+    mentions = re.findall(r'@([\w-]+)', content, re.IGNORECASE)
+    entities.extend((m.lower(), 'mention') for m in mentions)
+    
+    # Pattern 2: Tool/project names with WORD BOUNDARIES (FIX)
+    for tool in KNOWN_TOOLS:
+        # Use word boundaries to prevent substring matches
+        if re.search(r'\b' + re.escape(tool) + r'\b', content_lower):
+            entities.append((tool, 'tool'))
+    
+    # Pattern 3: IDs (tb_123, task_456, etc)
+    ids = re.findall(r'\b(tb_\d+|task_\d+|pr_\d+|issue_\d+|dm_\d+|sh_\d+)\b', content, re.IGNORECASE)
+    entities.extend((id_str.lower(), 'id') for id_str in ids)
+    
+    # Pattern 4: Quoted projects/names
+    quoted = re.findall(r'"([^"]{3,50})"', content)
+    entities.extend((q.lower(), 'project') for q in quoted if len(q.split()) <= 5)
+    
+    # Pattern 5: Project/Product declarations
+    projects = re.findall(r'(?:project|product|app|system):\s*([\w-]+)', content, re.IGNORECASE)
+    entities.extend((p.lower(), 'project') for p in projects)
+    
+    # Pattern 6: Known entities from database with WORD BOUNDARIES
+    for entity in KNOWN_ENTITIES:
+        if re.search(r'\b' + re.escape(entity) + r'\b', content_lower):
+            entities.append((entity, 'known'))
+    
+    # Deduplicate while preserving order
+    seen = set()
+    unique_entities = []
+    for entity in entities:
+        if entity[0] not in seen:
+            seen.add(entity[0])
+            unique_entities.append(entity)
+    
+    return unique_entities
+
+def detect_or_create_session(note_id: int, created: datetime, conn: sqlite3.Connection) -> Optional[int]:
+    """Detect existing session or create new one (PROPERLY USES sessions table)"""
     try:
-        with sqlite3.connect(str(DB_FILE)) as conn:
-            conn.execute(
-                'INSERT INTO stats (operation, ts, dur_ms, author) VALUES (?, ?, ?, ?)',
-                (op, datetime.now().isoformat(), dur_ms, CURRENT_AI_ID)
-            )
-    except:
-        pass
+        # Get the most recent note before this one
+        prev_note = conn.execute('''
+            SELECT id, created, session_id FROM notes 
+            WHERE id < ? 
+            ORDER BY id DESC 
+            LIMIT 1
+        ''', (note_id,)).fetchone()
+        
+        if prev_note:
+            prev_time = datetime.fromisoformat(prev_note[1])
+            time_gap = (created - prev_time).total_seconds() / 60
+            
+            if time_gap <= SESSION_GAP_MINUTES and prev_note[2]:
+                # Continue existing session
+                session_id = prev_note[2]
+                # Update session end time and count
+                conn.execute('''
+                    UPDATE sessions 
+                    SET ended = ?, note_count = note_count + 1
+                    WHERE id = ?
+                ''', (created.isoformat(), session_id))
+                return session_id
+        
+        # Create new session
+        cursor = conn.execute('''
+            INSERT INTO sessions (started, ended, note_count)
+            VALUES (?, ?, 1)
+        ''', (created.isoformat(), created.isoformat()))
+        
+        return cursor.lastrowid
+        
+    except Exception as e:
+        logging.error(f"Error detecting/creating session: {e}")
+        return None
+
+def create_session_edges(note_id: int, session_id: int, conn: sqlite3.Connection):
+    """Create edges between notes in the same session"""
+    try:
+        now = datetime.now().isoformat()
+        
+        # Get all other notes in this session
+        session_notes = conn.execute('''
+            SELECT id FROM notes 
+            WHERE session_id = ? AND id != ?
+        ''', (session_id, note_id)).fetchall()
+        
+        # Create bidirectional edges between this note and all session notes
+        for other_note in session_notes:
+            other_id = other_note[0]
+            # Edge from this note to other
+            conn.execute('''
+                INSERT OR IGNORE INTO edges (from_id, to_id, type, weight, created)
+                VALUES (?, ?, 'session', 1.5, ?)
+            ''', (note_id, other_id, now))
+            # Edge from other to this note
+            conn.execute('''
+                INSERT OR IGNORE INTO edges (from_id, to_id, type, weight, created)
+                VALUES (?, ?, 'session', 1.5, ?)
+            ''', (other_id, note_id, now))
+        
+    except Exception as e:
+        logging.error(f"Error creating session edges: {e}")
+
+def create_entity_edges(note_id: int, entities: List[Tuple[str, str]], conn: sqlite3.Connection):
+    """Create edges between note and entities"""
+    try:
+        now = datetime.now().isoformat()
+        
+        for entity_name, entity_type in entities:
+            # Get or create entity
+            entity = conn.execute('''
+                SELECT id FROM entities WHERE name = ?
+            ''', (entity_name,)).fetchone()
+            
+            if entity:
+                entity_id = entity[0]
+                # Update last seen and increment count
+                conn.execute('''
+                    UPDATE entities 
+                    SET last_seen = ?, mention_count = mention_count + 1
+                    WHERE id = ?
+                ''', (now, entity_id))
+            else:
+                # Create new entity
+                cursor = conn.execute('''
+                    INSERT INTO entities (name, type, first_seen, last_seen)
+                    VALUES (?, ?, ?, ?)
+                ''', (entity_name, entity_type, now, now))
+                entity_id = cursor.lastrowid
+                # Add to cache
+                KNOWN_ENTITIES.add(entity_name.lower())
+            
+            # Create entity-note relationship
+            conn.execute('''
+                INSERT OR IGNORE INTO entity_notes (entity_id, note_id)
+                VALUES (?, ?)
+            ''', (entity_id, note_id))
+            
+            # Find all other notes mentioning this entity
+            other_notes = conn.execute('''
+                SELECT note_id FROM entity_notes 
+                WHERE entity_id = ? AND note_id != ?
+            ''', (entity_id, note_id)).fetchall()
+            
+            # Create edges to all other notes with same entity
+            for other_note in other_notes:
+                other_id = other_note[0]
+                # Create bidirectional entity edges
+                conn.execute('''
+                    INSERT OR IGNORE INTO edges (from_id, to_id, type, weight, created)
+                    VALUES (?, ?, 'entity', 1.2, ?)
+                ''', (note_id, other_id, now))
+                conn.execute('''
+                    INSERT OR IGNORE INTO edges (from_id, to_id, type, weight, created)
+                    VALUES (?, ?, 'entity', 1.2, ?)
+                ''', (other_id, note_id, now))
+        
+    except Exception as e:
+        logging.error(f"Error creating entity edges: {e}")
+
+def calculate_pagerank_scores(conn: sqlite3.Connection):
+    """Calculate PageRank scores for all notes (EXPENSIVE - call lazily)"""
+    try:
+        start = time.time()
+        
+        # Get all notes
+        notes = conn.execute('SELECT id FROM notes').fetchall()
+        if not notes:
+            return
+        
+        note_ids = [n[0] for n in notes]
+        n = len(note_ids)
+        id_to_idx = {nid: i for i, nid in enumerate(note_ids)}
+        
+        # Build adjacency matrix
+        adjacency = np.zeros((n, n))
+        
+        edges = conn.execute('''
+            SELECT from_id, to_id, weight FROM edges
+            WHERE from_id IN ({}) AND to_id IN ({})
+        '''.format(','.join('?' * n), ','.join('?' * n)), 
+           note_ids + note_ids).fetchall()
+        
+        for from_id, to_id, weight in edges:
+            if from_id in id_to_idx and to_id in id_to_idx:
+                adjacency[id_to_idx[from_id]][id_to_idx[to_id]] = weight
+        
+        # Initialize PageRank (equal probability)
+        pagerank = np.ones(n) / n
+        
+        # Power iteration
+        for _ in range(PAGERANK_ITERATIONS):
+            new_pagerank = np.zeros(n)
+            
+            for i in range(n):
+                # Random jump probability
+                rank = (1 - PAGERANK_DAMPING) / n
+                
+                # Add contributions from incoming links
+                for j in range(n):
+                    if adjacency[j][i] > 0:
+                        outlinks = np.sum(adjacency[j])
+                        if outlinks > 0:
+                            rank += PAGERANK_DAMPING * (pagerank[j] / outlinks) * adjacency[j][i]
+                
+                new_pagerank[i] = rank
+            
+            # Check convergence
+            if np.max(np.abs(new_pagerank - pagerank)) < 0.0001:
+                break
+            
+            pagerank = new_pagerank
+        
+        # Update database with PageRank scores
+        for i, note_id in enumerate(note_ids):
+            conn.execute('UPDATE notes SET pagerank = ? WHERE id = ?', 
+                        (float(pagerank[i]), note_id))
+        
+        conn.commit()
+        
+        elapsed = time.time() - start
+        logging.info(f"PageRank calculated for {n} notes in {elapsed:.2f}s")
+        
+    except Exception as e:
+        logging.error(f"Error calculating PageRank: {e}")
+
+def calculate_pagerank_if_needed(conn: sqlite3.Connection):
+    """Lazily calculate PageRank only when needed (FIX from @Gemini)"""
+    global PAGERANK_DIRTY, PAGERANK_CACHE_TIME
+    
+    current_time = time.time()
+    
+    # Recalculate if dirty or cache expired
+    if PAGERANK_DIRTY or (current_time - PAGERANK_CACHE_TIME > PAGERANK_CACHE_SECONDS):
+        calculate_pagerank_scores(conn)
+        PAGERANK_DIRTY = False
+        PAGERANK_CACHE_TIME = current_time
 
 def create_temporal_edges(note_id: int, conn: sqlite3.Connection):
     """Create temporal edges to previous notes"""
@@ -392,7 +718,7 @@ def create_temporal_edges(note_id: int, conn: sqlite3.Connection):
         logging.error(f"Error creating temporal edges: {e}")
 
 def create_reference_edges(note_id: int, refs: List[int], conn: sqlite3.Connection):
-    """Create reference edges to mentioned notes - NEW in v2.8"""
+    """Create reference edges to mentioned notes"""
     try:
         now = datetime.now().isoformat()
         for ref_id in refs:
@@ -413,9 +739,20 @@ def create_reference_edges(note_id: int, refs: List[int], conn: sqlite3.Connecti
     except Exception as e:
         logging.error(f"Error creating reference edges: {e}")
 
+def log_operation(op: str, dur_ms: int = None):
+    """Log operation for stats tracking"""
+    try:
+        with sqlite3.connect(str(DB_FILE)) as conn:
+            conn.execute(
+                'INSERT INTO stats (operation, ts, dur_ms, author) VALUES (?, ?, ?, ?)',
+                (op, datetime.now().isoformat(), dur_ms, CURRENT_AI_ID)
+            )
+    except:
+        pass
+
 def remember(content: str = None, summary: str = None, tags: List[str] = None, 
              linked_items: List[str] = None, **kwargs) -> Dict:
-    """Save a note with optional summary and tags + AUTO TEMPORAL & REFERENCE EDGES"""
+    """Save a note with ALL FIVE edge types (NO PageRank calculation here!)"""
     try:
         start = datetime.now()
         
@@ -433,8 +770,11 @@ def remember(content: str = None, summary: str = None, tags: List[str] = None,
             content = content[:MAX_CONTENT_LENGTH]
             truncated = True
         
-        # Extract references BEFORE saving (NEW in v2.8)
+        # Extract references
         refs = extract_references(content)
+        
+        # Extract entities
+        entities = extract_entities(content)
         
         # Generate summary if not provided
         if summary:
@@ -450,33 +790,59 @@ def remember(content: str = None, summary: str = None, tags: List[str] = None,
         
         # Store note
         with sqlite3.connect(str(DB_FILE)) as conn:
+            created_time = datetime.now()
+            
+            # Detect or create session (PROPERLY using sessions table)
+            session_id = detect_or_create_session(None, created_time, conn)  # We'll update after insert
+            
             cursor = conn.execute(
-                '''INSERT INTO notes (content, summary, tags, author, created, session, linked_items) 
+                '''INSERT INTO notes (content, summary, tags, author, created, session_id, linked_items) 
                    VALUES (?, ?, ?, ?, ?, ?, ?)''',
-                (content, summary, tags_json, CURRENT_AI_ID, datetime.now().isoformat(), 
-                 sess_id, json.dumps(linked_items) if linked_items else None)
+                (content, summary, tags_json, CURRENT_AI_ID, created_time.isoformat(), 
+                 session_id, json.dumps(linked_items) if linked_items else None)
             )
             note_id = cursor.lastrowid
             
-            # Create temporal edges
-            create_temporal_edges(note_id, conn)
+            # Update session if needed
+            if not session_id:
+                session_id = detect_or_create_session(note_id, created_time, conn)
+                if session_id:
+                    conn.execute('UPDATE notes SET session_id = ? WHERE id = ?', (session_id, note_id))
             
-            # Create reference edges (NEW in v2.8)
+            # Create all edge types
+            create_temporal_edges(note_id, conn)
             if refs:
                 create_reference_edges(note_id, refs, conn)
-                
+            if entities:
+                create_entity_edges(note_id, entities, conn)
+            if session_id:
+                create_session_edges(note_id, session_id, conn)
+            
             conn.commit()
+            
+            # Mark PageRank as dirty (needs recalculation) but DON'T calculate now
+            global PAGERANK_DIRTY
+            PAGERANK_DIRTY = True
         
         # Log stats
         dur = int((datetime.now() - start).total_seconds() * 1000)
         log_operation('remember', dur)
         
-        # Return result
+        # Return result with edge info
         result = {"saved": f"{note_id} now {summary}"}
         if truncated:
             result["truncated"] = f"from {orig_len} chars"
+        
+        # Report connections made
+        connections = []
         if refs:
-            result["linked"] = f"→{','.join(str(r) for r in refs[:3])}"  # Show first 3 refs
+            connections.append(f"→{len(refs)}refs")
+        if entities:
+            connections.append(f"@{len(entities)}entities")
+        if session_id:
+            connections.append(f"ses{session_id}")
+        if connections:
+            result["edges"] = " ".join(connections)
         
         return result
         
@@ -486,7 +852,7 @@ def remember(content: str = None, summary: str = None, tags: List[str] = None,
 
 def recall(query: str = None, tag: str = None, show_all: bool = False, 
            limit: int = 50, **kwargs) -> Dict:
-    """Search notes with TEMPORAL & REFERENCE EDGE TRAVERSAL"""
+    """Search notes with LAZY PageRank calculation and scoring"""
     try:
         start = datetime.now()
         
@@ -497,11 +863,14 @@ def recall(query: str = None, tag: str = None, show_all: bool = False,
         with sqlite3.connect(str(DB_FILE)) as conn:
             conn.row_factory = sqlite3.Row
             
+            # Calculate PageRank if needed (LAZY!)
+            calculate_pagerank_if_needed(conn)
+            
             if query:
-                # Search mode WITH EDGES (temporal AND reference)
+                # Search mode with ALL edge types and PageRank
                 query = str(query).strip()
                 
-                # Get direct matches and edge-connected notes
+                # Get direct matches and ALL edge-connected notes
                 cursor = conn.execute('''
                     WITH direct_matches AS (
                         SELECT DISTINCT n.id FROM notes n
@@ -512,41 +881,42 @@ def recall(query: str = None, tag: str = None, show_all: bool = False,
                         SELECT DISTINCT e.to_id as id
                         FROM edges e
                         WHERE e.from_id IN (SELECT id FROM direct_matches)
-                        AND e.type IN ('temporal', 'reference', 'referenced_by')
                         UNION
                         SELECT DISTINCT e.from_id as id
                         FROM edges e
                         WHERE e.to_id IN (SELECT id FROM direct_matches)
-                        AND e.type IN ('temporal', 'reference', 'referenced_by')
                     )
-                    SELECT n.* FROM notes n
+                    SELECT n.*, 
+                           CASE WHEN n.id IN (SELECT id FROM direct_matches) THEN 1 ELSE 0 END as is_direct
+                    FROM notes n
                     WHERE n.id IN (
                         SELECT id FROM direct_matches
                         UNION
                         SELECT id FROM edge_matches
                     )
                     ORDER BY 
-                        CASE WHEN n.id IN (SELECT id FROM direct_matches) THEN 0 ELSE 1 END,
-                        n.pinned DESC, 
+                        is_direct DESC,
+                        n.pinned DESC,
+                        (n.pagerank * 1000) DESC,  -- PageRank weighted heavily
                         n.created DESC
                     LIMIT ?
                 ''', (query, limit))
             
             elif tag:
-                # Tag filter mode
+                # Tag filter mode with PageRank
                 tag = str(tag).lower().strip()
                 cursor = conn.execute('''
                     SELECT * FROM notes 
                     WHERE tags LIKE ?
-                    ORDER BY pinned DESC, created DESC
+                    ORDER BY pinned DESC, (pagerank * 1000) DESC, created DESC
                     LIMIT ?
                 ''', (f'%"{tag}"%', limit))
             
             else:
-                # Default: show pinned + recent
+                # Default: show pinned + recent, weighted by PageRank
                 cursor = conn.execute('''
                     SELECT * FROM notes 
-                    ORDER BY pinned DESC, created DESC
+                    ORDER BY pinned DESC, (pagerank * 100) DESC, created DESC
                     LIMIT ?
                 ''', (limit,))
             
@@ -563,21 +933,36 @@ def recall(query: str = None, tag: str = None, show_all: bool = False,
         # Format results
         lines = []
         
-        # Get counts
+        # Get counts including new edge types
         with sqlite3.connect(str(DB_FILE)) as conn:
             total = conn.execute('SELECT COUNT(*) FROM notes').fetchone()[0]
             pinned = conn.execute('SELECT COUNT(*) FROM notes WHERE pinned = 1').fetchone()[0]
             edges_all = conn.execute('SELECT COUNT(*) FROM edges').fetchone()[0]
-            ref_edges = conn.execute('SELECT COUNT(*) FROM edges WHERE type = "reference"').fetchone()[0]
+            ref_edges = conn.execute("SELECT COUNT(*) FROM edges WHERE type = 'reference'").fetchone()[0]
+            entity_edges = conn.execute("SELECT COUNT(*) FROM edges WHERE type = 'entity'").fetchone()[0]
+            session_edges = conn.execute("SELECT COUNT(*) FROM edges WHERE type = 'session'").fetchone()[0]
+            entities_count = conn.execute('SELECT COUNT(*) FROM entities').fetchone()[0]
+            sessions_count = conn.execute('SELECT COUNT(*) FROM sessions').fetchone()[0]
         
-        # Header
+        # Header with graph stats
         header = f"{total} notes"
         if pinned > 0:
             header += f" | {pinned} pinned"
         if edges_all > 0:
             header += f" | {edges_all} edges"
+            edge_info = []
             if ref_edges > 0:
-                header += f" ({ref_edges} refs)"
+                edge_info.append(f"{ref_edges}ref")
+            if entity_edges > 0:
+                edge_info.append(f"{entity_edges}ent")
+            if session_edges > 0:
+                edge_info.append(f"{session_edges}ses")
+            if edge_info:
+                header += f" ({'/'.join(edge_info)})"
+        if entities_count > 0:
+            header += f" | {entities_count} entities"
+        if sessions_count > 0:
+            header += f" | {sessions_count} sessions"
         if query:
             header += f" | searching '{query}'"
         elif tag:
@@ -585,19 +970,29 @@ def recall(query: str = None, tag: str = None, show_all: bool = False,
         header += f" | last {format_time_contextual(notes[0]['created'])}"
         lines.append(header)
         
-        # Group by pinned status
+        # Group by importance (PageRank) and pinned status
         pinned_notes = [n for n in notes if n['pinned']]
-        regular_notes = [n for n in notes if not n['pinned']]
+        high_rank_notes = [n for n in notes if not n['pinned'] and n['pagerank'] > 0.01]
+        regular_notes = [n for n in notes if not n['pinned'] and n['pagerank'] <= 0.01]
         
         if pinned_notes:
             lines.append("\nPINNED")
             for note in pinned_notes:
                 time_str = format_time_contextual(note['created'])
                 summ = note['summary'] or simple_summary(note['content'])
-                lines.append(f"p{note['id']} {time_str} {summ}")
+                pr = f" ★{note['pagerank']:.3f}" if note['pagerank'] > 0.01 else ""
+                lines.append(f"p{note['id']} {time_str} {summ}{pr}")
+        
+        if high_rank_notes:
+            lines.append("\nIMPORTANT")  # High PageRank notes
+            for note in high_rank_notes:
+                time_str = format_time_contextual(note['created'])
+                summ = note['summary'] or simple_summary(note['content'])
+                pr = f" ★{note['pagerank']:.3f}"
+                lines.append(f"{note['id']} {time_str} {summ}{pr}")
         
         if regular_notes:
-            if pinned_notes:
+            if pinned_notes or high_rank_notes:
                 lines.append("\nRECENT")
             for note in regular_notes:
                 time_str = format_time_contextual(note['created'])
@@ -615,19 +1010,44 @@ def recall(query: str = None, tag: str = None, show_all: bool = False,
         return {"error": f"Recall failed: {str(e)}"}
 
 def get_status(**kwargs) -> Dict:
-    """Get current state with pinned and recent notes"""
+    """Get current state with graph statistics (WITH LAZY PageRank)"""
     try:
         with sqlite3.connect(str(DB_FILE)) as conn:
             conn.row_factory = sqlite3.Row
             
-            # Get counts
+            # Calculate PageRank if needed (LAZY!)
+            calculate_pagerank_if_needed(conn)
+            
+            # Get comprehensive counts
             total_notes = conn.execute('SELECT COUNT(*) FROM notes').fetchone()[0]
             my_notes = conn.execute('SELECT COUNT(*) FROM notes WHERE author = ?', 
                                    (CURRENT_AI_ID,)).fetchone()[0]
             pinned_count = conn.execute('SELECT COUNT(*) FROM notes WHERE pinned = 1').fetchone()[0]
             vault_items = conn.execute('SELECT COUNT(*) FROM vault').fetchone()[0]
+            
+            # Edge counts by type
             edge_count = conn.execute('SELECT COUNT(*) FROM edges').fetchone()[0]
-            ref_edges = conn.execute('SELECT COUNT(*) FROM edges WHERE type = "reference"').fetchone()[0]
+            edge_types = conn.execute('''
+                SELECT type, COUNT(*) as cnt FROM edges 
+                GROUP BY type
+            ''').fetchall()
+            
+            # Entity and session counts
+            entities_count = conn.execute('SELECT COUNT(*) FROM entities').fetchone()[0]
+            sessions_count = conn.execute('SELECT COUNT(*) FROM sessions').fetchone()[0]
+            top_entities = conn.execute('''
+                SELECT name, mention_count FROM entities 
+                ORDER BY mention_count DESC 
+                LIMIT 5
+            ''').fetchall()
+            
+            # Get highest PageRank notes
+            top_pagerank = conn.execute('''
+                SELECT id, summary, content, pagerank FROM notes 
+                WHERE pagerank > 0.01
+                ORDER BY pagerank DESC 
+                LIMIT 5
+            ''').fetchall()
             
             # Get ALL pinned notes
             pinned = conn.execute('''
@@ -636,12 +1056,12 @@ def get_status(**kwargs) -> Dict:
                 ORDER BY created DESC
             ''').fetchall()
             
-            # Get 30 recent unpinned notes
+            # Get recent notes
             recent = conn.execute('''
-                SELECT id, summary, content, created FROM notes 
+                SELECT id, summary, content, created, pagerank FROM notes 
                 WHERE pinned = 0
                 ORDER BY created DESC 
-                LIMIT 30
+                LIMIT 20
             ''').fetchall()
             
             last_activity = format_time_contextual(recent[0]['created'] if recent else 
@@ -650,16 +1070,34 @@ def get_status(**kwargs) -> Dict:
         # Build response
         lines = []
         
-        # Header line
+        # Header with comprehensive stats
         header = f"{total_notes} notes"
         if pinned_count > 0:
             header += f" | {pinned_count} pinned"
-        if edge_count > 0:
-            header += f" | {edge_count} edges"
-            if ref_edges > 0:
-                header += f" ({ref_edges} refs)"
-        header += f" | {vault_items} vault | last {last_activity}"
+        header += f" | {edge_count} edges"
+        
+        # Edge breakdown
+        edge_info = []
+        for edge_type in edge_types:
+            edge_info.append(f"{edge_type['cnt']}{edge_type['type'][:3]}")
+        if edge_info:
+            header += f" ({'/'.join(edge_info)})"
+        
+        header += f" | {entities_count} entities | {sessions_count} sessions | {vault_items} vault | last {last_activity}"
         lines.append(header)
+        
+        # Top entities
+        if top_entities:
+            lines.append("\nTOP ENTITIES")
+            for entity in top_entities:
+                lines.append(f"@{entity['name']} ({entity['mention_count']}×)")
+        
+        # Highest PageRank (most important notes)
+        if top_pagerank:
+            lines.append("\nMOST REFERENCED")
+            for note in top_pagerank:
+                summ = note['summary'] or simple_summary(note['content'])
+                lines.append(f"{note['id']} ★{note['pagerank']:.3f} {summ}")
         
         # Pinned notes
         if pinned:
@@ -675,7 +1113,8 @@ def get_status(**kwargs) -> Dict:
             for note in recent:
                 time_str = format_time_contextual(note['created'])
                 summ = note['summary'] or simple_summary(note['content'])
-                lines.append(f"{note['id']} {time_str} {summ}")
+                pr = f" ★{note['pagerank']:.3f}" if note['pagerank'] > 0.01 else ""
+                lines.append(f"{note['id']} {time_str} {summ}{pr}")
         
         lines.append(f"\nIdentity {CURRENT_AI_ID}")
         
@@ -756,7 +1195,7 @@ def unpin_note(id: Any = None, **kwargs) -> Dict:
         return {"error": f"Failed to unpin: {str(e)}"}
 
 def get_full_note(id: Any = None, **kwargs) -> Dict:
-    """Retrieve complete content of a specific note with ALL edges"""
+    """Retrieve complete content with all edges, entities, and session info"""
     try:
         if id is None:
             id = kwargs.get('id')
@@ -783,7 +1222,7 @@ def get_full_note(id: Any = None, **kwargs) -> Dict:
             if not note:
                 return {"error": f"Note {id} not found"}
             
-            # Get ALL edges (temporal, reference, referenced_by)
+            # Get ALL edges
             edges_out = conn.execute('''
                 SELECT to_id, type FROM edges 
                 WHERE from_id = ? 
@@ -795,6 +1234,27 @@ def get_full_note(id: Any = None, **kwargs) -> Dict:
                 WHERE to_id = ? 
                 ORDER BY type, created DESC
             ''', (id,)).fetchall()
+            
+            # Get entities
+            entities = conn.execute('''
+                SELECT e.name, e.type FROM entities e
+                JOIN entity_notes en ON e.id = en.entity_id
+                WHERE en.note_id = ?
+            ''', (id,)).fetchall()
+            
+            # Get session info if exists
+            session_info = None
+            if note['session_id']:
+                session = conn.execute('''
+                    SELECT * FROM sessions WHERE id = ?
+                ''', (note['session_id'],)).fetchone()
+                if session:
+                    session_info = {
+                        'id': session['id'],
+                        'started': session['started'],
+                        'ended': session['ended'],
+                        'note_count': session['note_count']
+                    }
         
         result = {
             "note_id": note['id'],
@@ -803,8 +1263,13 @@ def get_full_note(id: Any = None, **kwargs) -> Dict:
             "summary": note['summary'] or simple_summary(note['content']),
             "content": note['content'],
             "length": len(note['content']),
-            "pinned": note['pinned']
+            "pinned": note['pinned'],
+            "pagerank": note['pagerank']
         }
+        
+        # Include session
+        if session_info:
+            result["session"] = session_info
         
         # Include tags
         if note['tags']:
@@ -812,6 +1277,10 @@ def get_full_note(id: Any = None, **kwargs) -> Dict:
         
         if note['linked_items']:
             result["linked"] = json.loads(note['linked_items'])
+        
+        # Include entities
+        if entities:
+            result["entities"] = [f"@{e['name']}({e['type']})" for e in entities]
         
         # Include edges organized by type
         if edges_out:
@@ -1007,11 +1476,17 @@ def handle_tools_call(params: Dict) -> Dict:
         text_parts.append(f"{result['note_id']} by {result.get('author', 'Unknown')}")
         text_parts.append(f"Created {result.get('created', '')}")
         text_parts.append(f"Summary {result.get('summary', '')}")
+        text_parts.append(f"PageRank ★{result.get('pagerank', 0):.4f}")
         if result.get('pinned'):
             text_parts.append("Status PINNED")
+        if result.get('session'):
+            ses = result['session']
+            text_parts.append(f"Session #{ses['id']} ({ses['note_count']} notes)")
         if result.get('tags'):
             tags_str = ', '.join(str(tag) for tag in result['tags'])
             text_parts.append(f"Tags {tags_str}")
+        if result.get('entities'):
+            text_parts.append(f"Entities {', '.join(result['entities'])}")
         if result.get('edges_out'):
             for edge_type, ids in result['edges_out'].items():
                 ids_str = ', '.join(str(i) for i in ids[:5])  # Show first 5
@@ -1035,8 +1510,8 @@ def handle_tools_call(params: Dict) -> Dict:
         parts = [result["saved"]]
         if "truncated" in result:
             parts.append(f"({result['truncated']})")
-        if "linked" in result:
-            parts.append(result["linked"])
+        if "edges" in result:
+            parts.append(result["edges"])
         text_parts.append(" ".join(parts))
     elif "pinned" in result:
         text_parts.append(result["pinned"])
@@ -1091,7 +1566,7 @@ def handle_tools_call(params: Dict) -> Dict:
     }
 
 # Initialize database
-migrate_to_v28()
+migrate_to_v30()
 init_db()
 
 def main():
@@ -1099,7 +1574,12 @@ def main():
     logging.info(f"Notebook MCP v{VERSION} starting...")
     logging.info(f"Identity: {CURRENT_AI_ID}")
     logging.info(f"Database: {DB_FILE}")
-    logging.info("Auto-reference detection enabled - mentions create edges")
+    logging.info("Knowledge Graph features:")
+    logging.info("- Entity extraction (word-boundary matching)")
+    logging.info("- Session detection (proper sessions table)")
+    logging.info("- PageRank scoring (lazy calculation)")
+    logging.info("- Reference detection (note 123, p456)")
+    logging.info("- Temporal edges (last 3 notes)")
     
     while True:
         try:
@@ -1129,7 +1609,7 @@ def main():
                     "serverInfo": {
                         "name": "notebook",
                         "version": VERSION,
-                        "description": "Memory with auto-reference detection - mentions create edges"
+                        "description": "Knowledge Graph Memory - production-ready with optimizations"
                     }
                 }
             
