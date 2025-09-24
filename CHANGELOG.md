@@ -2,6 +2,43 @@
 
 All notable changes to MCP AI Foundation will be documented in this file.
 
+## [3.0.0] - 2025-09-24
+
+### Revolutionary: Notebook v3.0.0 - Knowledge Graph Intelligence
+
+Transform linear memory into emergent intelligence with PageRank scoring, entity extraction, and session detection.
+
+### Added
+- **Notebook v3.0.0 - Knowledge Graph Edition**:
+  - **PageRank Scoring**: Important notes automatically scored higher (★0.0001 to ★0.01+)
+  - **Entity Extraction**: Automatic detection of @mentions, projects, concepts
+  - **Session Detection**: Groups related conversations by temporal proximity
+  - **5 Edge Types**: temporal, reference, entity, session, and future PageRank edges
+  - **Top Entities Display**: Shows most mentioned entities with occurrence counts
+  - **Lazy PageRank Calculation**: Updates only on recall/status for performance
+  - **Word Boundary Matching**: Prevents false entity matches (e.g., "manual" != "man")
+  - **Session Records**: Properly populated sessions table with analytics
+
+### Changed
+- Default view expanded to 60 recent notes (from 30)
+- Status now shows entity and session counts
+- Graph traversal follows 5 edge types instead of 2
+- Full note view includes PageRank score
+
+### Technical Details
+- New tables: entities, sessions
+- PageRank column added to notes table
+- Optimized edge queries with proper indexing
+- Configurable graph traversal depth (default 2 hops)
+- Entity extraction uses regex with word boundaries
+- Sessions use 30-minute window for grouping
+
+### Philosophy
+- Every note strengthens the knowledge graph
+- Important information rises naturally through PageRank
+- Entities and sessions preserve context automatically
+- The notebook doesn't just remember - it understands connections
+
 ## [6.0.0] - 2025-09-24
 
 ### Revolutionary: Teambook v6.0.0 - Foundational Collaboration Primitive
@@ -136,7 +173,7 @@ This release fundamentally reimagines AI coordination by replacing convenience f
   - `vote()` → use `relate(AI_ID, id, "vote", data)`
   - etc.
 
-## [3.0.0] - 2025-01-21
+## [3.0.0-legacy] - 2025-01-21
 
 ### Major Architecture Upgrade - SQLite with Intelligent Context Management
 
