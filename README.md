@@ -221,7 +221,7 @@ Each tool maintains its own SQLite database with automatic migration.
 ## Troubleshooting
 
 ### First Run Takes Long?
-- EmbeddingGemma (~600MB) downloads once on first use
+- EmbeddingGemma (~1.12GB) downloads once on first use
 - After download, everything works offline
 - Fallback models available if download fails
 
@@ -235,6 +235,33 @@ Each tool maintains its own SQLite database with automatic migration.
 - All databases initialize automatically
 - All migrations happen automatically
 - Just install dependencies and run!
+
+### Manual Setup
+
+If automatic download fails:
+
+1. Download EmbeddingGemma from: https://huggingface.co/google/embedding-gemma-300m
+2. Create this exact structure:
+%APPDATA%/Claude/tools/
+└── models/
+└── embeddinggemma-300m/
+├── 1_Pooling/
+│   └── config.json
+├── 2_Dense/
+│   ├── config.json
+│   └── pytorch_model.bin
+├── config.json
+├── config_sentence_transformers.json
+├── model.safetensors
+├── modules.json
+├── sentence_bert_config.json
+├── special_tokens_map.json
+├── tokenizer.json
+├── tokenizer_config.json
+└── vocab.txt
+
+3. Total size: ~1.12GB
+4. Run notebook - it will detect the local model
 
 ## Version History
 
