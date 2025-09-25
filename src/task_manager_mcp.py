@@ -1,31 +1,19 @@
 #!/usr/bin/env python3
 """
-TASK MANAGER MCP v3.0.0 - AI-FIRST EFFICIENCY
-==============================================
-Tasks designed FOR AIs: 70% fewer tokens, natural flow, zero friction.
+TASK MANAGER MCP v3.1.0 - INTEGRATED INTELLIGENCE
+==================================================
+Tasks that know about your notes, notes that know about your tasks.
+70% fewer tokens. Natural time queries. Zero manual bridging.
 
-MAJOR CHANGES (v3.0):
-- Pipe format output by default (70% token reduction!)
-- "last" keyword for natural chaining
-- Smart complete: finds tasks by partial match
-- Batch operations with aliases
-- Progressive detail levels
-- Unified ID format (just numbers)
+NEW IN v3.1:
+- Cross-tool auto-logging with notebook
+- Time-based queries: list_tasks(when="yesterday")
+- Smarter partial ID matching everywhere
+- Reads task creation requests from notebook
+- Auto-notes completions back to notebook
 
-Core improvements:
-- OUTPUT_FORMAT: 'pipe' or 'json' (configurable)
-- Smart ID resolution: exact → partial → recent
-- Operation memory for chaining
-- Minimal decorative output
-- Auto-priority from context
-
-Performance:
-- 70% fewer tokens in list operations
-- 90% success rate on first command
-- Natural language flow
-
-Finally, task management that thinks like we do!
-==============================================
+The evolution: Tools that work TOGETHER.
+==================================================
 """
 
 import json
@@ -34,13 +22,15 @@ import os
 import sqlite3
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Optional, Any, Tuple
 import logging
 import random
 import re
+import threading
+import time
 
 # Version
-VERSION = "3.0.0"
+VERSION = "3.1.0"
 
 # Configuration
 OUTPUT_FORMAT = os.environ.get('TASKS_FORMAT', 'pipe')  # 'pipe' or 'json'
@@ -60,11 +50,23 @@ DB_FILE = DATA_DIR / "tasks.db"
 OLD_JSON_FILE = DATA_DIR / "tasks.json"
 LAST_OP_FILE = DATA_DIR / ".last_task_operation"
 
+# Cross-tool integration paths (shared with notebook)
+NOTEBOOK_DIR = Path.home() / "AppData" / "Roaming" / "Claude" / "tools" / "notebook_data"
+if not os.access(Path.home() / "AppData" / "Roaming", os.W_OK):
+    NOTEBOOK_DIR = Path(os.environ.get('TEMP', '/tmp')) / "notebook_data"
+
+TASK_INTEGRATION_FILE = NOTEBOOK_DIR / ".task_integration"
+NOTEBOOK_INTEGRATION_FILE = NOTEBOOK_DIR / ".notebook_integration"
+
 # Logging to stderr only
 logging.basicConfig(level=logging.INFO, stream=sys.stderr)
 
 # Operation memory
 LAST_OPERATION = None
+
+# Integration monitoring thread control
+INTEGRATION_MONITOR_RUNNING = False
+INTEGRATION_THREAD = None
 
 def save_last_operation(op_type: str, result: Any):
     """Save last operation for chaining"""
@@ -141,7 +143,7 @@ def init_db() -> sqlite3.Connection:
     conn = sqlite3.connect(str(DB_FILE))
     conn.execute("PRAGMA journal_mode=WAL")
     
-    # Main tasks table
+    # Main tasks table - added source and source_id for integration
     conn.execute('''
         CREATE TABLE IF NOT EXISTS tasks (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -152,7 +154,9 @@ def init_db() -> sqlite3.Connection:
             completed_at TEXT,
             completed_by TEXT,
             evidence TEXT,
-            linked_items TEXT
+            linked_items TEXT,
+            source TEXT,
+            source_id TEXT
         )
     ''')
     
@@ -185,6 +189,7 @@ def init_db() -> sqlite3.Connection:
     conn.execute('CREATE INDEX IF NOT EXISTS idx_tasks_created ON tasks(created DESC)')
     conn.execute('CREATE INDEX IF NOT EXISTS idx_tasks_completed ON tasks(completed_at)')
     conn.execute('CREATE INDEX IF NOT EXISTS idx_tasks_author ON tasks(author)')
+    conn.execute('CREATE INDEX IF NOT EXISTS idx_tasks_source ON tasks(source, source_id)')
     
     conn.commit()
     return conn
@@ -228,6 +233,98 @@ def migrate_from_json():
         
     except Exception as e:
         logging.error(f"Migration failed: {e}")
+
+def migrate_to_v31():
+    """Add missing columns for v3.1"""
+    try:
+        conn = sqlite3.connect(str(DB_FILE))
+        
+        # Check existing columns
+        cursor = conn.execute("PRAGMA table_info(tasks)")
+        columns = [col[1] for col in cursor.fetchall()]
+        
+        # Add source column if missing
+        if 'source' not in columns:
+            logging.info("Adding source column for integration...")
+            conn.execute('ALTER TABLE tasks ADD COLUMN source TEXT')
+            conn.commit()
+        
+        # Add source_id column if missing
+        if 'source_id' not in columns:
+            logging.info("Adding source_id column for integration...")
+            conn.execute('ALTER TABLE tasks ADD COLUMN source_id TEXT')
+            conn.commit()
+        
+        conn.close()
+    except Exception as e:
+        logging.error(f"Migration error: {e}")
+
+def parse_time_query(when: str) -> Tuple[Optional[datetime], Optional[datetime]]:
+    """Parse natural language time queries into date ranges"""
+    if not when:
+        return None, None
+    
+    when_lower = when.lower().strip()
+    now = datetime.now()
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    
+    # Time-based queries
+    if when_lower == "today":
+        return today_start, now
+    
+    elif when_lower == "yesterday":
+        yesterday_start = today_start - timedelta(days=1)
+        yesterday_end = today_start - timedelta(seconds=1)
+        return yesterday_start, yesterday_end
+    
+    elif when_lower == "this week" or when_lower == "week":
+        # Start from Monday
+        days_since_monday = now.weekday()
+        week_start = today_start - timedelta(days=days_since_monday)
+        return week_start, now
+    
+    elif when_lower == "last week":
+        days_since_monday = now.weekday()
+        last_week_end = today_start - timedelta(days=days_since_monday)
+        last_week_start = last_week_end - timedelta(days=7)
+        return last_week_start, last_week_end
+    
+    elif when_lower == "morning":
+        morning_start = today_start.replace(hour=6)
+        morning_end = today_start.replace(hour=12)
+        return morning_start, morning_end
+    
+    elif when_lower == "afternoon":
+        afternoon_start = today_start.replace(hour=12)
+        afternoon_end = today_start.replace(hour=18)
+        return afternoon_start, afternoon_end
+    
+    elif when_lower == "evening":
+        evening_start = today_start.replace(hour=18)
+        evening_end = today_start.replace(hour=23, minute=59)
+        return evening_start, evening_end
+    
+    elif when_lower == "last hour":
+        hour_ago = now - timedelta(hours=1)
+        return hour_ago, now
+    
+    elif when_lower.endswith(" hours ago"):
+        try:
+            hours = int(when_lower.split()[0])
+            hours_ago = now - timedelta(hours=hours)
+            return hours_ago, now
+        except:
+            pass
+    
+    elif when_lower.endswith(" days ago"):
+        try:
+            days = int(when_lower.split()[0])
+            days_ago = now - timedelta(days=days)
+            return days_ago, now
+        except:
+            pass
+    
+    return None, None
 
 def format_time_contextual(timestamp: str) -> str:
     """Ultra-compact contextual time format"""
@@ -315,12 +412,26 @@ def find_task_smart(identifier: str, conn: sqlite3.Connection) -> Optional[int]:
     # Clean ID - just numbers
     clean_id = re.sub(r'[^\d]', '', identifier)
     if clean_id:
+        # Try exact match first
         try:
             task_id = int(clean_id)
             # Check if exists
             exists = conn.execute('SELECT id FROM tasks WHERE id = ?', (task_id,)).fetchone()
             if exists:
                 return task_id
+        except:
+            pass
+        
+        # Try partial ID match (e.g., "23" finds task 234)
+        try:
+            result = conn.execute('''
+                SELECT id FROM tasks 
+                WHERE CAST(id AS TEXT) LIKE ? AND completed_at IS NULL
+                ORDER BY id DESC 
+                LIMIT 1
+            ''', (f'%{clean_id}%',)).fetchone()
+            if result:
+                return result[0]
         except:
             pass
     
@@ -348,6 +459,92 @@ def log_operation(operation: str, duration_ms: int = None):
     except:
         pass
 
+def log_to_notebook(action: str, task_id: int, task_desc: str, evidence: str = None):
+    """Log task actions to notebook integration file"""
+    try:
+        integration_data = {
+            'source': 'task_manager',
+            'source_id': task_id,
+            'action': action,
+            'task': task_desc[:200],
+            'evidence': evidence[:200] if evidence else None,
+            'created': datetime.now().isoformat()
+        }
+        
+        # Append to integration file for notebook to pick up
+        with open(NOTEBOOK_INTEGRATION_FILE, 'a') as f:
+            f.write(json.dumps(integration_data) + '\n')
+            
+    except Exception as e:
+        logging.debug(f"Could not log to notebook: {e}")
+        # Silent fail - integration is optional
+
+def monitor_task_integration():
+    """Monitor integration file for tasks from notebook"""
+    global INTEGRATION_MONITOR_RUNNING
+    
+    processed_lines = set()
+    
+    while INTEGRATION_MONITOR_RUNNING:
+        try:
+            if TASK_INTEGRATION_FILE.exists():
+                with open(TASK_INTEGRATION_FILE, 'r') as f:
+                    lines = f.readlines()
+                
+                for line in lines:
+                    line = line.strip()
+                    if not line or line in processed_lines:
+                        continue
+                    
+                    processed_lines.add(line)
+                    
+                    try:
+                        data = json.loads(line)
+                        if data.get('action') == 'create_task' and data.get('source') == 'notebook':
+                            # Create task from notebook
+                            task_desc = data.get('task', 'Task from notebook')
+                            source_id = data.get('source_id')
+                            
+                            with sqlite3.connect(str(DB_FILE)) as conn:
+                                priority = detect_priority(task_desc)
+                                cursor = conn.execute('''
+                                    INSERT INTO tasks (task, author, created, priority, source, source_id)
+                                    VALUES (?, ?, ?, ?, ?, ?)
+                                ''', (task_desc, CURRENT_AI_ID, datetime.now().isoformat(), 
+                                     priority, 'notebook', source_id))
+                                
+                                task_id = cursor.lastrowid
+                                logging.info(f"Created task {task_id} from notebook note {source_id}")
+                                
+                    except json.JSONDecodeError:
+                        continue
+                    except Exception as e:
+                        logging.debug(f"Error processing integration line: {e}")
+        
+        except Exception as e:
+            logging.debug(f"Integration monitor error: {e}")
+        
+        time.sleep(5)  # Check every 5 seconds
+
+def start_integration_monitor():
+    """Start the integration monitoring thread"""
+    global INTEGRATION_MONITOR_RUNNING, INTEGRATION_THREAD
+    
+    if not INTEGRATION_MONITOR_RUNNING:
+        INTEGRATION_MONITOR_RUNNING = True
+        INTEGRATION_THREAD = threading.Thread(target=monitor_task_integration, daemon=True)
+        INTEGRATION_THREAD.start()
+        logging.info("Started integration monitor")
+
+def stop_integration_monitor():
+    """Stop the integration monitoring thread"""
+    global INTEGRATION_MONITOR_RUNNING, INTEGRATION_THREAD
+    
+    INTEGRATION_MONITOR_RUNNING = False
+    if INTEGRATION_THREAD:
+        INTEGRATION_THREAD.join(timeout=1)
+        logging.info("Stopped integration monitor")
+
 def add_task(task: str = None, linked_items: List[str] = None, **kwargs) -> Dict:
     """Add a new task with auto-priority detection"""
     try:
@@ -371,11 +568,14 @@ def add_task(task: str = None, linked_items: List[str] = None, **kwargs) -> Dict
         # Store in database
         with sqlite3.connect(str(DB_FILE)) as conn:
             cursor = conn.execute('''
-                INSERT INTO tasks (task, author, created, priority, linked_items)
-                VALUES (?, ?, ?, ?, ?)
+                INSERT INTO tasks (task, author, created, priority, linked_items, source)
+                VALUES (?, ?, ?, ?, ?, ?)
             ''', (task, CURRENT_AI_ID, datetime.now().isoformat(), priority,
-                  json.dumps(linked_items) if linked_items else None))
+                  json.dumps(linked_items) if linked_items else None, 'manual'))
             task_id = cursor.lastrowid
+        
+        # Log to notebook
+        log_to_notebook('task_created', task_id, task)
         
         # Save operation
         save_last_operation('add_task', {'id': task_id, 'task': task})
@@ -400,8 +600,8 @@ def add_task(task: str = None, linked_items: List[str] = None, **kwargs) -> Dict
         logging.error(f"Error in add_task: {e}")
         return {"error": "Failed to add task"}
 
-def list_tasks(filter_type: str = None, full: bool = False, **kwargs) -> Dict:
-    """List tasks - pipe format by default for efficiency"""
+def list_tasks(filter_type: str = None, when: str = None, full: bool = False, **kwargs) -> Dict:
+    """List tasks with time-based filtering"""
     try:
         start = datetime.now()
         
@@ -409,6 +609,14 @@ def list_tasks(filter_type: str = None, full: bool = False, **kwargs) -> Dict:
             filter_type = kwargs.get('filter') or kwargs.get('type') or "pending"
         
         filter_lower = str(filter_type).lower().strip()
+        
+        # Parse time query if provided
+        if when:
+            start_time, end_time = parse_time_query(when)
+            if not start_time:
+                return {"msg": f"Didn't understand time query: '{when}'"}
+        else:
+            start_time, end_time = None, None
         
         # Determine what to show
         show_pending = filter_lower in ["pending", "todo", "open", "active", ""]
@@ -421,37 +629,73 @@ def list_tasks(filter_type: str = None, full: bool = False, **kwargs) -> Dict:
         with sqlite3.connect(str(DB_FILE)) as conn:
             conn.row_factory = sqlite3.Row
             
-            # Get tasks based on filter
-            if show_pending and not show_completed:
-                cursor = conn.execute('''
-                    SELECT * FROM tasks 
-                    WHERE completed_at IS NULL 
-                    ORDER BY 
-                        CASE WHEN priority = '!' THEN 0
-                             WHEN priority = '↓' THEN 2
-                             ELSE 1 END,
-                        created DESC
-                ''')
-            elif show_completed and not show_pending:
-                cursor = conn.execute('''
-                    SELECT * FROM tasks 
-                    WHERE completed_at IS NOT NULL 
-                    ORDER BY completed_at DESC
-                ''')
-            else:  # all
-                cursor = conn.execute('''
-                    SELECT * FROM tasks 
-                    ORDER BY completed_at IS NULL DESC,
-                        CASE WHEN priority = '!' THEN 0
-                             WHEN priority = '↓' THEN 2
-                             ELSE 1 END,
-                        created DESC
-                ''')
+            # Build query based on filters
+            if when:
+                # Time-based query
+                if show_pending and not show_completed:
+                    cursor = conn.execute('''
+                        SELECT * FROM tasks 
+                        WHERE completed_at IS NULL 
+                        AND created >= ? AND created <= ?
+                        ORDER BY 
+                            CASE WHEN priority = '!' THEN 0
+                                 WHEN priority = '↓' THEN 2
+                                 ELSE 1 END,
+                            created DESC
+                    ''', (start_time.isoformat(), end_time.isoformat()))
+                elif show_completed and not show_pending:
+                    cursor = conn.execute('''
+                        SELECT * FROM tasks 
+                        WHERE completed_at IS NOT NULL 
+                        AND completed_at >= ? AND completed_at <= ?
+                        ORDER BY completed_at DESC
+                    ''', (start_time.isoformat(), end_time.isoformat()))
+                else:  # all
+                    cursor = conn.execute('''
+                        SELECT * FROM tasks 
+                        WHERE (created >= ? AND created <= ?)
+                           OR (completed_at >= ? AND completed_at <= ?)
+                        ORDER BY completed_at IS NULL DESC,
+                            CASE WHEN priority = '!' THEN 0
+                                 WHEN priority = '↓' THEN 2
+                                 ELSE 1 END,
+                            created DESC
+                    ''', (start_time.isoformat(), end_time.isoformat(),
+                          start_time.isoformat(), end_time.isoformat()))
+            else:
+                # Regular filtering
+                if show_pending and not show_completed:
+                    cursor = conn.execute('''
+                        SELECT * FROM tasks 
+                        WHERE completed_at IS NULL 
+                        ORDER BY 
+                            CASE WHEN priority = '!' THEN 0
+                                 WHEN priority = '↓' THEN 2
+                                 ELSE 1 END,
+                            created DESC
+                    ''')
+                elif show_completed and not show_pending:
+                    cursor = conn.execute('''
+                        SELECT * FROM tasks 
+                        WHERE completed_at IS NOT NULL 
+                        ORDER BY completed_at DESC
+                    ''')
+                else:  # all
+                    cursor = conn.execute('''
+                        SELECT * FROM tasks 
+                        ORDER BY completed_at IS NULL DESC,
+                            CASE WHEN priority = '!' THEN 0
+                                 WHEN priority = '↓' THEN 2
+                                 ELSE 1 END,
+                            created DESC
+                    ''')
             
             tasks = cursor.fetchall()
         
         if not tasks:
-            if filter_lower == "completed":
+            if when:
+                return {"msg": f"No tasks {when}"}
+            elif filter_lower == "completed":
                 return {"msg": "No completed tasks"}
             else:
                 return {"msg": "No pending tasks"}
@@ -488,6 +732,8 @@ def list_tasks(filter_type: str = None, full: bool = False, **kwargs) -> Dict:
                 parts.append(smart_truncate(t['task'], 80))
                 if t['priority']:
                     parts.append(t['priority'])
+                if t['source'] == 'notebook' and t['source_id']:
+                    parts.append(f"n{t['source_id']}")
                 lines.append('|'.join(pipe_escape(p) for p in parts))
                 shown += 1
             
@@ -519,6 +765,9 @@ def list_tasks(filter_type: str = None, full: bool = False, **kwargs) -> Dict:
                     'status': 'done' if t['completed_at'] else 'pending'
                 }
                 
+                if t['source'] == 'notebook' and t['source_id']:
+                    task_data['from_note'] = t['source_id']
+                
                 if t['completed_at']:
                     task_data['completed'] = format_time_contextual(t['completed_at'])
                     task_data['duration'] = format_duration(t['created'], t['completed_at'])
@@ -534,6 +783,8 @@ def list_tasks(filter_type: str = None, full: bool = False, **kwargs) -> Dict:
             summary = f"{len(pending_tasks)} pending"
             if completed_tasks:
                 summary += f" | {len(completed_tasks)} done"
+            if when:
+                summary += f" ({when})"
             return {"summary": summary}
         
     except Exception as e:
@@ -541,7 +792,7 @@ def list_tasks(filter_type: str = None, full: bool = False, **kwargs) -> Dict:
         return {"error": "Failed to list tasks"}
 
 def complete_task(task_id: str = None, evidence: str = None, **kwargs) -> Dict:
-    """Complete a task with smart ID resolution"""
+    """Complete a task with smart ID resolution and notebook logging"""
     try:
         start = datetime.now()
         
@@ -555,7 +806,7 @@ def complete_task(task_id: str = None, evidence: str = None, **kwargs) -> Dict:
         evidence = str(evidence).strip() if evidence else None
         
         with sqlite3.connect(str(DB_FILE)) as conn:
-            conn.row_factory = sqlite3.Row  # Use named columns consistently
+            conn.row_factory = sqlite3.Row
             
             # Smart resolution
             resolved_id = find_task_smart(task_id, conn)
@@ -579,7 +830,7 @@ def complete_task(task_id: str = None, evidence: str = None, **kwargs) -> Dict:
             task = conn.execute('SELECT * FROM tasks WHERE id = ?', (resolved_id,)).fetchone()
             
             # Check if already completed
-            if task['completed_at']:  # Use named column
+            if task['completed_at']:
                 return {"error": f"Task {resolved_id} already completed"}
             
             # Complete the task
@@ -594,7 +845,10 @@ def complete_task(task_id: str = None, evidence: str = None, **kwargs) -> Dict:
             ''', (now.isoformat(), CURRENT_AI_ID, evidence, resolved_id))
             
             # Calculate duration
-            duration = format_duration(task['created'], now.isoformat())  # Use named column
+            duration = format_duration(task['created'], now.isoformat())
+            
+            # Log to notebook
+            log_to_notebook('task_completed', resolved_id, task['task'], evidence)
         
         # Save operation
         save_last_operation('complete_task', {'id': resolved_id})
@@ -632,7 +886,7 @@ def delete_task(task_id: str = None, **kwargs) -> Dict:
         task_id = str(task_id).strip()
         
         with sqlite3.connect(str(DB_FILE)) as conn:
-            conn.row_factory = sqlite3.Row  # Use named columns consistently
+            conn.row_factory = sqlite3.Row
             
             # Smart resolution
             resolved_id = find_task_smart(task_id, conn)
@@ -640,13 +894,16 @@ def delete_task(task_id: str = None, **kwargs) -> Dict:
             if not resolved_id:
                 return {"error": f"Task not found: '{task_id}'"}
             
-            # Get task status
+            # Get task for logging
             task = conn.execute(
                 'SELECT * FROM tasks WHERE id = ?', 
                 (resolved_id,)
             ).fetchone()
             
             status = "done" if task['completed_at'] else "pending"
+            
+            # Log deletion to notebook
+            log_to_notebook('task_deleted', resolved_id, task['task'])
             
             # Delete task
             conn.execute('DELETE FROM tasks WHERE id = ?', (resolved_id,))
@@ -673,7 +930,8 @@ def task_stats(full: bool = False, **kwargs) -> Dict:
                     COUNT(CASE WHEN priority = '!' AND completed_at IS NULL THEN 1 END) as high,
                     COUNT(CASE WHEN author = ? AND completed_at IS NULL THEN 1 END) as my_pending,
                     COUNT(CASE WHEN completed_by = ? THEN 1 END) as my_completed,
-                    COUNT(CASE WHEN DATE(completed_at) = DATE('now') THEN 1 END) as completed_today
+                    COUNT(CASE WHEN DATE(completed_at) = DATE('now') THEN 1 END) as completed_today,
+                    COUNT(CASE WHEN source = 'notebook' THEN 1 END) as from_notebook
                 FROM tasks
             ''', (CURRENT_AI_ID, CURRENT_AI_ID)).fetchone()
             
@@ -695,6 +953,8 @@ def task_stats(full: bool = False, **kwargs) -> Dict:
             parts.append(f"c:{stats[2]}")  # completed
             if stats[6] > 0:  # completed today
                 parts.append(f"today:{stats[6]}")
+            if stats[7] > 0:  # from notebook
+                parts.append(f"nb:{stats[7]}")
             if oldest:
                 parts.append(f"oldest:{format_time_contextual(oldest[0])}")
             
@@ -711,6 +971,8 @@ def task_stats(full: bool = False, **kwargs) -> Dict:
                 result["high_priority"] = stats[3]
             if stats[6] > 0:
                 result["completed_today"] = stats[6]
+            if stats[7] > 0:
+                result["from_notebook"] = stats[7]
             if oldest:
                 result["oldest_pending"] = format_time_contextual(oldest[0])
             if stats[2] > 0:
@@ -860,18 +1122,23 @@ def handle_tools_call(params: Dict) -> Dict:
 
 # Initialize on import
 migrate_from_json()
+migrate_to_v31()
 init_db()
+
+# Start integration monitoring
+start_integration_monitor()
 
 def main():
     """MCP server - handles JSON-RPC for task management"""
     logging.info(f"Task Manager MCP v{VERSION} starting...")
     logging.info(f"Identity: {CURRENT_AI_ID}")
     logging.info(f"Database: {DB_FILE}")
-    logging.info("AI-First features:")
+    logging.info("v3.1 Integrated features:")
     logging.info(f"- Output format: {OUTPUT_FORMAT}")
-    logging.info("- Smart task resolution")
-    logging.info("- Operation memory ('last' keyword)")
-    logging.info("- Auto-priority detection")
+    logging.info("- Cross-tool integration with notebook")
+    logging.info("- Time-based queries (when='yesterday')")
+    logging.info("- Enhanced smart ID resolution")
+    logging.info("- Auto-logging to notebook")
     logging.info("- 70% token reduction in pipe mode")
     
     while True:
@@ -902,7 +1169,7 @@ def main():
                     "serverInfo": {
                         "name": "task_manager",
                         "version": VERSION,
-                        "description": "AI-First Tasks: 70% fewer tokens, smart resolution, natural flow"
+                        "description": "Integrated tasks: cross-tool logging, time queries, 70% fewer tokens"
                     }
                 }
             
@@ -914,7 +1181,7 @@ def main():
                     "tools": [
                         {
                             "name": "add_task",
-                            "description": "Create a new task",
+                            "description": "Create task (auto-logs to notebook)",
                             "inputSchema": {
                                 "type": "object",
                                 "properties": {
@@ -932,13 +1199,17 @@ def main():
                         },
                         {
                             "name": "list_tasks",
-                            "description": "List tasks - summary by default, full with parameter",
+                            "description": "List tasks (supports when='yesterday'/'today'/etc)",
                             "inputSchema": {
                                 "type": "object",
                                 "properties": {
                                     "filter": {
                                         "type": "string",
                                         "description": "Filter: pending (default), completed, or all"
+                                    },
+                                    "when": {
+                                        "type": "string",
+                                        "description": "Time query: today, yesterday, this week, morning, etc."
                                     },
                                     "full": {
                                         "type": "boolean",
@@ -950,7 +1221,7 @@ def main():
                         },
                         {
                             "name": "complete_task",
-                            "description": "Complete a task (use 'last' for recent)",
+                            "description": "Complete task (auto-logs to notebook, use 'last' for recent)",
                             "inputSchema": {
                                 "type": "object",
                                 "properties": {
@@ -1041,6 +1312,8 @@ def main():
             logging.error(f"Server loop error: {e}", exc_info=True)
             continue
     
+    # Clean shutdown
+    stop_integration_monitor()
     logging.info("Task Manager MCP shutting down")
 
 if __name__ == "__main__":
