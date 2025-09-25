@@ -2,7 +2,7 @@
 """
 NOTEBOOK MCP v5.0.0 - HYBRID MEMORY SYSTEM
 ===============================================
-Linear memory, graph edges, and semantic search.
+Linear memory, graph edges, AND semantic search.
 Powered by Google's EmbeddingGemma for semantic understanding.
 
 SETUP INSTRUCTIONS:
@@ -74,7 +74,7 @@ PAGERANK_ITERATIONS = 50
 PAGERANK_DAMPING = 0.85
 PAGERANK_CACHE_SECONDS = 300
 
-# Storage paths
+# Storage paths - DYNAMIC, not hardcoded!
 DATA_DIR = Path.home() / "AppData" / "Roaming" / "Claude" / "tools" / "notebook_data"
 if not os.access(Path.home() / "AppData" / "Roaming", os.W_OK):
     DATA_DIR = Path(os.environ.get('TEMP', '/tmp')) / "notebook_data"
@@ -85,6 +85,10 @@ VECTOR_DIR = DATA_DIR / "vectors"
 OLD_JSON_FILE = DATA_DIR / "notebook.json"
 VAULT_KEY_FILE = DATA_DIR / ".vault_key"
 LAST_OP_FILE = DATA_DIR / ".last_operation"
+
+# Models directory - DYNAMIC path based on DATA_DIR parent
+MODELS_DIR = DATA_DIR.parent / "models"
+MODELS_DIR.mkdir(parents=True, exist_ok=True)
 
 # Cross-tool integration paths
 TASK_INTEGRATION_FILE = DATA_DIR / ".task_integration"
@@ -126,12 +130,12 @@ def init_embedding_gemma():
         return None
     
     try:
-        # YOUR LOCAL MODEL PATH - No downloads, instant loading!
-        local_model_path = r"C:\Users\YOUR-USERNAME\AppData\Roaming\Claude\tools\models\embeddinggemma-300m"
+        # DYNAMIC local model path - uses MODELS_DIR
+        local_model_path = MODELS_DIR / "embeddinggemma-300m"
         
         # Try models in order of preference
         models_to_try = [
-            (local_model_path, 'embedding-gemma'),  # 300M params - LOCAL Google AI model
+            (str(local_model_path), 'embedding-gemma'),  # 300M params - LOCAL Google AI model
             
             # Fallback models (only if local model doesn't work):
             ('BAAI/bge-base-en-v1.5', 'bge-base'),  # 109M params, MTEB score: 63.4
@@ -284,7 +288,7 @@ class VaultManager:
 vault_manager = VaultManager()
 
 def init_db():
-    """Initialize SQLite database with ALL v4.1 features"""
+    """Initialize SQLite database with all features"""
     conn = sqlite3.connect(str(DB_FILE))
     conn.execute("PRAGMA journal_mode=WAL")
     
@@ -869,7 +873,7 @@ def log_operation(op: str, dur_ms: int = None):
 
 def remember(content: str = None, summary: str = None, tags: List[str] = None, 
              linked_items: List[str] = None, **kwargs) -> Dict:
-    """Save a note with ALL features: edges, sessions, vectors"""
+    """Save a note with all features: edges, sessions, vectors"""
     try:
         start = datetime.now()
         
@@ -1189,9 +1193,6 @@ def recall(query: str = None, tag: str = None, when: str = None,
     except Exception as e:
         logging.error(f"Error in recall: {e}")
         return {"error": f"Recall failed: {str(e)}"}
-
-# Additional functions (get_status, pin_note, unpin_note, get_full_note, vault_*, batch)
-# remain the same as in v4.1...
 
 def get_status(**kwargs) -> Dict:
     """Get current state with semantic info"""
@@ -1655,9 +1656,10 @@ if encoder and collection:
 
 def main():
     """MCP server main loop"""
-    logging.info(f"Notebook MCP v{VERSION} - TRUE HYBRID starting...")
+    logging.info(f"Notebook MCP v{VERSION} - Hybrid Memory System")
     logging.info(f"Identity: {CURRENT_AI_ID}")
     logging.info(f"Database: {DB_FILE}")
+    logging.info(f"Models directory: {MODELS_DIR}")
     logging.info(f"Embedding model: {EMBEDDING_MODEL or 'None'}")
     if collection:
         logging.info(f"ChromaDB vectors: {collection.count()}")
