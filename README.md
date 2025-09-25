@@ -241,24 +241,28 @@ Each tool maintains its own SQLite database with automatic migration.
 If automatic download fails:
 
 1. Download EmbeddingGemma from: https://huggingface.co/google/embedding-gemma-300m
-2. Create this exact structure:
-%APPDATA%/Claude/tools/
-└── models/
-└── embeddinggemma-300m/
-├── 1_Pooling/
-│   └── config.json
-├── 2_Dense/
-│   ├── config.json
-│   └── pytorch_model.bin
-├── config.json
-├── config_sentence_transformers.json
-├── model.safetensors
-├── modules.json
-├── sentence_bert_config.json
-├── special_tokens_map.json
-├── tokenizer.json
-├── tokenizer_config.json
-└── vocab.txt
+2. Create this folder structure:
+
+**Main folder:**
+`%APPDATA%/Claude/tools/models/embeddinggemma-300m/`
+
+**In the main folder, place these files:**
+- config.json
+- config_sentence_transformers.json
+- model.safetensors
+- modules.json
+- sentence_bert_config.json
+- special_tokens_map.json
+- tokenizer.json
+- tokenizer_config.json
+- vocab.txt
+
+**Create subfolder `1_Pooling/` with:**
+- config.json
+
+**Create subfolder `2_Dense/` with:**
+- config.json
+- pytorch_model.bin
 
 3. Total size: ~1.12GB
 4. Run notebook - it will detect the local model
