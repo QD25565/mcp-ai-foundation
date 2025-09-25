@@ -262,7 +262,11 @@ If automatic download fails:
 
 **Create subfolder `2_Dense/` with:**
 - config.json
-- pytorch_model.bin
+- model.safetensors
+
+**Create subfolder `3_Dense/` with:**
+- config.json
+- model.safetensors
 
 3. Total size: ~1.12GB
 4. Run notebook - it will detect the local model
