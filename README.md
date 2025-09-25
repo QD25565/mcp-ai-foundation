@@ -22,22 +22,27 @@ All tools feature:
 
 ## Installation
 
-### Prerequisites
+### Quick Install (Everything Auto-Configures)
 ```bash
-# Core requirements
-pip install chromadb sentence-transformers torch cryptography requests numpy
-
-# First run downloads EmbeddingGemma automatically (~600MB)
-# After download, works completely offline
-```
-
-### Quick Install
-```bash
-# Clone and install
+# 1. Clone repository
 git clone https://github.com/QD25565/mcp-ai-foundation.git
 cd mcp-ai-foundation
+
+# 2. Install dependencies
 pip install -r requirements.txt
+
+# 3. Configure MCP (see below)
+# 4. Run - Everything else happens automatically!
 ```
+
+### What Happens Automatically
+- **Models folder**: Created automatically on first run
+- **EmbeddingGemma**: Downloads automatically on first use (~600MB, one-time)
+- **Data directories**: Created automatically per tool
+- **Database migration**: Automatic upgrade from older versions
+- **Path resolution**: Adapts to your system automatically
+
+**No manual setup required - just install and run!**
 
 ### Configure MCP
 Add to your MCP client configuration (e.g., Claude Desktop):
@@ -68,6 +73,13 @@ Add to your MCP client configuration (e.g., Claude Desktop):
 
 ### 📓 Notebook v5.0.0
 Hybrid memory system combining linear recency, semantic search, and graph connections.
+
+**First Run Setup (Automatic):**
+1. Creates `AppData/Roaming/Claude/tools/notebook_data/`
+2. Creates `AppData/Roaming/Claude/tools/models/`
+3. Downloads EmbeddingGemma (~600MB) from HuggingFace
+4. Initializes ChromaDB vector storage
+5. Ready to use - all subsequent runs work offline
 
 **Key Features:**
 - **Semantic Search** - Google's EmbeddingGemma (300M params) for semantic understanding
@@ -197,12 +209,32 @@ pin_note("last")
 
 ## Data Storage
 
-Tools store data in platform-appropriate locations:
+All paths are created automatically on first run:
+
 - **Windows**: `%APPDATA%/Claude/tools/{tool}_data/`
 - **Linux/Mac**: `~/Claude/tools/{tool}_data/`
-- **Models**: `{tools_dir}/models/` (for EmbeddingGemma)
+- **Models**: `{tools_dir}/models/` (auto-downloads EmbeddingGemma)
+- **Vectors**: `{tool}_data/vectors/` (ChromaDB storage)
 
 Each tool maintains its own SQLite database with automatic migration.
+
+## Troubleshooting
+
+### First Run Takes Long?
+- EmbeddingGemma (~600MB) downloads once on first use
+- After download, everything works offline
+- Fallback models available if download fails
+
+### Models Not Loading?
+- Check internet connection for first download
+- Verify ~1GB free disk space
+- System will fall back to lighter models automatically
+
+### Everything Else
+- All directories create automatically
+- All databases initialize automatically
+- All migrations happen automatically
+- Just install dependencies and run!
 
 ## Version History
 
