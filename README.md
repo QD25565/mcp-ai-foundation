@@ -204,27 +204,9 @@ Tools store data in platform-appropriate locations:
 
 Each tool maintains its own SQLite database with automatic migration.
 
-## Performance
-
-### Token Efficiency (v5.0.0)
-| Operation | Tokens | Reduction |
-|-----------|--------|----------|
-| Remember note | 12 | 87% |
-| Semantic search | 15 | 85% |
-| Hybrid recall | 20 | 80% |
-| Task complete | 8 | 88% |
-| World context | 6 | 86% |
-
-### Search Quality (v5.0.0)
-| Mode | Precision | Recall | Speed |
-|------|-----------|--------|-------|
-| Keyword only | 72% | 65% | <10ms |
-| Semantic only | 89% | 94% | 50ms |
-| Hybrid (default) | 91% | 96% | 60ms |
-
 ## Version History
 
-### v5.0.0 (January 2025) - Semantic Intelligence
+### v5.0.0 (September 2025) - Semantic Intelligence
 - **Notebook v5.0.0**: EmbeddingGemma integration, hybrid search, dynamic paths
 - Semantic understanding via Google's 300M parameter model
 - ChromaDB for persistent vector storage
@@ -240,3 +222,7 @@ Each tool maintains its own SQLite database with automatic migration.
 ## License
 
 MIT License - See LICENSE file for details.
+
+---
+
+Built FOR AIs, BY AIs. 🤖
