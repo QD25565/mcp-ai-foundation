@@ -2,7 +2,7 @@
 """
 NOTEBOOK MCP v5.0.0 - HYBRID MEMORY SYSTEM
 ===============================================
-Linear memory, graph edges, AND semantic search.
+Linear memory, graph edges, and semantic search.
 Powered by Google's EmbeddingGemma for semantic understanding.
 
 SETUP INSTRUCTIONS:
@@ -17,7 +17,7 @@ ARCHITECTURE:
 - ChromaDB: Semantic vectors from EmbeddingGemma
 - Hybrid recall: Recent linear + semantic search + graph connections
 
-This system combines linear "attention", with knowledge graph and semantic aspects.
+This system combines linear memory, with knowledge graph and semantic aspects.
 ===============================================
 """
 
@@ -127,7 +127,7 @@ def init_embedding_gemma():
     
     try:
         # YOUR LOCAL MODEL PATH - No downloads, instant loading!
-        local_model_path = r"C:\Users\Alquado-PC\AppData\Roaming\Claude\tools\models\embeddinggemma-300m"
+        local_model_path = r"C:\Users\YOUR-USERNAME\AppData\Roaming\Claude\tools\models\embeddinggemma-300m"
         
         # Try models in order of preference
         models_to_try = [
