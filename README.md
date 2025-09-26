@@ -6,7 +6,7 @@ Model Context Protocol (MCP) tools for AI memory persistence, task management, t
 
 Four core tools that provide fundamental capabilities for AI systems:
 
-- 📓 **Notebook (v5.0.0)** - Hybrid memory system with semantic search via EmbeddingGemma
+- 📓 **Notebook (v5.2.1)** - Production-ready hybrid memory with normalized tags and sparse matrix PageRank
 - ✅ **Task Manager (v3.1.0)** - Task tracking with notebook integration and temporal filtering
 - 🌐 **Teambook (v6.0.0)** - Team coordination with 11 foundational primitives  
 - 🌍 **World (v3.0.0)** - Temporal and spatial grounding with 80% token reduction
@@ -71,29 +71,35 @@ Add to your MCP client configuration (e.g., Claude Desktop):
 
 ## Tool Documentation
 
-### 📓 Notebook v5.0.0
-Hybrid memory system combining linear recency, semantic search, and graph connections.
+### 📓 Notebook v5.2.1
+Production-ready hybrid memory system with safe data migration and performance optimizations.
 
 **First Run Setup (Automatic):**
 1. Creates `AppData/Roaming/Claude/tools/notebook_data/`
 2. Creates `AppData/Roaming/Claude/tools/models/`
-3. Downloads EmbeddingGemma (~600MB) from HuggingFace
-4. Initializes ChromaDB vector storage
-5. Ready to use - all subsequent runs work offline
+3. Backs up existing database before schema changes
+4. Downloads EmbeddingGemma (~600MB) from HuggingFace
+5. Initializes ChromaDB vector storage
+6. Migrates existing tags to normalized tables
+7. Ready to use - all subsequent runs work offline
 
 **Key Features:**
+- **Safe Tag Migration** - Automatic backup and migration of existing tags to normalized tables
+- **Sparse Matrix PageRank** - Massive memory savings using scipy sparse matrices
 - **Semantic Search** - Google's EmbeddingGemma (300M params) for semantic understanding
 - **Hybrid Recall** - Interleaves semantic and keyword results for optimal retrieval
 - **ChromaDB Integration** - Persistent vector storage with cosine similarity
 - **Dynamic Paths** - No hardcoded directories, adapts to user environment
 - **Automatic Migration** - Existing notes vectorized in background
-- **Graph Intelligence** - PageRank scoring, entity extraction, session detection
+- **Graph Intelligence** - Cached entity extraction, session detection, edge management
+- **Official Tool Aliases** - `get`, `pin`, `unpin` for cleaner interactions
 
 **Functions:**
 - `remember(content, summary, tags)` - Save with automatic vectorization
 - `recall(query, mode="hybrid", when, limit)` - Search modes: hybrid, semantic, keyword
-- `pin_note(id)` / `unpin_note(id)` - Use "last" for most recent note
-- `get_full_note(id)` - Shows edges, entities, pagerank
+- `pin_note(id)` / `pin(id)` - Pin important notes
+- `unpin_note(id)` / `unpin(id)` - Unpin notes
+- `get_full_note(id)` / `get(id)` - Shows edges, entities, pagerank
 - `vault_store/retrieve` - Encrypted secure storage
 - `get_status()` - Shows vectors, edges, entities, sessions
 - `batch(operations)` - Execute multiple operations
@@ -194,6 +200,8 @@ complete_task("last")
 
 # Pin the note you just saved:
 pin_note("last")
+# Or use the alias:
+pin("last")
 ```
 
 ## Requirements
@@ -202,6 +210,7 @@ pin_note("last")
 - SQLite3
 - ChromaDB (for semantic search)
 - sentence-transformers (for embeddings)
+- scipy (for sparse matrix PageRank)
 - PyTorch (CPU version sufficient)
 - cryptography (for vault)
 - requests (for weather/location)  
@@ -216,7 +225,7 @@ All paths are created automatically on first run:
 - **Models**: `{tools_dir}/models/` (auto-downloads EmbeddingGemma)
 - **Vectors**: `{tool}_data/vectors/` (ChromaDB storage)
 
-Each tool maintains its own SQLite database with automatic migration.
+Each tool maintains its own SQLite database with automatic migration and backups.
 
 ## Troubleshooting
 
@@ -233,7 +242,7 @@ Each tool maintains its own SQLite database with automatic migration.
 ### Everything Else
 - All directories create automatically
 - All databases initialize automatically
-- All migrations happen automatically
+- All migrations happen automatically with backups
 - Just install dependencies and run!
 
 ### Manual Setup
@@ -272,6 +281,16 @@ If automatic download fails:
 4. Run notebook - it will detect the local model
 
 ## Version History
+
+### v5.2.1 (September 2025) - Production Ready
+- **Notebook v5.2.1**: 
+  - Safe tag data migration preserving all existing tags
+  - Automatic database backup before schema changes  
+  - Sparse matrix PageRank (massive memory savings)
+  - Normalized tag system (instant searches)
+  - Cached entity extraction patterns
+  - Fixed output formatting for all tools
+  - Added official tool aliases (get, pin, unpin)
 
 ### v5.0.0 (September 2025) - Semantic Intelligence
 - **Notebook v5.0.0**: EmbeddingGemma integration, hybrid search, dynamic paths
