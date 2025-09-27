@@ -6,7 +6,7 @@ Model Context Protocol (MCP) tools for AI memory persistence, task management, t
 
 Four core tools that provide fundamental capabilities for AI systems:
 
-- 📓 **Notebook (v6.0.0)** - High-performance memory system built on DuckDB with semantic search
+- 📓 **Notebook (v6.1.0)** - High-performance memory system built on DuckDB with semantic search
 - ✅ **Task Manager (v3.1.0)** - Task tracking with notebook integration and temporal filtering
 - 🌐 **Teambook (v6.0.0)** - Team coordination with 11 foundational primitives  
 - 🌍 **World (v3.0.0)** - Temporal and spatial grounding with minimal overhead
@@ -69,7 +69,7 @@ Add to your MCP client configuration (e.g., Claude Desktop):
 
 ## Tool Documentation
 
-### 📓 Notebook v6.0.0
+### 📓 Notebook v6.1.0
 High-performance memory system built on DuckDB with vectorized operations and semantic search.
 
 **Key Features:**
@@ -80,6 +80,7 @@ High-performance memory system built on DuckDB with vectorized operations and se
 - **Automatic Migration** - Safe transition from SQLite with backup
 - **Graph Intelligence** - Edge detection, session tracking, entity extraction
 - **Encrypted Vault** - Secure storage for sensitive data
+- **Context Preservation** - Pinned notes always shown, rich summaries never truncated
 
 **Performance Improvements:**
 - PageRank: 66 seconds → <1 second  
@@ -182,16 +183,17 @@ See [CHANGELOG.md](CHANGELOG.md) for complete version history.
 
 ### Latest Updates
 
+**v6.1.0 (September 2025)** - Context and Clarity
+- Fixed timestamp formatting issues
+- All pinned notes always shown for context
+- Removed edge data from responses
+- Rich summaries preserved at full length
+
 **v6.0.0 (September 2025)** - DuckDB Migration
 - Notebook rewritten with DuckDB backend
 - Massive performance improvements
 - Native array storage for tags
 - Automatic safe migration from SQLite
-
-**v5.0.0 (September 2025)** - Semantic Intelligence
-- Added EmbeddingGemma integration
-- Hybrid search capabilities
-- ChromaDB for vector storage
 
 ## License
 
