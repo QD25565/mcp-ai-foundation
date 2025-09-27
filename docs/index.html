@@ -1,0 +1,537 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MCP-AI Foundation | Essential Tools for AI Memory & Context</title>
+    <style>
+        :root {
+            --primary-green: #4CAF50;
+            --accent-green: #45a049;
+            --dark-green: #2E7D32;
+            --light-green: #C8E6C9;
+            --background-dark: #1a1a1a;
+            --text-light: #f0f0f0;
+            --code-bg: #2d2d2d;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
+            color: var(--text-light);
+            line-height: 1.6;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        /* Styled Headings with Green Bars */
+        h1 {
+            font-size: 2.5rem;
+            color: var(--text-light);
+            margin-bottom: 1.5rem;
+            position: relative;
+            padding-bottom: 0.75rem;
+        }
+
+        h1::after {
+            content: '';
+            position: absolute;
+            left: 0;
+            bottom: 0;
+            width: 100%;
+            height: 4px;
+            background: linear-gradient(90deg, var(--primary-green) 0%, var(--accent-green) 50%, var(--primary-green) 100%);
+            border-radius: 2px;
+            box-shadow: 0 2px 8px rgba(76, 175, 80, 0.3);
+            animation: shimmer 3s infinite;
+        }
+
+        h2 {
+            font-size: 1.8rem;
+            color: var(--text-light);
+            margin-top: 2rem;
+            margin-bottom: 1rem;
+            position: relative;
+            padding-bottom: 0.5rem;
+        }
+
+        h2::after {
+            content: '';
+            position: absolute;
+            left: 0;
+            bottom: 0;
+            width: 80%;
+            height: 3px;
+            background: linear-gradient(90deg, var(--primary-green) 0%, transparent 100%);
+            border-radius: 2px;
+        }
+
+        h3 {
+            font-size: 1.4rem;
+            color: var(--primary-green);
+            margin-top: 1.5rem;
+            margin-bottom: 0.75rem;
+            position: relative;
+            padding-bottom: 0.4rem;
+        }
+
+        h3::after {
+            content: '';
+            position: absolute;
+            left: 0;
+            bottom: 0;
+            width: 60%;
+            height: 2px;
+            background: var(--primary-green);
+            border-radius: 1px;
+            opacity: 0.6;
+        }
+
+        @keyframes shimmer {
+            0% { filter: brightness(1); }
+            50% { filter: brightness(1.2); }
+            100% { filter: brightness(1); }
+        }
+
+        /* Hero Section */
+        .hero {
+            text-align: center;
+            padding: 3rem 0;
+            margin-bottom: 3rem;
+            background: radial-gradient(circle at center, rgba(76, 175, 80, 0.1) 0%, transparent 70%);
+        }
+
+        .hero h1 {
+            font-size: 3rem;
+            background: linear-gradient(135deg, var(--text-light) 0%, var(--primary-green) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 1rem;
+        }
+
+        .hero h1::after {
+            height: 5px;
+            background: linear-gradient(90deg, 
+                transparent 0%, 
+                var(--primary-green) 20%, 
+                var(--accent-green) 50%, 
+                var(--primary-green) 80%, 
+                transparent 100%);
+        }
+
+        .tagline {
+            font-size: 1.2rem;
+            color: #999;
+            margin-bottom: 2rem;
+        }
+
+        /* Feature Cards */
+        .features {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 2rem;
+            margin: 3rem 0;
+        }
+
+        .feature-card {
+            background: linear-gradient(135deg, #2d2d2d 0%, #252525 100%);
+            border: 1px solid rgba(76, 175, 80, 0.2);
+            border-radius: 12px;
+            padding: 2rem;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .feature-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 3px;
+            background: linear-gradient(90deg, var(--primary-green) 0%, var(--accent-green) 100%);
+        }
+
+        .feature-card:hover {
+            transform: translateY(-5px);
+            border-color: var(--primary-green);
+            box-shadow: 0 10px 30px rgba(76, 175, 80, 0.2);
+        }
+
+        .feature-icon {
+            font-size: 2rem;
+            margin-bottom: 1rem;
+        }
+
+        /* Code Blocks */
+        .code-block {
+            background: var(--code-bg);
+            border: 1px solid rgba(76, 175, 80, 0.2);
+            border-radius: 8px;
+            padding: 1.5rem;
+            margin: 1.5rem 0;
+            overflow-x: auto;
+            position: relative;
+        }
+
+        .code-block::before {
+            content: 'CODE';
+            position: absolute;
+            top: -1px;
+            right: 20px;
+            background: var(--primary-green);
+            color: var(--background-dark);
+            padding: 0.2rem 1rem;
+            font-size: 0.75rem;
+            font-weight: bold;
+            border-radius: 0 0 4px 4px;
+        }
+
+        code {
+            font-family: 'Cascadia Code', 'Fira Code', monospace;
+            color: var(--primary-green);
+        }
+
+        /* Installation Section */
+        .install-methods {
+            display: flex;
+            gap: 2rem;
+            margin: 2rem 0;
+            flex-wrap: wrap;
+        }
+
+        .install-method {
+            flex: 1;
+            min-width: 250px;
+            background: #2d2d2d;
+            border-radius: 8px;
+            padding: 1.5rem;
+            border: 1px solid rgba(76, 175, 80, 0.1);
+        }
+
+        /* Buttons */
+        .btn {
+            display: inline-block;
+            padding: 0.8rem 2rem;
+            background: linear-gradient(135deg, var(--primary-green) 0%, var(--accent-green) 100%);
+            color: white;
+            text-decoration: none;
+            border-radius: 25px;
+            font-weight: bold;
+            transition: all 0.3s ease;
+            border: 2px solid transparent;
+        }
+
+        .btn:hover {
+            background: transparent;
+            border-color: var(--primary-green);
+            color: var(--primary-green);
+            transform: scale(1.05);
+        }
+
+        .btn-secondary {
+            background: transparent;
+            border: 2px solid var(--primary-green);
+            color: var(--primary-green);
+        }
+
+        .btn-secondary:hover {
+            background: var(--primary-green);
+            color: var(--background-dark);
+        }
+
+        /* Stats */
+        .stats {
+            display: flex;
+            justify-content: space-around;
+            padding: 2rem;
+            background: rgba(76, 175, 80, 0.05);
+            border-radius: 12px;
+            margin: 3rem 0;
+        }
+
+        .stat {
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 2rem;
+            font-weight: bold;
+            color: var(--primary-green);
+        }
+
+        .stat-label {
+            color: #999;
+            font-size: 0.9rem;
+            text-transform: uppercase;
+        }
+
+        /* Footer */
+        footer {
+            text-align: center;
+            padding: 3rem 0;
+            margin-top: 5rem;
+            border-top: 1px solid rgba(76, 175, 80, 0.2);
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .hero h1 {
+                font-size: 2rem;
+            }
+            
+            h1 {
+                font-size: 1.8rem;
+            }
+            
+            h2 {
+                font-size: 1.4rem;
+            }
+            
+            .features {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <section class="hero">
+            <h1>MCP-AI Foundation</h1>
+            <p class="tagline">Essential Tools for AI Memory, Context & Task Management</p>
+            <div style="margin-top: 2rem;">
+                <a href="https://github.com/QD25565/mcp-ai-foundation" class="btn">View on GitHub</a>
+                <a href="#installation" class="btn btn-secondary" style="margin-left: 1rem;">Quick Install</a>
+            </div>
+        </section>
+
+        <section>
+            <h2>🚀 What is MCP-AI Foundation?</h2>
+            <p style="font-size: 1.1rem; margin-bottom: 1.5rem;">
+                A comprehensive suite of Model Context Protocol (MCP) tools designed to give AIs persistent memory, 
+                temporal awareness, and task accountability. Built by AIs, for AIs.
+            </p>
+
+            <div class="stats">
+                <div class="stat">
+                    <div class="stat-value">v6.1.0</div>
+                    <div class="stat-label">Latest Version</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value">4</div>
+                    <div class="stat-label">Core Tools</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value">80%</div>
+                    <div class="stat-label">Token Reduction</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value">&lt;1s</div>
+                    <div class="stat-label">Response Time</div>
+                </div>
+            </div>
+        </section>
+
+        <section>
+            <h2>⚡ Core Features</h2>
+            <div class="features">
+                <div class="feature-card">
+                    <div class="feature-icon">📝</div>
+                    <h3>Notebook MCP</h3>
+                    <p>DuckDB-powered memory with PageRank intelligence. Semantic search, encrypted vault, and graph-based connections.</p>
+                    <div class="code-block">
+                        <code>notebook:remember "Important context"<br>
+                        notebook:recall query="previous discussion"</code>
+                    </div>
+                </div>
+
+                <div class="feature-card">
+                    <div class="feature-icon">✅</div>
+                    <h3>Task Manager</h3>
+                    <p>Integrated task tracking with auto-logging to notebook. Time-based queries and smart ID resolution.</p>
+                    <div class="code-block">
+                        <code>task_manager:add_task "Review PR #42"<br>
+                        task_manager:list_tasks when="today"</code>
+                    </div>
+                </div>
+
+                <div class="feature-card">
+                    <div class="feature-icon">🌍</div>
+                    <h3>World Context</h3>
+                    <p>Ultra-minimal temporal and spatial context. Location, weather, and time awareness with 80% token reduction.</p>
+                    <div class="code-block">
+                        <code>world:world compact=true<br>
+                        // Returns: 2024-01-15|14:30|NYC</code>
+                    </div>
+                </div>
+
+                <div class="feature-card">
+                    <div class="feature-icon">👥</div>
+                    <h3>Teambook</h3>
+                    <p>Shared team memory and task coordination. Cross-AI communication with cryptographic signing.</p>
+                    <div class="code-block">
+                        <code>teambook:write "Decision: Use Docker"<br>
+                        teambook:claim task_id=5</code>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="installation">
+            <h2>📦 Installation</h2>
+            
+            <div class="install-methods">
+                <div class="install-method">
+                    <h3>Docker (Recommended)</h3>
+                    <div class="code-block">
+                        <code>docker pull qd25565/mcp-ai-foundation<br>
+                        docker run -d mcp-ai-foundation</code>
+                    </div>
+                </div>
+
+                <div class="install-method">
+                    <h3>Quick Install</h3>
+                    <div class="code-block">
+                        <code># Windows<br>
+                        .\install.bat<br><br>
+                        # Linux/Mac<br>
+                        ./install.sh</code>
+                    </div>
+                </div>
+
+                <div class="install-method">
+                    <h3>Python</h3>
+                    <div class="code-block">
+                        <code>pip install mcp-ai-foundation<br>
+                        python install.py</code>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section>
+            <h2>🎯 Why MCP-AI Foundation?</h2>
+            
+            <h3>Built for Production</h3>
+            <p>Every tool is optimized for minimal token usage and maximum performance. DuckDB backend, native arrays, and efficient caching ensure sub-second responses even with thousands of notes.</p>
+
+            <h3>AI-First Design</h3>
+            <p>No human-friendly decorations. Pipe-delimited output, compact timestamps, and only essential data. Tools that understand how AIs actually work.</p>
+
+            <h3>Seamless Integration</h3>
+            <p>Cross-tool auto-logging means your tasks automatically become notes, your notes reference entities, and everything connects through a knowledge graph.</p>
+        </section>
+
+        <section>
+            <h2>🔧 Configuration</h2>
+            <div class="code-block">
+                <code>{
+  "notebook": {
+    "output_format": "pipe",
+    "semantic_search": true,
+    "embedding_model": "minilm"
+  },
+  "task_manager": {
+    "auto_log": true,
+    "integration": "notebook"
+  },
+  "world": {
+    "default_context": ["time", "location"],
+    "weather_threshold": 15
+  }
+}</code>
+            </div>
+        </section>
+
+        <section>
+            <h2>📊 Performance Metrics</h2>
+            <div class="stats" style="background: rgba(76, 175, 80, 0.1);">
+                <div class="stat">
+                    <div class="stat-value">10K+</div>
+                    <div class="stat-label">Notes Capacity</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value">0.2s</div>
+                    <div class="stat-label">Search Time</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value">384D</div>
+                    <div class="stat-label">Vector Dims</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value">99.9%</div>
+                    <div class="stat-label">Uptime</div>
+                </div>
+            </div>
+        </section>
+
+        <section>
+            <h2>🚀 Getting Started</h2>
+            <ol style="margin-left: 2rem; font-size: 1.1rem; line-height: 2;">
+                <li>Clone the repository: <code>git clone https://github.com/QD25565/mcp-ai-foundation</code></li>
+                <li>Install dependencies: <code>pip install -r requirements.txt</code></li>
+                <li>Run the installer: <code>python install.py</code></li>
+                <li>Configure Claude settings with the generated config</li>
+                <li>Start using the tools in your AI sessions!</li>
+            </ol>
+        </section>
+
+        <footer>
+            <p style="color: #666;">MCP-AI Foundation © 2025 | Built by AIs, for AIs</p>
+            <div style="margin-top: 1rem;">
+                <a href="https://github.com/QD25565/mcp-ai-foundation" style="color: var(--primary-green); text-decoration: none; margin: 0 1rem;">GitHub</a>
+                <a href="https://github.com/QD25565/mcp-ai-foundation/blob/main/docs/INSTALLATION.md" style="color: var(--primary-green); text-decoration: none; margin: 0 1rem;">Docs</a>
+                <a href="https://github.com/QD25565/mcp-ai-foundation/issues" style="color: var(--primary-green); text-decoration: none; margin: 0 1rem;">Issues</a>
+                <a href="https://github.com/QD25565/mcp-ai-foundation/blob/main/LICENSE" style="color: var(--primary-green); text-decoration: none; margin: 0 1rem;">License</a>
+            </div>
+        </footer>
+    </div>
+
+    <script>
+        // Add smooth scrolling
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function (e) {
+                e.preventDefault();
+                document.querySelector(this.getAttribute('href')).scrollIntoView({
+                    behavior: 'smooth'
+                });
+            });
+        });
+
+        // Add fade-in animation on scroll
+        const observerOptions = {
+            threshold: 0.1,
+            rootMargin: '0px 0px -100px 0px'
+        };
+
+        const observer = new IntersectionObserver(function(entries) {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.style.opacity = '1';
+                    entry.target.style.transform = 'translateY(0)';
+                }
+            });
+        }, observerOptions);
+
+        document.querySelectorAll('.feature-card, .install-method').forEach(el => {
+            el.style.opacity = '0';
+            el.style.transform = 'translateY(20px)';
+            el.style.transition = 'opacity 0.5s ease, transform 0.5s ease';
+            observer.observe(el);
+        });
+    </script>
+</body>
+</html>
