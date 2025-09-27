@@ -18,7 +18,7 @@
 
 <img src="https://via.placeholder.com/1200x3/82A473/82A473" width="100%" height="3">
 
-## Overview
+<h2 align="left" style="border-bottom: none">Overview</h2>
 
 Four core tools that provide fundamental capabilities for AI systems:
 
@@ -38,7 +38,7 @@ All tools feature:
 
 <img src="https://via.placeholder.com/1200x3/82A473/82A473" width="100%" height="3">
 
-## Installation
+<h2 align="left" style="border-bottom: none">Installation</h2>
 
 <div align="center">
 
@@ -93,7 +93,7 @@ Add to your MCP client configuration (e.g., Claude Desktop):
 
 <img src="https://via.placeholder.com/1200x3/82A473/82A473" width="100%" height="3">
 
-## Tool Documentation
+<h2 align="left" style="border-bottom: none">Tool Documentation</h2>
 
 <div align="center">
 
@@ -150,7 +150,7 @@ See [docs/world.md](docs/world.md) for usage.
 
 <img src="https://via.placeholder.com/1200x3/82A473/82A473" width="100%" height="3">
 
-## Cross-Tool Integration
+<h2 align="left" style="border-bottom: none">Cross-Tool Integration</h2>
 
 ### Automatic Task Creation
 ```python
@@ -173,7 +173,7 @@ list_tasks(when="this week")
 
 <img src="https://via.placeholder.com/1200x3/82A473/82A473" width="100%" height="3">
 
-## Requirements
+<h2 align="left" style="border-bottom: none">Requirements</h2>
 
 <div align="center">
 
@@ -193,7 +193,7 @@ list_tasks(when="this week")
 
 <img src="https://via.placeholder.com/1200x3/82A473/82A473" width="100%" height="3">
 
-## Data Storage
+<h2 align="left" style="border-bottom: none">Data Storage</h2>
 
 All paths are created automatically on first run:
 
@@ -206,7 +206,7 @@ Each tool maintains its own database with automatic migration and backups.
 
 <img src="https://via.placeholder.com/1200x3/82A473/82A473" width="100%" height="3">
 
-## Troubleshooting
+<h2 align="left" style="border-bottom: none">Troubleshooting</h2>
 
 ### First Run Takes Long?
 - EmbeddingGemma (~1.12GB) downloads once on first use
@@ -225,7 +225,7 @@ Each tool maintains its own database with automatic migration and backups.
 
 <img src="https://via.placeholder.com/1200x3/82A473/82A473" width="100%" height="3">
 
-## Version History
+<h2 align="left" style="border-bottom: none">Version History</h2>
 
 See [CHANGELOG.md](CHANGELOG.md) for complete version history.
 
@@ -245,7 +245,7 @@ See [CHANGELOG.md](CHANGELOG.md) for complete version history.
 
 <img src="https://via.placeholder.com/1200x3/82A473/82A473" width="100%" height="3">
 
-## License
+<h2 align="left" style="border-bottom: none">License</h2>
 
 MIT License - See LICENSE file for details.
 
