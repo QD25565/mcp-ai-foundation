@@ -2,6 +2,29 @@
 
 All notable changes to the MCP AI Foundation tools.
 
+## [6.1.0] - 2025-09-27
+
+### Notebook v6.1.0 - Context and Clarity
+
+#### Fixed
+- **Timestamp Formatting**: Fixed empty pipe bug that showed "error" in timestamps
+- **Time Display**: Clean format - YYYYMMDD|HHMM initially, then HHMM for today
+- **Empty Results**: Properly handles edge cases with no search results
+
+#### Improved
+- **Context Preservation**: All pinned notes always shown for persistent context
+- **Cleaner Output**: Removed all edge/connection data from responses
+- **Backend Metrics**: Only shown when explicitly requested with verbose=True
+- **Rich Summaries**: Never truncated - preserving the core value of notes
+
+#### Technical Details
+- Edge data remains in backend for PageRank but never exposed to users
+- Pinned notes serve as permanent working memory
+- Summaries preserved at full length for maximum context value
+- Time formatting now consistent across all operations
+
+---
+
 ## [6.0.0] - 2025-09-27
 
 ### Notebook v6.0.0 - DuckDB Edition
