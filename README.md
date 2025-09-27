@@ -16,10 +16,8 @@
 
 </div>
 
-<img src="https://via.placeholder.com/1200x3/82A473/82A473" width="100%" height="3">
 
 **Overview**
-<img src="https://via.placeholder.com/1200x3/82A473/82A473" width="100%" height="3">
 
 Four core tools that provide fundamental capabilities for AI systems:
 
@@ -37,10 +35,7 @@ All tools feature:
 - Operation memory for natural chaining
 - Batch operations support
 
-<img src="https://via.placeholder.com/1200x3/82A473/82A473" width="100%" height="3">
-
 **Installation**
-<img src="https://via.placeholder.com/1200x3/82A473/82A473" width="100%" height="3">
 
 <div align="center">
 
@@ -93,10 +88,8 @@ Add to your MCP client configuration (e.g., Claude Desktop):
 }
 ```
 
-<img src="https://via.placeholder.com/1200x3/82A473/82A473" width="100%" height="3">
 
 **Tool Documentation**
-<img src="https://via.placeholder.com/1200x3/82A473/82A473" width="100%" height="3">
 
 <div align="center">
 
@@ -151,10 +144,8 @@ Provides temporal and spatial context with minimal overhead.
 
 See [docs/world.md](docs/world.md) for usage.
 
-<img src="https://via.placeholder.com/1200x3/82A473/82A473" width="100%" height="3">
 
 **Cross-Tool Integration**
-<img src="https://via.placeholder.com/1200x3/82A473/82A473" width="100%" height="3">
 
 ### Automatic Task Creation
 ```python
@@ -175,10 +166,7 @@ recall(when="yesterday")
 list_tasks(when="this week")
 ```
 
-<img src="https://via.placeholder.com/1200x3/82A473/82A473" width="100%" height="3">
-
 **Requirements**
-<img src="https://via.placeholder.com/1200x3/82A473/82A473" width="100%" height="3">
 
 <div align="center">
 
@@ -196,10 +184,7 @@ list_tasks(when="this week")
 - requests (for weather/location)  
 - numpy (for calculations)
 
-<img src="https://via.placeholder.com/1200x3/82A473/82A473" width="100%" height="3">
-
 **Data Storage**
-<img src="https://via.placeholder.com/1200x3/82A473/82A473" width="100%" height="3">
 
 All paths are created automatically on first run:
 
@@ -210,10 +195,7 @@ All paths are created automatically on first run:
 
 Each tool maintains its own database with automatic migration and backups.
 
-<img src="https://via.placeholder.com/1200x3/82A473/82A473" width="100%" height="3">
-
 **Troubleshooting**
-<img src="https://via.placeholder.com/1200x3/82A473/82A473" width="100%" height="3">
 
 ### First Run Takes Long?
 - EmbeddingGemma (~1.12GB) downloads once on first use
@@ -230,10 +212,7 @@ Each tool maintains its own database with automatic migration and backups.
 - Verify ~1GB free disk space
 - System will fall back to lighter models automatically
 
-<img src="https://via.placeholder.com/1200x3/82A473/82A473" width="100%" height="3">
-
 **Version History**
-<img src="https://via.placeholder.com/1200x3/82A473/82A473" width="100%" height="3">
 
 See [CHANGELOG.md](CHANGELOG.md) for complete version history.
 
@@ -251,14 +230,9 @@ See [CHANGELOG.md](CHANGELOG.md) for complete version history.
 - Native array storage for tags
 - Automatic safe migration from SQLite
 
-<img src="https://via.placeholder.com/1200x3/82A473/82A473" width="100%" height="3">
-
 **License**
-<img src="https://via.placeholder.com/1200x3/82A473/82A473" width="100%" height="3">
-
 MIT License - See LICENSE file for details.
 
-<img src="https://via.placeholder.com/1200x3/82A473/82A473" width="100%" height="3">
 
 <div align="center">
 
