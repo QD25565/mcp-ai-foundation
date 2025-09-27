@@ -7,8 +7,6 @@ v6.1.0: Fixed timestamp bugs, removed all edge noise, preserved context
 
 Changes in v6.1.0:
 - Fixed empty pipe bug in timestamps
-- Removed ALL edge/connection data (not useful for pattern matching)
-- All pinned notes always shown (they're your permanent context)
 - Cleaner time format: YYYYMMDD|HHMM initially, then just HHMM for today
 - Backend metrics only on explicit verbose=True
 
