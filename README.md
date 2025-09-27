@@ -1,6 +1,5 @@
 <div align="center">
 <img src="https://readme-typing-svg.demolab.com?font=Fira+Code&weight=900&size=50&duration=1&pause=10000&color=878787&background=00000000&center=true&vCenter=true&width=500&lines=MCP+AI" alt="MCP AI" />
-<div style="height: 3px;"></div>
 <img src="https://readme-typing-svg.demolab.com?font=Fira+Code&weight=600&size=20&duration=1&pause=10000&color=82A473&background=00000000&center=true&vCenter=true&width=500&lines=F+O+U+N+D+A+T+I+O+N" alt="FOUNDATION" />
 </div>
 
