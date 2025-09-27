@@ -1,20 +1,19 @@
-<div align="center">
+```
+███╗   ███╗ ██████╗██████╗      █████╗ ██╗    ███████╗ ██████╗ ██╗   ██╗███╗   ██╗██████╗  █████╗ ████████╗██╗ ██████╗ ███╗   ██╗
+████╗ ████║██╔════╝██╔══██╗    ██╔══██╗██║    ██╔════╝██╔═══██╗██║   ██║████╗  ██║██╔══██╗██╔══██╗╚══██╔══╝██║██╔═══██╗████╗  ██║
+██╔████╔██║██║     ██████╔╝    ███████║██║    █████╗  ██║   ██║██║   ██║██╔██╗ ██║██║  ██║███████║   ██║   ██║██║   ██║██╔██╗ ██║
+██║╚██╔╝██║██║     ██╔═══╝     ██╔══██║██║    ██╔══╝  ██║   ██║██║   ██║██║╚██╗██║██║  ██║██╔══██║   ██║   ██║██║   ██║██║╚██╗██║
+██║ ╚═╝ ██║╚██████╗██║         ██║  ██║██║    ██║     ╚██████╔╝╚██████╔╝██║ ╚████║██████╔╝██║  ██║   ██║   ██║╚██████╔╝██║ ╚████║
+╚═╝     ╚═╝ ╚═════╝╚═╝         ╚═╝  ╚═╝╚═╝    ╚═╝      ╚═════╝  ╚═════╝ ╚═╝  ╚═══╝╚═════╝ ╚═╝  ╚═╝   ╚═╝   ╚═╝ ╚═════╝ ╚═╝  ╚═══╝
 
-![MCP AI Foundation](https://img.shields.io/badge/MCP%20AI%20FOUNDATION-878787?style=for-the-badge&labelColor=82A473&logo=data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+                          Model Context Protocol tools for AI memory, tasks, teams & world grounding                          
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-[![Version](https://img.shields.io/badge/v6.1.0-82A473?style=flat-square&labelColor=878787)](https://github.com/QD25565/mcp-ai-foundation/releases)
-[![Python](https://img.shields.io/badge/Python-3.8+-82A473?style=flat-square&labelColor=878787)](https://www.python.org/)
-[![License](https://img.shields.io/badge/MIT-82A473?style=flat-square&labelColor=878787)](LICENSE)
-[![Tools](https://img.shields.io/badge/Tools-4-82A473?style=flat-square&labelColor=878787)](#overview)
-[![Performance](https://img.shields.io/badge/Tokens-↓80%25-82A473?style=flat-square&labelColor=878787)](#overview)
-
-</div>
-
----
-
-# MCP AI Foundation
-
-Model Context Protocol (MCP) tools for AI memory persistence, task management, team coordination, and real-world grounding.
+                        ┌────────────┬──────────────┬───────────────┬──────────────┬──────────────┐
+                        │  v6.1.0    │  Python 3.8+ │  MIT License  │  4 Tools     │  ↓80% Tokens │
+                        └────────────┴──────────────┴───────────────┴──────────────┴──────────────┘
+```
 
 ## Overview
 
