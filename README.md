@@ -37,7 +37,7 @@ pip install -r requirements.txt
 
 ### What Happens Automatically
 - **Models folder**: Created on first run
-- **EmbeddingGemma**: Downloads on first use (~600MB, one-time)
+- **EmbeddingGemma**: Downloads on first use (file size depends on model you go with)
 - **Data directories**: Created automatically per tool
 - **Database migration**: From SQLite to DuckDB with automatic backup
 - **Path resolution**: Adapts to your system
