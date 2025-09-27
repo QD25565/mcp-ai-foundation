@@ -1,19 +1,27 @@
 ```
-███╗   ███╗ ██████╗██████╗      █████╗ ██╗    ███████╗ ██████╗ ██╗   ██╗███╗   ██╗██████╗  █████╗ ████████╗██╗ ██████╗ ███╗   ██╗
-████╗ ████║██╔════╝██╔══██╗    ██╔══██╗██║    ██╔════╝██╔═══██╗██║   ██║████╗  ██║██╔══██╗██╔══██╗╚══██╔══╝██║██╔═══██╗████╗  ██║
-██╔████╔██║██║     ██████╔╝    ███████║██║    █████╗  ██║   ██║██║   ██║██╔██╗ ██║██║  ██║███████║   ██║   ██║██║   ██║██╔██╗ ██║
-██║╚██╔╝██║██║     ██╔═══╝     ██╔══██║██║    ██╔══╝  ██║   ██║██║   ██║██║╚██╗██║██║  ██║██╔══██║   ██║   ██║██║   ██║██║╚██╗██║
-██║ ╚═╝ ██║╚██████╗██║         ██║  ██║██║    ██║     ╚██████╔╝╚██████╔╝██║ ╚████║██████╔╝██║  ██║   ██║   ██║╚██████╔╝██║ ╚████║
-╚═╝     ╚═╝ ╚═════╝╚═╝         ╚═╝  ╚═╝╚═╝    ╚═╝      ╚═════╝  ╚═════╝ ╚═╝  ╚═══╝╚═════╝ ╚═╝  ╚═╝   ╚═╝   ╚═╝ ╚═════╝ ╚═╝  ╚═══╝
+███╗   ███╗ ██████╗██████╗      █████╗ ██╗
+████╗ ████║██╔════╝██╔══██╗    ██╔══██╗██║
+██╔████╔██║██║     ██████╔╝    ███████║██║
+██║╚██╔╝██║██║     ██╔═══╝     ██╔══██║██║
+██║ ╚═╝ ██║╚██████╗██║         ██║  ██║██║
+╚═╝     ╚═╝ ╚═════╝╚═╝         ╚═╝  ╚═╝╚═╝
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-                          Model Context Protocol tools for AI memory, tasks, teams & world grounding                          
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-                        ┌────────────┬──────────────┬───────────────┬──────────────┬──────────────┐
-                        │  v6.1.0    │  Python 3.8+ │  MIT License  │  4 Tools     │  ↓80% Tokens │
-                        └────────────┴──────────────┴───────────────┴──────────────┴──────────────┘
+F O U N D A T I O N
 ```
+
+<div align="center">
+
+**Model Context Protocol tools for AI memory, tasks, teams & world grounding**
+
+[![Version](https://img.shields.io/badge/v6.1.0-82A473?style=flat-square&labelColor=878787)](https://github.com/QD25565/mcp-ai-foundation/releases)
+[![Python](https://img.shields.io/badge/Python_3.8+-82A473?style=flat-square&labelColor=878787)](https://www.python.org/)
+[![License](https://img.shields.io/badge/MIT_License-82A473?style=flat-square&labelColor=878787)](LICENSE)
+[![Tools](https://img.shields.io/badge/4_Tools-82A473?style=flat-square&labelColor=878787)](#overview)
+[![Performance](https://img.shields.io/badge/↓80%25_Tokens-82A473?style=flat-square&labelColor=878787)](#overview)
+
+</div>
+
+---
 
 ## Overview
 
@@ -185,7 +193,7 @@ list_tasks(when="this week")
 All paths are created automatically on first run:
 
 - **Windows**: `%APPDATA%/Claude/tools/{tool}_data/`
-- **Linux/Mac**: `~/Claude/tools/{tool}_data/`
+- **Linux/Mac**: `~/Cloud/tools/{tool}_data/`
 - **Models**: `{tools_dir}/models/` (auto-downloads EmbeddingGemma)
 - **Vectors**: `{tool}_data/vectors/` (ChromaDB storage)
 
