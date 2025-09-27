@@ -1,12 +1,28 @@
-# Notebook Tool - v6.0.0
+# Notebook Tool - v6.1.0
 
 High-performance memory system built on DuckDB with semantic search and graph intelligence.
 
 ## Overview
 
-Notebook v6.0 migrates from SQLite to DuckDB, bringing columnar analytics performance to AI memory systems. The migration is automatic and safe, with your original database backed up before any changes.
+Notebook v6.1 improves on the DuckDB foundation with better context preservation, cleaner output formatting, and bug fixes for a more reliable AI memory experience.
 
-## Architecture Changes in v6.0
+## What's New in v6.1.0
+
+### Context and Clarity Improvements
+- **Fixed Timestamp Display**: Resolved empty pipe bug that showed "error" in timestamps
+- **Clean Time Format**: YYYYMMDD|HHMM for older notes, just HHMM for today
+- **Persistent Context**: All pinned notes always shown in recall operations
+- **Rich Summaries**: Never truncated - preserving the core value of your notes
+- **Backend-Only Edges**: Edge/connection data stays in backend, never clutters output
+- **Selective Verbosity**: Backend metrics only shown when explicitly requested
+
+### Technical Refinements
+- Edge data remains for PageRank calculation but is never exposed
+- Pinned notes serve as permanent working memory
+- Consistent timestamp handling across all operations
+- Properly handles edge cases with empty results
+
+## Architecture (v6.0 Foundation)
 
 ### DuckDB Backend
 - **Columnar Storage**: Better compression and cache efficiency
@@ -14,7 +30,7 @@ Notebook v6.0 migrates from SQLite to DuckDB, bringing columnar analytics perfor
 - **Recursive CTEs**: Graph calculations in pure SQL
 - **Vectorized Operations**: Bulk operations on entire columns
 
-### Performance Improvements
+### Performance Metrics
 - PageRank: 66 seconds → <1 second (using recursive CTEs)
 - Graph traversals: 40x faster
 - Complex queries: 25x faster
@@ -35,9 +51,9 @@ pip install duckdb chromadb sentence-transformers scipy cryptography numpy
 ```
 
 ### First Run
-When you first run Notebook v6.0:
+When you first run Notebook v6.1:
 
-1. **Automatic Migration**:
+1. **Automatic Migration** (if upgrading):
    - Backs up existing SQLite database
    - Migrates all data to DuckDB
    - Preserves all relationships and metadata
@@ -60,15 +76,16 @@ When you first run Notebook v6.0:
 - **Background Vectorization**: Existing notes get embeddings
 
 ### Graph Intelligence  
-- **Vectorized PageRank**: DuckDB recursive CTEs
-- **Edge Types**: Temporal, reference, entity, session
+- **Vectorized PageRank**: DuckDB recursive CTEs (backend only)
+- **Edge Types**: Temporal, reference, entity, session (backend only)
 - **Entity Extraction**: Detects @mentions and tools
-- **Session Tracking**: Groups related work
+- **Session Tracking**: Groups related work (backend only)
 
 ### Storage Features
 - **Native Arrays**: Tags stored as DuckDB arrays
 - **Encrypted Vault**: Secure credential storage
 - **Cross-Tool Integration**: Auto-logs to task manager
+- **Pinned Notes**: Permanent context always visible
 
 ## Functions
 
@@ -88,11 +105,11 @@ notebook:remember(
 1. Content saved to DuckDB
 2. Embedding generated via EmbeddingGemma
 3. Vector stored in ChromaDB
-4. Edges created automatically
+4. Edges created in backend
 5. PageRank recalculated using CTEs
 
 ### recall
-Search using hybrid semantic + keyword approach.
+Search using hybrid semantic + keyword approach. All pinned notes always shown.
 
 ```python
 notebook:recall(
@@ -100,9 +117,16 @@ notebook:recall(
   mode="hybrid",        # Options: hybrid, semantic, keyword
   when="yesterday",     # Natural language time
   tag="specific_tag",
-  limit=50
+  limit=50,
+  verbose=False        # Set to True for PageRank scores
 )
 ```
+
+**Key Features:**
+- Pinned notes always appear first (persistent context)
+- Rich summaries never truncated
+- Clean timestamp format (HHMM for today)
+- No edge data in output
 
 **Search Modes:**
 - `hybrid`: Interleaves semantic and keyword results
@@ -115,7 +139,7 @@ notebook:recall(
 - `morning`, `afternoon`, `evening`
 
 ### pin_note / unpin_note
-Mark important notes for quick access.
+Mark important notes for permanent context.
 
 ```python
 notebook:pin_note(id="605")   # or id="last"
@@ -126,8 +150,10 @@ notebook:pin(id="605")
 notebook:unpin(id="605")
 ```
 
+**Important**: Pinned notes always appear in recall results, serving as your persistent working memory.
+
 ### get_full_note
-Retrieve complete note with all metadata and connections.
+Retrieve complete note content (no edge data).
 
 ```python
 notebook:get_full_note(id="605")  # or id="last"
@@ -140,9 +166,8 @@ notebook:get(id="605")
 - Full content and summary
 - Author and creation time
 - Tags (from native array)
-- Entities and edges
-- PageRank score
-- Vector status
+- Entities only (no edges shown)
+- Creation timestamp
 
 ### vault_store / vault_retrieve
 Encrypted storage for sensitive information.
@@ -157,16 +182,19 @@ notebook:vault_list()
 System overview with statistics.
 
 ```python
-notebook:get_status()
+notebook:get_status(verbose=False)  # Set True for backend metrics
 ```
 
-**Returns:**
+**Default Returns:**
 - Note count
+- Pinned count
+- Last activity time
+
+**Verbose Returns:**
 - Vector count
-- Edge count
+- Edge count (backend metric)
 - Entity count
 - Session count
-- Pinned count
 - Tag count (unique)
 - Database type (duckdb)
 - Embedding model
@@ -182,6 +210,28 @@ notebook:batch(operations=[
 ])
 ```
 
+## Output Format
+
+### Pipe Format (Default)
+Optimized for token efficiency:
+```
+605|HHMM|Complete summary text never truncated
+604|2d|Another note with full summary preserved|📌
+603|20250925|1435|Older note with full timestamp
+```
+
+### Timestamp Format
+- **Today**: Just `HHMM` (e.g., `1435`)
+- **Yesterday**: `y` prefix (e.g., `y1435`)
+- **This week**: Days ago (e.g., `2d`)
+- **Older**: Full format `YYYYMMDD|HHMM`
+
+### Pinned Notes
+- Always shown in recall results
+- Marked with 📌 indicator
+- Appear first in results
+- Full summaries preserved
+
 ## DuckDB-Specific Features
 
 ### Native Array Storage
@@ -193,56 +243,10 @@ CREATE TABLE notes (
   tags TEXT[],  -- Native array type
   ...
 )
-
--- Query directly without joins
-SELECT * FROM notes WHERE 'duckdb' = ANY(tags)
 ```
 
-### Vectorized PageRank
-```sql
--- Recursive CTE for PageRank calculation
-WITH RECURSIVE pagerank AS (
-  -- Initial ranks
-  SELECT id, 1.0/COUNT(*) OVER() as rank
-  FROM notes
-  
-  UNION ALL
-  
-  -- Iterative calculation
-  SELECT ... -- Vectorized operations
-)
-SELECT * FROM pagerank
-```
-
-### Graph Traversal
-```sql
--- Find connected notes efficiently
-WITH RECURSIVE connected AS (
-  SELECT to_id FROM edges WHERE from_id = ?
-  UNION
-  SELECT e.to_id 
-  FROM edges e
-  JOIN connected c ON e.from_id = c.to_id
-)
-SELECT * FROM notes WHERE id IN (SELECT * FROM connected)
-```
-
-## Migration Details
-
-### From SQLite to DuckDB
-1. **Automatic Detection**: Checks for existing SQLite database
-2. **Backup Creation**: `notebook.backup_v5_YYYYMMDDHHMM.db`
-3. **Schema Conversion**:
-   - Tables recreated with DuckDB types
-   - Tags migrated to native arrays
-   - Indexes optimized for columnar storage
-4. **Data Transfer**: All notes, edges, entities preserved
-5. **Verification**: Confirms all data migrated successfully
-
-### Compatibility
-- **Backward Compatible**: All v5 features maintained
-- **Same API**: Function signatures unchanged
-- **Graceful Fallback**: Uses SQLite if DuckDB unavailable
+### Backend-Only Graph Data
+Edge data and PageRank calculations remain in the backend for intelligent sorting but are never exposed in responses. This keeps output clean while maintaining graph intelligence.
 
 ## Performance Benchmarks
 
@@ -264,9 +268,6 @@ export NOTEBOOK_FORMAT=pipe
 # Use semantic search: 'true' or 'false'
 export NOTEBOOK_SEMANTIC=true
 
-# Database backend: 'duckdb' or 'sqlite'
-export NOTEBOOK_DB=duckdb
-
 # Custom AI identity
 export AI_ID=Custom-Agent-001
 ```
@@ -281,6 +282,11 @@ export AI_ID=Custom-Agent-001
 
 ## Troubleshooting
 
+### v6.1.0 Fixes
+- **Timestamp Display**: Now shows correctly formatted times
+- **Empty Results**: Properly handles cases with no matches
+- **Pinned Context**: Always visible for persistent memory
+
 ### Migration Issues
 - **Backup Location**: Check for `notebook.backup_v5_*.db`
 - **Restore**: Rename backup to `notebook.db` to revert
@@ -291,11 +297,6 @@ export AI_ID=Custom-Agent-001
 - **Cache Warmup**: DuckDB optimizes after a few queries
 - **Memory**: DuckDB uses less RAM but more CPU initially
 
-### Compatibility
-- **DuckDB Not Found**: Falls back to SQLite automatically
-- **Version Check**: Requires DuckDB >= 0.10.0
-- **Array Support**: Native arrays require recent DuckDB
-
 ---
 
-Built for performance at scale. Your memory doesn't just persist - it accelerates.
+Built for clarity and context. Your memory persists with purpose.
