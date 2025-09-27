@@ -1,3 +1,17 @@
+<div align="center">
+
+![MCP AI Foundation](https://img.shields.io/badge/MCP%20AI%20FOUNDATION-878787?style=for-the-badge&labelColor=82A473&logo=data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==)
+
+[![Version](https://img.shields.io/badge/v6.1.0-82A473?style=flat-square&labelColor=878787)](https://github.com/QD25565/mcp-ai-foundation/releases)
+[![Python](https://img.shields.io/badge/Python-3.8+-82A473?style=flat-square&labelColor=878787)](https://www.python.org/)
+[![License](https://img.shields.io/badge/MIT-82A473?style=flat-square&labelColor=878787)](LICENSE)
+[![Tools](https://img.shields.io/badge/Tools-4-82A473?style=flat-square&labelColor=878787)](#overview)
+[![Performance](https://img.shields.io/badge/Tokens-↓80%25-82A473?style=flat-square&labelColor=878787)](#overview)
+
+</div>
+
+---
+
 # MCP AI Foundation
 
 Model Context Protocol (MCP) tools for AI memory persistence, task management, team coordination, and real-world grounding.
@@ -21,6 +35,12 @@ All tools feature:
 - Batch operations support
 
 ## Installation
+
+<div align="center">
+
+[![Quick Install](https://img.shields.io/badge/🚀_Quick_Install-82A473?style=for-the-badge&labelColor=878787)](#quick-install)
+
+</div>
 
 ### Quick Install
 ```bash
@@ -68,6 +88,12 @@ Add to your MCP client configuration (e.g., Claude Desktop):
 ```
 
 ## Tool Documentation
+
+<div align="center">
+
+![Notebook](https://img.shields.io/badge/📓_Notebook-878787?style=flat-square) ![Task Manager](https://img.shields.io/badge/✅_Task_Manager-878787?style=flat-square) ![Teambook](https://img.shields.io/badge/🌐_Teambook-878787?style=flat-square) ![World](https://img.shields.io/badge/🌍_World-878787?style=flat-square)
+
+</div>
 
 ### 📓 Notebook v6.1.0
 High-performance memory system built on DuckDB with vectorized operations and semantic search.
@@ -139,6 +165,12 @@ list_tasks(when="this week")
 
 ## Requirements
 
+<div align="center">
+
+![DuckDB](https://img.shields.io/badge/DuckDB-82A473?style=flat-square&labelColor=878787) ![ChromaDB](https://img.shields.io/badge/ChromaDB-82A473?style=flat-square&labelColor=878787) ![PyTorch](https://img.shields.io/badge/PyTorch-82A473?style=flat-square&labelColor=878787) ![Python](https://img.shields.io/badge/Python_3.8+-82A473?style=flat-square&labelColor=878787)
+
+</div>
+
 - Python 3.8+
 - DuckDB (for Notebook v6.0)
 - ChromaDB (for semantic search)
@@ -201,4 +233,11 @@ MIT License - See LICENSE file for details.
 
 ---
 
+<div align="center">
+
 Built for AIs, by AIs. 🤖
+
+[![GitHub](https://img.shields.io/badge/GitHub-QD25565-82A473?style=flat-square&labelColor=878787&logo=github)](https://github.com/QD25565)
+[![Repository](https://img.shields.io/badge/Repository-mcp--ai--foundation-82A473?style=flat-square&labelColor=878787)](https://github.com/QD25565/mcp-ai-foundation)
+
+</div>
