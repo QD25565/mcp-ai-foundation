@@ -16,8 +16,8 @@
 
 </div>
 
-
-**Overview**
+## Overview
+<img src="https://via.placeholder.com/1000x4/82A473/82A473" width="100%" height="4">
 
 Four core tools that provide fundamental capabilities for AI systems:
 
@@ -35,7 +35,8 @@ All tools feature:
 - Operation memory for natural chaining
 - Batch operations support
 
-**Installation**
+## Installation
+<img src="https://via.placeholder.com/1000x4/82A473/82A473" width="100%" height="4">
 
 <div align="center">
 
@@ -88,8 +89,24 @@ Add to your MCP client configuration (e.g., Claude Desktop):
 }
 ```
 
+## Documentation
+<img src="https://via.placeholder.com/1000x4/82A473/82A473" width="100%" height="4">
 
-**Tool Documentation**
+<div align="center">
+
+[![Interactive Docs](https://img.shields.io/badge/🌐_Interactive_Documentation-82A473?style=for-the-badge&labelColor=878787)](https://qd25565.github.io/mcp-ai-foundation/)
+[![API Reference](https://img.shields.io/badge/📖_API_Reference-82A473?style=for-the-badge&labelColor=878787)](docs/)
+
+</div>
+
+Visit our [**interactive documentation**](https://qd25565.github.io/mcp-ai-foundation/) for:
+- Live code examples with syntax highlighting
+- Visual feature demonstrations
+- Installation walkthroughs
+- Performance metrics and benchmarks
+
+## Tool Documentation
+<img src="https://via.placeholder.com/1000x4/82A473/82A473" width="100%" height="4">
 
 <div align="center">
 
@@ -144,8 +161,8 @@ Provides temporal and spatial context with minimal overhead.
 
 See [docs/world.md](docs/world.md) for usage.
 
-
-**Cross-Tool Integration**
+## Cross-Tool Integration
+<img src="https://via.placeholder.com/1000x4/82A473/82A473" width="100%" height="4">
 
 ### Automatic Task Creation
 ```python
@@ -166,7 +183,8 @@ recall(when="yesterday")
 list_tasks(when="this week")
 ```
 
-**Requirements**
+## Requirements
+<img src="https://via.placeholder.com/1000x4/82A473/82A473" width="100%" height="4">
 
 <div align="center">
 
@@ -184,7 +202,8 @@ list_tasks(when="this week")
 - requests (for weather/location)  
 - numpy (for calculations)
 
-**Data Storage**
+## Data Storage
+<img src="https://via.placeholder.com/1000x4/82A473/82A473" width="100%" height="4">
 
 All paths are created automatically on first run:
 
@@ -195,7 +214,8 @@ All paths are created automatically on first run:
 
 Each tool maintains its own database with automatic migration and backups.
 
-**Troubleshooting**
+## Troubleshooting
+<img src="https://via.placeholder.com/1000x4/82A473/82A473" width="100%" height="4">
 
 ### First Run Takes Long?
 - EmbeddingGemma (~1.12GB) downloads once on first use
@@ -212,7 +232,8 @@ Each tool maintains its own database with automatic migration and backups.
 - Verify ~1GB free disk space
 - System will fall back to lighter models automatically
 
-**Version History**
+## Version History
+<img src="https://via.placeholder.com/1000x4/82A473/82A473" width="100%" height="4">
 
 See [CHANGELOG.md](CHANGELOG.md) for complete version history.
 
@@ -223,6 +244,7 @@ See [CHANGELOG.md](CHANGELOG.md) for complete version history.
 - All pinned notes always shown for context
 - Removed edge data from responses
 - Rich summaries preserved at full length
+- Added interactive HTML documentation with green theme
 
 **v6.0.0 (September 2025)** - DuckDB Migration
 - Notebook rewritten with DuckDB backend
@@ -230,7 +252,9 @@ See [CHANGELOG.md](CHANGELOG.md) for complete version history.
 - Native array storage for tags
 - Automatic safe migration from SQLite
 
-**License**
+## License
+<img src="https://via.placeholder.com/1000x4/82A473/82A473" width="100%" height="4">
+
 MIT License - See LICENSE file for details.
 
 
