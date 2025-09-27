@@ -1,28 +1,18 @@
 #!/usr/bin/env python3
 """
-NOTEBOOK MCP v6.0.0 - DUCKDB EDITION
+NOTEBOOK MCP v6.1.0 - Small fixes and improved context exposure
 ===============================================
-High-performance hybrid memory system built on DuckDB.
-Features vectorized graph operations, native array types, and massive speedups.
+v6.0.0: DuckDB migration, PageRank <1s, native arrays
+v6.1.0: Fixed timestamp bugs, removed all edge noise, preserved context
 
-CRITICAL: This version will automatically migrate your existing SQLite database
-to DuckDB on first run. Your original database will be safely backed up.
+Changes in v6.1.0:
+- Fixed empty pipe bug in timestamps
+- Removed ALL edge/connection data (not useful for pattern matching)
+- All pinned notes always shown (they're your permanent context)
+- Cleaner time format: YYYYMMDD|HHMM initially, then just HHMM for today
+- Backend metrics only on explicit verbose=True
 
-PERFORMANCE GAINS:
-- PageRank: 66 seconds → <1 second (using DuckDB recursive CTEs)
-- Graph traversals: 40x faster
-- Complex queries: 25x faster
-- Memory usage: 90% reduction
-
-SETUP:
-pip install duckdb chromadb sentence-transformers scipy cryptography numpy
-
-v6.0.0 FEATURES:
-- Native array storage for tags (no more join tables!)
-- Vectorized PageRank using DuckDB's recursive CTEs
-- Full-text search with DuckDB FTS extension
-- Graph traversal queries in pure SQL
-- Automatic safe migration from SQLite
+Built by AIs, for AIs.
 ===============================================
 """
 
@@ -39,7 +29,6 @@ import re
 import time
 import numpy as np
 from cryptography.fernet import Fernet
-import threading
 
 # Database Engine
 try:
@@ -64,16 +53,8 @@ except ImportError:
     ST_AVAILABLE = False
     logging.warning("sentence-transformers not installed - semantic features disabled")
 
-# Performance libraries
-try:
-    from scipy.sparse import dok_matrix
-    SCIPY_AVAILABLE = True
-except ImportError:
-    SCIPY_AVAILABLE = False
-    logging.warning("scipy not installed - fallback PageRank will be used")
-
 # Version
-VERSION = "6.0.0"
+VERSION = "6.1.0"
 
 # Configuration
 OUTPUT_FORMAT = os.environ.get('NOTEBOOK_FORMAT', 'pipe')
@@ -87,7 +68,7 @@ BATCH_MAX = 50
 DEFAULT_RECENT = 30
 TEMPORAL_EDGES = 3
 SESSION_GAP_MINUTES = 30
-PAGERANK_ITERATIONS = 20  # Reduced since DuckDB is much faster
+PAGERANK_ITERATIONS = 20
 PAGERANK_DAMPING = 0.85
 PAGERANK_CACHE_SECONDS = 300
 
@@ -102,8 +83,6 @@ SQLITE_DB_FILE = DATA_DIR / "notebook.db"
 VECTOR_DIR = DATA_DIR / "vectors"
 VAULT_KEY_FILE = DATA_DIR / ".vault_key"
 LAST_OP_FILE = DATA_DIR / ".last_operation"
-MODELS_DIR = DATA_DIR.parent / "models"
-MODELS_DIR.mkdir(parents=True, exist_ok=True)
 
 # Logging
 logging.basicConfig(level=logging.INFO, stream=sys.stderr)
@@ -114,7 +93,7 @@ KNOWN_TOOLS = {'teambook', 'firebase', 'gemini', 'claude', 'jetbrains', 'github'
                 'slack', 'discord', 'vscode', 'git', 'docker', 'python', 'node',
                 'react', 'vue', 'angular', 'tensorflow', 'pytorch', 'aws', 'gcp',
                 'azure', 'kubernetes', 'redis', 'postgres', 'mongodb', 'sqlite',
-                'task_manager', 'notebook', 'world', 'chromadb', 'embedding-gemma', 'duckdb'}
+                'task_manager', 'notebook', 'world', 'chromadb', 'duckdb'}
 ENTITY_PATTERN = None
 ENTITY_PATTERN_SIZE = 0
 PAGERANK_DIRTY = True
@@ -124,7 +103,7 @@ encoder = None
 chroma_client = None
 collection = None
 EMBEDDING_MODEL = None
-FTS_ENABLED = False  # Track if FTS is available
+FTS_ENABLED = False
 
 def get_persistent_id():
     """Get or create persistent AI identity"""
@@ -192,14 +171,11 @@ def migrate_from_sqlite():
         sqlite_conn.row_factory = sqlite3.Row
         
         with get_db_conn() as duck_conn:
-            # Create schema
             _create_duckdb_schema(duck_conn)
             
-            # Get note count for progress
             note_count = sqlite_conn.execute("SELECT COUNT(*) FROM notes").fetchone()[0]
             logging.info(f"Migrating {note_count} notes...")
             
-            # Start transaction for atomic migration
             duck_conn.execute("BEGIN TRANSACTION")
             
             try:
@@ -215,7 +191,6 @@ def migrate_from_sqlite():
                         ''', (note['id'],)).fetchall()
                         tag_list = [t['name'] for t in tags] if tags else []
                     except sqlite3.OperationalError:
-                        # Old schema might have tags column
                         tag_list = []
                         if 'tags' in note.keys():
                             tags_data = note['tags']
@@ -224,7 +199,6 @@ def migrate_from_sqlite():
                                     tag_list = json.loads(tags_data) if isinstance(tags_data, str) else []
                                 except: pass
                     
-                    # Insert into DuckDB with native array
                     duck_conn.execute('''
                         INSERT INTO notes (
                             id, content, summary, tags, pinned, author,
@@ -253,25 +227,21 @@ def migrate_from_sqlite():
                 _migrate_simple_table(sqlite_conn, duck_conn, 'vault')
                 _migrate_simple_table(sqlite_conn, duck_conn, 'stats')
                 
-                # Commit transaction
                 duck_conn.execute("COMMIT")
                 logging.info("Migration committed successfully!")
                 
-                # Reset sequence to continue from max ID
                 max_id = duck_conn.execute("SELECT MAX(id) FROM notes").fetchone()[0]
                 if max_id:
                     duck_conn.execute(f"ALTER SEQUENCE notes_id_seq RESTART WITH {max_id + 1}")
                     logging.info(f"Sequence reset to start at {max_id + 1}")
                 
             except Exception as e:
-                # Rollback on any error
                 duck_conn.execute("ROLLBACK")
                 logging.error(f"Migration failed, rolled back: {e}")
                 raise
         
         sqlite_conn.close()
         
-        # Backup old database
         backup_path = SQLITE_DB_FILE.with_suffix(
             f'.backup_{datetime.now().strftime("%Y%m%d%H%M")}.db'
         )
@@ -291,7 +261,6 @@ def _migrate_simple_table(sqlite_conn, duck_conn, table_name: str):
     try:
         rows = sqlite_conn.execute(f"SELECT * FROM {table_name}").fetchall()
         if rows:
-            # Get column count from first row
             placeholders = ','.join(['?'] * len(rows[0]))
             duck_conn.executemany(
                 f"INSERT INTO {table_name} VALUES ({placeholders})",
@@ -303,7 +272,6 @@ def _migrate_simple_table(sqlite_conn, duck_conn, table_name: str):
 def _create_duckdb_schema(conn: duckdb.DuckDBPyConnection):
     """Create all tables and indices for DuckDB"""
     
-    # Create sequence for note IDs (will be updated after migration)
     conn.execute("CREATE SEQUENCE IF NOT EXISTS notes_id_seq START 1")
     
     # Main notes table with native array for tags
@@ -402,39 +370,32 @@ def _create_duckdb_schema(conn: duckdb.DuckDBPyConnection):
         logging.info("DuckDB FTS extension loaded")
     except Exception as e:
         FTS_ENABLED = False
-        logging.warning(f"FTS not available (OK on read-only filesystems): {e}")
+        logging.warning(f"FTS not available: {e}")
 
 def init_db():
     """Initialize DuckDB database"""
-    # Migrate if needed
     migrate_from_sqlite()
     
-    # Initialize schema if new
     with get_db_conn() as conn:
         tables = conn.execute("SHOW TABLES").fetchall()
         if not any(t[0] == 'notes' for t in tables):
             logging.info("Creating new database schema...")
             _create_duckdb_schema(conn)
         else:
-            # Check and fix sequence if needed
             try:
                 max_id = conn.execute("SELECT MAX(id) FROM notes").fetchone()[0]
                 if max_id:
-                    # Check current sequence value
                     seq_val = conn.execute("SELECT nextval('notes_id_seq')").fetchone()[0]
-                    conn.execute(f"SELECT setval('notes_id_seq', {seq_val - 1})")  # Reset because we just consumed one
+                    conn.execute(f"SELECT setval('notes_id_seq', {seq_val - 1})")
                     
                     if seq_val <= max_id:
-                        # Sequence needs to be updated
                         conn.execute(f"ALTER SEQUENCE notes_id_seq RESTART WITH {max_id + 1}")
                         logging.info(f"Fixed sequence to start at {max_id + 1}")
             except Exception as e:
                 logging.warning(f"Could not check/fix sequence: {e}")
         
-        # Load entities
         load_known_entities(conn)
         
-        # Log stats
         note_count = conn.execute("SELECT COUNT(*) FROM notes").fetchone()[0]
         logging.info(f"Database ready with {note_count} notes")
 
@@ -525,20 +486,41 @@ def pipe_escape(text: str) -> str:
     """Escape pipes in text for pipe format"""
     return str(text).replace('|', '\\|')
 
-def format_time_contextual(ts: Any) -> str:
-    """Ultra-compact contextual time format"""
-    if not ts: return ""
+def format_time_compact(ts: Any) -> str:
+    """Compact time format - YYYYMMDD|HHMM or just HHMM for today"""
+    if not ts: 
+        return "unknown"
     try:
-        dt = ts if isinstance(ts, datetime) else datetime.fromisoformat(str(ts))
-        delta = datetime.now() - dt
-        if delta.total_seconds() < 60: return "now"
-        if delta.total_seconds() < 3600: return f"{int(delta.total_seconds()/60)}m"
-        if dt.date() == datetime.now().date(): return dt.strftime("%H%M")
-        if delta.days == 1: return f"y{dt.strftime('%H%M')}"
-        if delta.days < 7: return f"{delta.days}d"
+        # Handle if ts is already a datetime object
+        if isinstance(ts, datetime):
+            dt = ts
+        elif isinstance(ts, str):
+            # Try parsing as ISO format
+            dt = datetime.fromisoformat(ts.replace('Z', '+00:00').replace(' ', 'T'))
+        else:
+            # Try converting to string first
+            dt = datetime.fromisoformat(str(ts))
+        
+        now = datetime.now()
+        delta = now - dt
+        
+        if delta.total_seconds() < 60: 
+            return "now"
+        if delta.total_seconds() < 3600: 
+            return f"{int(delta.total_seconds()/60)}m"
+        if dt.date() == now.date():
+            # Today - just show time
+            return dt.strftime("%H%M")
+        if delta.days == 1: 
+            return f"y{dt.strftime('%H%M')}"
+        if delta.days < 7: 
+            return f"{delta.days}d"
+        # Older - show full date|time
         return dt.strftime("%Y%m%d|%H%M")
-    except:
-        return ""
+    except Exception as e:
+        # Log for debugging but return something useful
+        logging.debug(f"Timestamp parsing error for {ts}: {e}")
+        return str(ts)[:10] if ts else "unknown"
 
 def clean_text(text: str) -> str:
     """Clean text by removing extra whitespace"""
@@ -569,11 +551,9 @@ def extract_entities(content: str) -> List[Tuple[str, str]]:
     entities = []
     content_lower = content.lower()
     
-    # Extract @mentions
     mentions = re.findall(r'@([\w-]+)', content, re.IGNORECASE)
     entities.extend((m.lower(), 'mention') for m in mentions)
     
-    # Check for known entities
     all_known = KNOWN_TOOLS.union(KNOWN_ENTITIES)
     if all_known:
         if ENTITY_PATTERN is None or len(all_known) != ENTITY_PATTERN_SIZE:
@@ -605,7 +585,6 @@ def detect_or_create_session(note_id: int, created: datetime, conn: duckdb.DuckD
                 )
                 return prev[1]
         
-        # Create new session (using max ID approach)
         max_session_id = conn.execute("SELECT COALESCE(MAX(id), 0) FROM sessions").fetchone()[0]
         new_session_id = max_session_id + 1
         
@@ -618,7 +597,7 @@ def detect_or_create_session(note_id: int, created: datetime, conn: duckdb.DuckD
         return None
 
 def create_all_edges(note_id: int, content: str, session_id: Optional[int], conn: duckdb.DuckDBPyConnection):
-    """Create all edge types efficiently"""
+    """Create all edge types efficiently - backend only, never shown"""
     now = datetime.now()
     edges_to_add = []
     
@@ -674,7 +653,6 @@ def create_all_edges(note_id: int, content: str, session_id: Optional[int], conn
                 [now, entity_id]
             )
         else:
-            # Create new entity using max ID approach
             max_entity_id = conn.execute("SELECT COALESCE(MAX(id), 0) FROM entities").fetchone()[0]
             entity_id = max_entity_id + 1
             
@@ -691,7 +669,6 @@ def create_all_edges(note_id: int, content: str, session_id: Optional[int], conn
                 [entity_id, note_id]
             )
             
-            # Find related notes
             other_notes = conn.execute(
                 'SELECT note_id FROM entity_notes WHERE entity_id = ? AND note_id != ?',
                 [entity_id, note_id]
@@ -711,11 +688,10 @@ def create_all_edges(note_id: int, content: str, session_id: Optional[int], conn
             )
 
 def calculate_pagerank_duckdb(conn: duckdb.DuckDBPyConnection):
-    """Calculate PageRank using DuckDB's native SQL - BLAZING FAST!"""
+    """Calculate PageRank using DuckDB's native SQL"""
     try:
         start = time.time()
         
-        # Use DuckDB's powerful recursive CTEs for PageRank
         conn.execute(f'''
             CREATE OR REPLACE TEMPORARY TABLE pagerank_scores AS
             WITH RECURSIVE
@@ -731,13 +707,11 @@ def calculate_pagerank_duckdb(conn: duckdb.DuckDBPyConnection):
                 GROUP BY from_id
             ),
             pagerank(iteration, id, rank) AS (
-                -- Initial PageRank
                 SELECT 0, id, 1.0 / node_count.total
                 FROM nodes, node_count
                 
                 UNION ALL
                 
-                -- Iterate PageRank
                 SELECT 
                     pr.iteration + 1,
                     n.id,
@@ -756,7 +730,6 @@ def calculate_pagerank_duckdb(conn: duckdb.DuckDBPyConnection):
             WHERE iteration = {PAGERANK_ITERATIONS}
         ''')
         
-        # Update notes with PageRank scores
         conn.execute('''
             UPDATE notes 
             SET pagerank = pr.rank
@@ -766,11 +739,10 @@ def calculate_pagerank_duckdb(conn: duckdb.DuckDBPyConnection):
         
         elapsed = time.time() - start
         note_count = conn.execute("SELECT COUNT(*) FROM notes").fetchone()[0]
-        logging.info(f"PageRank calculated for {note_count} notes in {elapsed:.2f}s (DuckDB native)")
+        logging.info(f"PageRank calculated for {note_count} notes in {elapsed:.2f}s")
         
     except Exception as e:
         logging.error(f"DuckDB PageRank failed, using fallback: {e}")
-        # Simple fallback based on edge count
         conn.execute('''
             UPDATE notes 
             SET pagerank = COALESCE((
@@ -864,11 +836,9 @@ def remember(content: str = None, summary: str = None, tags: List[str] = None,
         tags = [str(t).lower().strip() for t in tags if t] if tags else []
         
         with get_db_conn() as conn:
-            # Get next ID by finding max and adding 1 (more reliable than sequences)
             max_id = conn.execute("SELECT COALESCE(MAX(id), 0) FROM notes").fetchone()[0]
             note_id = max_id + 1
             
-            # Insert note with native array tags
             conn.execute('''
                 INSERT INTO notes (
                     id, content, summary, tags, pinned, author,
@@ -881,12 +851,10 @@ def remember(content: str = None, summary: str = None, tags: List[str] = None,
                 0.0, bool(encoder and collection)
             ])
             
-            # Handle session
             session_id = detect_or_create_session(note_id, datetime.now(), conn)
             if session_id:
                 conn.execute('UPDATE notes SET session_id = ? WHERE id = ?', [session_id, note_id])
             
-            # Create edges
             create_all_edges(note_id, content, session_id, conn)
             
             global PAGERANK_DIRTY
@@ -912,14 +880,13 @@ def remember(content: str = None, summary: str = None, tags: List[str] = None,
         save_last_operation('remember', {'id': note_id, 'summary': summary})
         log_operation('remember', int((datetime.now() - start).total_seconds() * 1000))
         
-        current_timestamp = datetime.now().strftime("%Y%m%d|%H%M")
         if OUTPUT_FORMAT == 'pipe':
-            result_str = f"{note_id}|{current_timestamp}|{summary}"
+            result_str = f"{note_id}|{format_time_compact(datetime.now())}|{summary}"
             if truncated:
-                result_str += f"|truncated:{orig_len}"
+                result_str += f"|T{orig_len}"
             return {"saved": result_str}
         else:
-            result_dict = {"id": note_id, "time": current_timestamp, "summary": summary}
+            result_dict = {"id": note_id, "time": format_time_compact(datetime.now()), "summary": summary}
             if truncated:
                 result_dict["truncated"] = orig_len
             return result_dict
@@ -930,12 +897,11 @@ def remember(content: str = None, summary: str = None, tags: List[str] = None,
 
 def recall(query: str = None, tag: str = None, when: str = None,
            pinned_only: bool = False, show_all: bool = False,
-           limit: int = 50, mode: str = "hybrid", **kwargs) -> Dict:
-    """Search notes using DuckDB's powerful features"""
+           limit: int = 50, mode: str = "hybrid", verbose: bool = False, **kwargs) -> Dict:
+    """Search notes - always with rich summaries, all pinned shown"""
     try:
         start_time = datetime.now()
         
-        # Ensure limit is an integer
         if isinstance(limit, str):
             try:
                 limit = int(limit)
@@ -948,7 +914,6 @@ def recall(query: str = None, tag: str = None, when: str = None,
         with get_db_conn() as conn:
             calculate_pagerank_if_needed(conn)
             
-            # Build query
             conditions = []
             params = []
             
@@ -967,6 +932,16 @@ def recall(query: str = None, tag: str = None, when: str = None,
                 params.append(tag_clean)
             
             notes = []
+            
+            # First, always get ALL pinned notes (unless specifically filtering)
+            if not pinned_only and not query and not tag and not when:
+                pinned_notes = conn.execute('''
+                    SELECT id, content, summary, tags, pinned, author, created, pagerank
+                    FROM notes WHERE pinned = TRUE
+                    ORDER BY created DESC
+                ''').fetchall()
+            else:
+                pinned_notes = []
             
             if query:
                 # Semantic search
@@ -989,7 +964,6 @@ def recall(query: str = None, tag: str = None, when: str = None,
                     global FTS_ENABLED
                     if FTS_ENABLED:
                         try:
-                            # Use FTS if available
                             fts_results = conn.execute('''
                                 SELECT fts_main_notes.id 
                                 FROM fts_main_notes 
@@ -998,11 +972,9 @@ def recall(query: str = None, tag: str = None, when: str = None,
                             ''', [str(query).strip(), limit]).fetchall()
                             keyword_ids = [row[0] for row in fts_results]
                         except:
-                            # FTS query failed, fall back to LIKE
                             FTS_ENABLED = False
                     
                     if not FTS_ENABLED:
-                        # Fallback to LIKE
                         like_query = f"%{str(query).strip()}%"
                         like_results = conn.execute('''
                             SELECT id FROM notes 
@@ -1025,8 +997,6 @@ def recall(query: str = None, tag: str = None, when: str = None,
                     placeholders = ','.join(['?'] * len(note_ids))
                     
                     where_clause = " AND ".join(conditions) if conditions else "1=1"
-                    
-                    # Safely construct final parameters - only add the first ID if we have one
                     final_params = note_ids + params + ([note_ids[0]] if note_ids else [])
                     
                     notes = conn.execute(f'''
@@ -1038,7 +1008,6 @@ def recall(query: str = None, tag: str = None, when: str = None,
                             pinned DESC, pagerank DESC, created DESC
                     ''', final_params).fetchall()
                 else:
-                    # No results from search, return empty
                     notes = []
             else:
                 # Regular query without search
@@ -1050,93 +1019,108 @@ def recall(query: str = None, tag: str = None, when: str = None,
                     LIMIT ?
                 ''', params + [limit]).fetchall()
         
-        current_timestamp = datetime.now().strftime("%Y%m%d|%H%M")
-        if not notes:
-            return {"msg": "No notes found", "current_time": current_timestamp}
+        # Combine pinned and regular notes
+        all_notes = list(pinned_notes) + [n for n in notes if not n[4]]  # n[4] is pinned column
+        
+        if not all_notes:
+            return {"msg": "No notes found"}
         
         if OUTPUT_FORMAT == 'pipe':
-            lines = [f"@{current_timestamp}"]
-            for note in notes:
+            lines = []
+            for note in all_notes:
                 note_id, content, summary, tags_arr, pinned, author, created, pagerank = note
+                # Always preserve full summary - it's the main value
                 parts = [
                     str(note_id),
-                    format_time_contextual(created),
-                    summary or simple_summary(content, 80)
+                    format_time_compact(created),
+                    summary or simple_summary(content, 150)  # Never truncate summaries
                 ]
                 if pinned:
-                    parts.append('PIN')
-                if pagerank and pagerank > 0.01:
-                    parts.append(f"★{pagerank:.3f}")
+                    parts.append('📌')
+                if verbose and pagerank and pagerank > 0.01:
+                    parts.append(f"★{pagerank:.2f}")
                 lines.append('|'.join(pipe_escape(p) for p in parts))
             return {"notes": lines}
         else:
             formatted_notes = []
-            for note in notes:
+            for note in all_notes:
                 note_id, content, summary, tags_arr, pinned, author, created, pagerank = note
-                formatted_notes.append({
+                note_dict = {
                     'id': note_id,
-                    'time': format_time_contextual(created),
-                    'summary': summary or simple_summary(content, 80),
-                    'pinned': bool(pinned),
-                    'pagerank': round(pagerank, 3) if pagerank > 0.01 else None
-                })
-            return {"notes": formatted_notes, "current_time": current_timestamp}
+                    'time': format_time_compact(created),
+                    'summary': summary or simple_summary(content, 150),  # Never truncate
+                }
+                if pinned:
+                    note_dict['pinned'] = True
+                if verbose and pagerank and pagerank > 0.01:
+                    note_dict['rank'] = round(pagerank, 3)
+                formatted_notes.append(note_dict)
+            return {"notes": formatted_notes}
         
-        save_last_operation('recall', {"notes": notes})
+        save_last_operation('recall', {"notes": all_notes})
         log_operation('recall', int((datetime.now() - start_time).total_seconds() * 1000))
         
     except Exception as e:
         logging.error(f"Error in recall: {e}", exc_info=True)
         return {"error": f"Recall failed: {str(e)}"}
 
-def get_status(**kwargs) -> Dict:
-    """Get current state with DuckDB stats"""
+def get_status(verbose: bool = False, **kwargs) -> Dict:
+    """Get current state - ultra-minimal by default"""
     try:
-        current_timestamp = datetime.now().strftime("%Y%m%d|%H%M")
-        
         with get_db_conn() as conn:
-            counts = {
-                "notes": conn.execute('SELECT COUNT(*) FROM notes').fetchone()[0],
-                "pinned": conn.execute('SELECT COUNT(*) FROM notes WHERE pinned = TRUE').fetchone()[0],
-                "edges": conn.execute('SELECT COUNT(*) FROM edges').fetchone()[0],
-                "entities": conn.execute('SELECT COUNT(*) FROM entities').fetchone()[0],
-                "sessions": conn.execute('SELECT COUNT(*) FROM sessions').fetchone()[0],
-                "vault": conn.execute('SELECT COUNT(*) FROM vault').fetchone()[0],
-                "tags": conn.execute('SELECT COUNT(DISTINCT tag) FROM (SELECT unnest(tags) as tag FROM notes WHERE tags IS NOT NULL)').fetchone()[0],
-            }
+            # Always get these essentials
+            notes = conn.execute('SELECT COUNT(*) FROM notes').fetchone()[0]
+            pinned = conn.execute('SELECT COUNT(*) FROM notes WHERE pinned = TRUE').fetchone()[0]
             
             recent = conn.execute('SELECT created FROM notes ORDER BY created DESC LIMIT 1').fetchone()
-            last_activity = format_time_contextual(recent[0]) if recent else "never"
-        
-        vector_count = collection.count() if collection else 0
-        
-        if OUTPUT_FORMAT == 'pipe':
-            parts = [
-                f"@{current_timestamp}",
-                f"notes:{counts['notes']}",
-                f"vectors:{vector_count}",
-                f"edges:{counts['edges']}",
-                f"entities:{counts['entities']}",
-                f"sessions:{counts['sessions']}",
-                f"pinned:{counts['pinned']}",
-                f"tags:{counts['tags']}",
-                f"last:{last_activity}",
-                f"db:duckdb",
-                f"model:{EMBEDDING_MODEL or 'none'}",
-                f"fts:{'yes' if FTS_ENABLED else 'no'}"
-            ]
-            return {"status": '|'.join(parts)}
-        else:
-            return {
-                "current_time": current_timestamp,
-                **counts,
-                "vectors": vector_count,
-                "last": last_activity,
-                "database": "duckdb",
-                "embedding_model": EMBEDDING_MODEL or "none",
-                "fts_enabled": FTS_ENABLED,
-                "identity": CURRENT_AI_ID
-            }
+            last_activity = format_time_compact(recent[0]) if recent else "never"
+            
+            if verbose:
+                # Backend metrics only when explicitly requested
+                edges = conn.execute('SELECT COUNT(*) FROM edges').fetchone()[0]
+                entities = conn.execute('SELECT COUNT(*) FROM entities').fetchone()[0]
+                sessions = conn.execute('SELECT COUNT(*) FROM sessions').fetchone()[0]
+                vault = conn.execute('SELECT COUNT(*) FROM vault').fetchone()[0]
+                tags = conn.execute('SELECT COUNT(DISTINCT tag) FROM (SELECT unnest(tags) as tag FROM notes WHERE tags IS NOT NULL)').fetchone()[0]
+                vector_count = collection.count() if collection else 0
+                
+                if OUTPUT_FORMAT == 'pipe':
+                    parts = [
+                        f"n:{notes}",
+                        f"p:{pinned}",
+                        f"v:{vector_count}",
+                        f"e:{edges}",
+                        f"ent:{entities}",
+                        f"s:{sessions}",
+                        f"t:{tags}",
+                        f"last:{last_activity}",
+                        f"db:duck",
+                        f"emb:{EMBEDDING_MODEL or 'none'}"
+                    ]
+                    return {"status": '|'.join(parts)}
+                else:
+                    return {
+                        "notes": notes,
+                        "pinned": pinned,
+                        "vectors": vector_count,
+                        "edges": edges,
+                        "entities": entities,
+                        "sessions": sessions,
+                        "tags": tags,
+                        "last": last_activity,
+                        "db": "duckdb",
+                        "embedding": EMBEDDING_MODEL or "none"
+                    }
+            else:
+                # Default minimal output - just what matters
+                if OUTPUT_FORMAT == 'pipe':
+                    return {"status": f"n:{notes}|p:{pinned}|{last_activity}"}
+                else:
+                    return {
+                        "notes": notes,
+                        "pinned": pinned,
+                        "last": last_activity
+                    }
     
     except Exception as e:
         logging.error(f"Error in get_status: {e}")
@@ -1147,7 +1131,7 @@ def _modify_pin_status(id_param: Any, pin: bool) -> Dict:
     try:
         note_id = _get_note_id(id_param)
         if not note_id:
-            return {"error": "Invalid or missing note ID"}
+            return {"error": "Invalid note ID"}
         
         with get_db_conn() as conn:
             result = conn.execute(
@@ -1160,16 +1144,15 @@ def _modify_pin_status(id_param: Any, pin: bool) -> Dict:
         
         action = 'pin' if pin else 'unpin'
         save_last_operation(action, {'id': note_id})
-        current_timestamp = datetime.now().strftime("%Y%m%d|%H%M")
         
         if pin:
-            summ = result[0] or simple_summary(result[1], 60)
+            summ = result[0] or simple_summary(result[1], 100)
             if OUTPUT_FORMAT == 'pipe':
-                return {"pinned": f"{note_id}|{current_timestamp}|{summ}"}
+                return {"pinned": f"{note_id}|{summ}"}
             else:
-                return {"pinned": note_id, "time": current_timestamp, "summary": summ}
+                return {"pinned": note_id, "summary": summ}
         else:
-            return {"unpinned": note_id, "time": current_timestamp}
+            return {"unpinned": note_id}
     
     except Exception as e:
         logging.error(f"Error in pin/unpin: {e}")
@@ -1183,57 +1166,42 @@ def unpin_note(id: Any = None, **kwargs) -> Dict:
     """Unpin a note"""
     return _modify_pin_status(kwargs.get('id', id), False)
 
-def get_full_note(id: Any = None, **kwargs) -> Dict:
-    """Get complete note with all graph connections"""
+def get_full_note(id: Any = None, verbose: bool = False, **kwargs) -> Dict:
+    """Get complete note - NO edges ever shown"""
     try:
         note_id = _get_note_id(kwargs.get('id', id))
         if not note_id:
-            return {"error": "Invalid or missing note ID"}
+            return {"error": "Invalid note ID"}
         
         with get_db_conn() as conn:
             note = conn.execute('SELECT * FROM notes WHERE id = ?', [note_id]).fetchone()
             if not note:
                 return {"error": f"Note {note_id} not found"}
             
-            # Build result dict
             cols = [desc[0] for desc in conn.description]
             result = dict(zip(cols, note))
             
-            # Convert datetime to string for JSON serialization
+            # Clean up datetime
             if 'created' in result and result['created']:
-                result['created'] = result['created'].isoformat() if hasattr(result['created'], 'isoformat') else str(result['created'])
+                result['created'] = format_time_compact(result['created'])
             
-            # Get entities
+            # Get entities (actually useful for pattern matching)
             entities = conn.execute('''
                 SELECT e.name FROM entities e
                 JOIN entity_notes en ON e.id = en.entity_id
                 WHERE en.note_id = ?
             ''', [note_id]).fetchall()
-            result['entities'] = [f"@{e[0]}" for e in entities]
+            if entities:
+                result['entities'] = [e[0] for e in entities]
             
-            # Get edges
-            edges_out = conn.execute(
-                'SELECT to_id, type FROM edges WHERE from_id = ?',
-                [note_id]
-            ).fetchall()
-            edges_in = conn.execute(
-                'SELECT from_id, type FROM edges WHERE to_id = ?',
-                [note_id]
-            ).fetchall()
+            # Remove any edge data from result
+            result.pop('session_id', None)
+            result.pop('linked_items', None)
+            result.pop('pagerank', None)
+            result.pop('has_vector', None)
             
-            result['edges_out'] = {}
-            for to_id, edge_type in edges_out:
-                if edge_type not in result['edges_out']:
-                    result['edges_out'][edge_type] = []
-                result['edges_out'][edge_type].append(to_id)
-            
-            result['edges_in'] = {}
-            for from_id, edge_type in edges_in:
-                if edge_type not in result['edges_in']:
-                    result['edges_in'][edge_type] = []
-                result['edges_in'][edge_type].append(from_id)
+            # NEVER include edges - they're backend noise
         
-        result['current_time'] = datetime.now().strftime("%Y%m%d|%H%M")
         save_last_operation('get_full_note', {'id': note_id})
         return result
     
@@ -1247,13 +1215,12 @@ def vault_store(key: str = None, value: str = None, **kwargs) -> Dict:
         key = str(kwargs.get('key', key) or '').strip()
         value = str(kwargs.get('value', value) or '').strip()
         if not key or not value:
-            return {"error": "Both key and value required"}
+            return {"error": "Key and value required"}
         
         encrypted = vault_manager.encrypt(value)
         now = datetime.now()
         
         with get_db_conn() as conn:
-            # DuckDB UPSERT
             conn.execute('''
                 INSERT INTO vault (key, encrypted_value, created, updated, author)
                 VALUES (?, ?, ?, ?, ?)
@@ -1263,7 +1230,7 @@ def vault_store(key: str = None, value: str = None, **kwargs) -> Dict:
             ''', [key, encrypted, now, now, CURRENT_AI_ID])
         
         log_operation('vault_store')
-        return {"stored": key, "time": datetime.now().strftime("%Y%m%d|%H%M")}
+        return {"stored": key}
     
     except Exception as e:
         logging.error(f"Error in vault_store: {e}")
@@ -1287,7 +1254,7 @@ def vault_retrieve(key: str = None, **kwargs) -> Dict:
         
         decrypted = vault_manager.decrypt(result[0])
         log_operation('vault_retrieve')
-        return {"key": key, "value": decrypted, "time": datetime.now().strftime("%Y%m%d|%H%M")}
+        return {"key": key, "value": decrypted}
     
     except Exception as e:
         logging.error(f"Error in vault_retrieve: {e}")
@@ -1301,21 +1268,20 @@ def vault_list(**kwargs) -> Dict:
                 'SELECT key, updated FROM vault ORDER BY updated DESC'
             ).fetchall()
         
-        current_timestamp = datetime.now().strftime("%Y%m%d|%H%M")
         if not items:
-            return {"msg": "Vault empty", "current_time": current_timestamp}
+            return {"msg": "Vault empty"}
         
         if OUTPUT_FORMAT == 'pipe':
-            keys = [f"@{current_timestamp}"]
+            keys = []
             for key, updated in items:
-                keys.append(f"{key}|{format_time_contextual(updated)}")
+                keys.append(f"{key}|{format_time_compact(updated)}")
             return {"vault_keys": keys}
         else:
             keys = [
-                {'key': key, 'updated': format_time_contextual(updated)}
+                {'key': key, 'updated': format_time_compact(updated)}
                 for key, updated in items
             ]
-            return {"vault_keys": keys, "current_time": current_timestamp}
+            return {"vault_keys": keys}
     
     except Exception as e:
         logging.error(f"Error in vault_list: {e}")
@@ -1326,9 +1292,9 @@ def batch(operations: List[Dict] = None, **kwargs) -> Dict:
     try:
         operations = kwargs.get('operations', operations or [])
         if not operations:
-            return {"error": "No operations provided"}
+            return {"error": "No operations"}
         if len(operations) > BATCH_MAX:
-            return {"error": f"Too many operations (max {BATCH_MAX})"}
+            return {"error": f"Max {BATCH_MAX} operations"}
         
         op_map = {
             'remember': remember, 'recall': recall,
@@ -1345,7 +1311,7 @@ def batch(operations: List[Dict] = None, **kwargs) -> Dict:
             if op_type in op_map:
                 results.append(op_map[op_type](**op.get('args', {})))
             else:
-                results.append({"error": f"Unknown operation: {op_type}"})
+                results.append({"error": f"Unknown op: {op_type}"})
         
         return {"batch_results": results, "count": len(results)}
     
@@ -1354,7 +1320,7 @@ def batch(operations: List[Dict] = None, **kwargs) -> Dict:
         return {"error": f"Batch failed: {str(e)}"}
 
 def handle_tools_call(params: Dict) -> Dict:
-    """Route tool calls with proper formatting"""
+    """Route tool calls with clean formatting"""
     tool_name = params.get("name", "").lower().strip()
     tool_args = params.get("arguments", {})
     
@@ -1375,25 +1341,16 @@ def handle_tools_call(params: Dict) -> Dict:
     
     # Format response based on tool and result
     if tool_name in ["get_full_note", "get"] and "content" in result and "id" in result:
-        text_parts.append(f"@{result.get('current_time', '')}")
         text_parts.append(f"=== NOTE {result['id']} ===")
-        text_parts.append(f"Created: {result.get('created', 'Unknown')}")
-        text_parts.append(f"Author: {result.get('author', 'Unknown')}")
         if result.get('pinned'):
             text_parts.append("📌 PINNED")
         text_parts.append(f"\n{result['content']}\n")
         if result.get('summary'):
             text_parts.append(f"Summary: {result['summary']}")
-        if result.get('tags'):
-            text_parts.append(f"Tags: {', '.join(result['tags'])}")
         if result.get('entities'):
             text_parts.append(f"Entities: {', '.join(result['entities'])}")
-        if result.get('edges_out'):
-            text_parts.append(f"Connections: {json.dumps(result['edges_out'])}")
-        if result.get('pagerank') and result['pagerank'] > 0.01:
-            text_parts.append(f"PageRank: {result['pagerank']:.4f}")
-    elif tool_name == "vault_retrieve" and "value" in result and "key" in result:
-        text_parts.append(f"@{result.get('time', '')}")
+        # NO edge data ever shown
+    elif tool_name == "vault_retrieve" and "value" in result:
         text_parts.append(f"🔐 {result['key']}: {result['value']}")
     elif "error" in result:
         text_parts.append(f"Error: {result['error']}")
@@ -1442,15 +1399,14 @@ init_vector_db()
 
 def main():
     """MCP server main loop"""
-    logging.info(f"Notebook MCP v{VERSION} - DUCKDB POWERED")
+    logging.info(f"Notebook MCP v{VERSION} - AI-Only Edition")
     logging.info(f"Identity: {CURRENT_AI_ID} | DB: {DB_FILE}")
-    logging.info(f"Database: DuckDB (vectorized PageRank)")
-    logging.info(f"Embedding model: {EMBEDDING_MODEL or 'None'}")
-    logging.info(f"FTS: {'Enabled' if FTS_ENABLED else 'Disabled (fallback to LIKE)'}")
-    if SCIPY_AVAILABLE:
-        logging.info("✓ Scipy available (for fallback if needed)")
-    logging.info("✓ Native arrays for tags")
-    logging.info("✓ Recursive CTE PageRank")
+    logging.info(f"Features: Rich content preserved, backend noise removed")
+    logging.info(f"Embedding: {EMBEDDING_MODEL or 'None'}")
+    logging.info(f"FTS: {'Yes' if FTS_ENABLED else 'No'}")
+    logging.info("✓ Fixed timestamp formatting")
+    logging.info("✓ All pinned notes shown")
+    logging.info("✓ No edge data pollution")
     
     while True:
         try:
@@ -1475,14 +1431,17 @@ def main():
                     "serverInfo": {
                         "name": "notebook",
                         "version": VERSION,
-                        "description": f"DuckDB-powered memory (PageRank <1s, {EMBEDDING_MODEL or 'keyword-only'})"
+                        "description": f"AI memory: Rich summaries, no noise, {EMBEDDING_MODEL or 'keyword'}"
                     }
                 }
             elif method == "notifications/initialized":
                 continue
             elif method == "tools/list":
                 tool_schemas = {
-                    "get_status": {"desc": "See current system state", "props": {}},
+                    "get_status": {
+                        "desc": "System state (n:X|p:Y|last)",
+                        "props": {"verbose": {"type": "boolean", "description": "Include backend metrics"}}
+                    },
                     "remember": {
                         "desc": "Save a note",
                         "props": {
@@ -1492,21 +1451,28 @@ def main():
                         }
                     },
                     "recall": {
-                        "desc": "Hybrid search",
+                        "desc": "Search notes (shows ALL pinned + results)",
                         "props": {
                             "query": {"type": "string"},
                             "tag": {"type": "string"},
-                            "when": {"type": "string"}
+                            "when": {"type": "string"},
+                            "verbose": {"type": "boolean", "description": "Include PageRank scores"}
                         }
                     },
                     "get_full_note": {
-                        "desc": "Get complete note",
-                        "props": {"id": {"type": "string"}},
+                        "desc": "Get note content",
+                        "props": {
+                            "id": {"type": "string"},
+                            "verbose": {"type": "boolean", "description": "No effect - edges never shown"}
+                        },
                         "req": ["id"]
                     },
                     "get": {
                         "desc": "Alias for get_full_note",
-                        "props": {"id": {"type": "string"}},
+                        "props": {
+                            "id": {"type": "string"},
+                            "verbose": {"type": "boolean", "description": "No effect - edges never shown"}
+                        },
                         "req": ["id"]
                     },
                     "pin_note": {
