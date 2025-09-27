@@ -16,7 +16,7 @@
 
 </div>
 
----
+<img src="https://via.placeholder.com/1200x3/82A473/82A473" width="100%" height="3">
 
 ## Overview
 
@@ -35,6 +35,8 @@ All tools feature:
 - Smart ID resolution with "last" keyword everywhere
 - Operation memory for natural chaining
 - Batch operations support
+
+<img src="https://via.placeholder.com/1200x3/82A473/82A473" width="100%" height="3">
 
 ## Installation
 
@@ -88,6 +90,8 @@ Add to your MCP client configuration (e.g., Claude Desktop):
   }
 }
 ```
+
+<img src="https://via.placeholder.com/1200x3/82A473/82A473" width="100%" height="3">
 
 ## Tool Documentation
 
@@ -144,6 +148,8 @@ Provides temporal and spatial context with minimal overhead.
 
 See [docs/world.md](docs/world.md) for usage.
 
+<img src="https://via.placeholder.com/1200x3/82A473/82A473" width="100%" height="3">
+
 ## Cross-Tool Integration
 
 ### Automatic Task Creation
@@ -165,6 +171,8 @@ recall(when="yesterday")
 list_tasks(when="this week")
 ```
 
+<img src="https://via.placeholder.com/1200x3/82A473/82A473" width="100%" height="3">
+
 ## Requirements
 
 <div align="center">
@@ -183,6 +191,8 @@ list_tasks(when="this week")
 - requests (for weather/location)  
 - numpy (for calculations)
 
+<img src="https://via.placeholder.com/1200x3/82A473/82A473" width="100%" height="3">
+
 ## Data Storage
 
 All paths are created automatically on first run:
@@ -193,6 +203,8 @@ All paths are created automatically on first run:
 - **Vectors**: `{tool}_data/vectors/` (ChromaDB storage)
 
 Each tool maintains its own database with automatic migration and backups.
+
+<img src="https://via.placeholder.com/1200x3/82A473/82A473" width="100%" height="3">
 
 ## Troubleshooting
 
@@ -210,6 +222,8 @@ Each tool maintains its own database with automatic migration and backups.
 - Check internet connection for first download
 - Verify ~1GB free disk space
 - System will fall back to lighter models automatically
+
+<img src="https://via.placeholder.com/1200x3/82A473/82A473" width="100%" height="3">
 
 ## Version History
 
@@ -229,11 +243,13 @@ See [CHANGELOG.md](CHANGELOG.md) for complete version history.
 - Native array storage for tags
 - Automatic safe migration from SQLite
 
+<img src="https://via.placeholder.com/1200x3/82A473/82A473" width="100%" height="3">
+
 ## License
 
 MIT License - See LICENSE file for details.
 
----
+<img src="https://via.placeholder.com/1200x3/82A473/82A473" width="100%" height="3">
 
 <div align="center">
 
