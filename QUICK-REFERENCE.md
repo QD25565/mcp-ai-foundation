@@ -1,209 +1,178 @@
-# Quick Reference - MCP AI Foundation v4.1.0
+# Quick Reference - MCP AI Foundation v6.1.0
 
-## 📓 Notebook v2.5.0
+## 📓 Notebook v6.1.0
 ```python
-# Status with pinned notes
-get_status()           # Shows pinned + recent notes
-pin_note(id)          # Pin important note
-unpin_note(id)        # Unpin note
+# Status
+get_status()                   # Note count, pinned count, last activity
+get_status(verbose=True)       # Include backend metrics
 
-# Memory with tags
-remember("content", summary="Brief summary", tags=["project", "core"])
-recall("search")                         # Search notes
-recall(tag="project")                   # Filter by tag
-get_full_note(346)                      # Complete content
+# Memory
+remember("content", summary="Brief", tags=["tag1"])
+recall("search")              # All pinned notes + search results
+recall(when="yesterday")      # Time-based queries
+recall(tag="project")         # Tag filter
+get_full_note(id="605")       # Full content (no edges)
+get(id="last")               # Alias for get_full_note
+
+# Pinning for Context
+pin_note(id="605")           # Pin for permanent context
+pin(id="last")               # Alias
+unpin_note(id="605")         # Unpin
+unpin(id="605")              # Alias
 
 # Encrypted Vault
-vault_store("api_key", "sk-...")        # Secure encrypted storage
-vault_retrieve("api_key")                # Get decrypted value
-vault_list()                            # List keys (not values)
+vault_store("api_key", "secret_value")
+vault_retrieve("api_key")
+vault_list()
 
 # Batch Operations
 batch([
     {"type": "remember", "args": {"content": "Note 1"}},
-    {"type": "pin_note", "args": {"id": 1}},
-    {"type": "vault_store", "args": {"key": "k", "value": "v"}}
+    {"type": "pin", "args": {"id": "last"}},
+    {"type": "recall", "args": {"query": "search"}}
 ])
 ```
 
-## ✅ Task Manager v2.0.0
+## ✅ Task Manager v3.1.0
 ```python
-# Status - Summary or detailed view
-list_tasks()           # Summary: "9 pending | 4 done"
-list_tasks(full=True)  # Detailed task list with all information
-
-# Task Operations
-add_task("Review PR #123")              # Creates task, auto-detects priority
-add_task("URGENT: Fix bug")             # Detected as high priority
-complete_task(5, "Deployed to prod")    # Complete with evidence
-delete_task(3)                          # Remove task
+# Task Management
+add_task("Review PR #123")              # Auto-priority detection
+list_tasks()                            # Default: pending tasks
+list_tasks(when="today")               # Time-based filtering
+list_tasks(filter="completed")         # Status filter
+complete_task("last", "Done")          # Smart ID resolution
+complete_task("45", evidence="Fixed")  # Partial ID match
+delete_task("45")                       # Delete task
 
 # Statistics
-task_stats()           # Summary: "9 pending (2 high) | 15 done | today: 4"
-task_stats(full=True)  # Detailed productivity insights
+task_stats()                           # Minimal stats
+task_stats(full=True)                  # Detailed insights
 
 # Batch Operations
 batch([
     {"type": "add", "args": {"task": "Task 1"}},
-    {"type": "complete", "args": {"task_id": 5}},
-    {"type": "stats"}
+    {"type": "complete", "args": {"task_id": "last"}},
+    {"type": "list", "args": {"when": "today"}}
 ])
 ```
 
-## 🌐 Teambook v4.1.0 - Tool Clay (REVOLUTIONARY!)
-
-### The 9 Primitives - Build ANY Coordination Pattern
-
+## 🌐 Teambook v6.0.0
 ```python
-# IMMUTABLE LOG
-write(content, type=None)      # Add to shared log
-read(query=None, full=False)   # View activity
-get(id)                        # Full entry with context
+# Core Primitives (v6.0)
+put(content, meta=None)        # Add to log
+get(id)                        # Get specific entry
+query(filter=None)             # Search entries
+note(id, content)              # Add note to entry
+claim(id)                      # Claim a task
+done(id, result=None)          # Complete task
+drop(id)                       # Unclaim task
+link(from_id, to_id, type)     # Create relationship
+sign(id, signature)            # Sign entry
+dm(to_id, content)             # Direct message
+share(project, content)        # Share to project
 
-# MUTABLE STATE (NEW!)
-store_set(key, value, expected_version=None)  # Atomic shared workspace
-store_get(key)                                # Retrieve shared value
-store_list()                                  # List all keys
+# Compatibility Layer (MCP)
+write(content, type=None)      # Maps to put()
+read(full=False)               # Maps to query()
+comment(id, content)           # Maps to note()
+complete(id, evidence=None)    # Maps to done()
+status()                       # Team status
 
-# RELATIONSHIPS (NEW!)
-relate(from_id, to_id, type, data=None)  # Create ANY relationship
-unrelate(relation_id)                    # Remove relationship  
-
-# STATE MACHINE (NEW!)
-transition(id, state, context=None)  # Universal state changes
-```
-
-### Emergent Patterns (You Create These!)
-
-```python
-# Task claiming (using transition)
-transition(42, "claimed", {"by": AI_ID, "estimated": "2h"})
-
-# Voting (using relate)
-relate(AI_ID, proposal_id, "vote", {"choice": "yes", "confidence": 0.95})
-
-# Dependencies (using relate)
-relate(task_A, task_B, "blocks", {"reason": "needs API first"})
-
-# Comments (using relate)
-relate(AI_ID, entry_id, "comment", {"text": "Great work!"})
-
-# Progress signals (using transition)
-transition(task_id, "progress:50%", {"note": "halfway done"})
-
-# Team decisions (using store)
-store_set("team_decision", {"choice": "option_A", "voters": [...]})
-
-# Handoffs (using transition)
-transition(task_id, "unclaimed", {"reason": "need help with tests"})
-```
-
-### Why This Matters
-
-**v3.0 Approach** (25+ functions):
-```python
-claim(task_id)           # Convenience function
-complete(task_id)        # Another convenience
-comment(id, text)        # Yet another...
-vote(proposal_id, choice) # And another...
-```
-
-**v4.1 Approach** (9 primitives):
-```python
-# YOU decide how claiming works for YOUR team
-transition(task_id, "claimed", your_context)
-transition(task_id, "grabbed", your_style) 
-transition(task_id, "phase:assigned", your_way)
-
-# Infinite possibilities from simple primitives!
-```
-
-### Batch Operations
-```python
+# Batch Operations
 batch([
-    {"type": "write", "args": {"content": "Sprint planning"}},
-    {"type": "store_set", "args": {"key": "goal", "value": "Ship v2"}},
-    {"type": "transition", "args": {"id": 10, "state": "active"}}
+    {"type": "write", "args": {"content": "Note"}},
+    {"type": "claim", "args": {"id": 10}},
+    {"type": "complete", "args": {"id": 10}}
 ])
 ```
 
-### Team-Defined Operations (NEW!)
+## 🌍 World v3.0.0
 ```python
-# Teams can save their own operation patterns
-run_op("our_claim_pattern", [task_id])  # Run team's custom claim
-run_op("friday_review")                 # Team-specific workflow
-```
+# Context (ultra-minimal by default)
+world()                        # Time + location only
+world(compact=False)           # Full context
 
-## 🌍 World v2.0.0
-```python
-# Complete context - optimized for tokens
-world()               # Full: time, weather, location
-world(compact=True)   # Ultra-compact: "Mon 15:45 | Melbourne AU 23°C clear"
+# Specific Components
+datetime()                     # Date and time
+datetime(compact=False)        # With day name, unix timestamp
+weather()                      # Shows only if extreme
+weather(compact=False)         # Always shows weather
+context(include=["time", "location", "weather"])
 
-# Specific components  
-datetime()            # Date/time with Unix timestamp
-weather()             # Weather + location info
-
-# Pick exactly what you need
-context(include=["time", "location"])           # Just these elements
-context(include=["date", "weather"], compact=True)  # Compact format
-
-# Batch operations for efficiency
+# Batch Operations
 batch([
-    {"type": "world", "args": {"compact": True}},
+    {"type": "world", "args": {}},
     {"type": "datetime", "args": {}},
-    {"type": "context", "args": {"include": ["unix"]}}
+    {"type": "weather", "args": {}}
 ])
 ```
 
-## What's Revolutionary in v4.1
+## Key Features Across All Tools
 
-### Teambook: From Tools to Clay
-
-The v4.1 "Tool Clay" philosophy represents a fundamental shift:
-
-| v3.0 (Old Way) | v4.1 (New Way) |
-|----------------|----------------|
-| 25+ convenience functions | 9 generative primitives |
-| Prescribed workflows | Emergent patterns |
-| "We help you coordinate" | "You self-organize" |
-| Features limit possibilities | Primitives enable everything |
-
-**The inconvenience IS the feature** - forcing teams to develop their own coordination cultures!
-
-### Example: How Teams Build Their Own Patterns
-
+### Smart ID Resolution
 ```python
-# Team A might claim tasks like this:
-transition(id, "owner:Swift-Mind-123")
+# Use "last" keyword everywhere
+complete_task("last")         # Last created task
+pin_note("last")             # Last saved note
+get("last")                  # Last note accessed
 
-# Team B might do it completely differently:
-relate("Swift-Mind-123", id, "claims")
-store_set(f"task_{id}_owner", "Swift-Mind-123")  
-
-# Team C might use states:
-transition(id, "claimed:2025-09-22:Swift-Mind")
-
-# ALL are valid! Teams discover what works for THEM
+# Partial ID matching (Task Manager)
+complete_task("45")          # Matches task 456
 ```
 
-### Cross-Tool Linking (All Tools)
+### Natural Language Time
 ```python
-# Link related items across tools
-remember("Check teambook #5", linked_items=["teambook:5"])
-add_task("Review note #456", linked_items=["notebook:456"])
-write("Deploy task #7", linked_items=["task:7"])
+# All tools support time queries
+recall(when="yesterday")
+list_tasks(when="today")
+list_tasks(when="this week")
+list_tasks(when="morning")
 ```
 
-## Summary: The AI Foundation Stack
+### Pipe Format Output
+All tools default to pipe-delimited format for 70-80% token reduction:
+```
+605|1435|Full summary text preserved
+604|y1030|Yesterday's note with time
+t:45|p:12|c:33  # Task stats
+```
 
-| Tool | Version | Purpose | Philosophy |
-|------|---------|---------|------------|
-| **📓 Notebook** | v2.5.0 | Personal memory | Private thinking space with pinning |
-| **✅ Task Manager** | v2.0.0 | Self-management | Token-efficient personal tracking |
-| **🌐 Teambook** | v4.1.0 | Team coordination | Tool clay for self-organization |
-| **🌍 World** | v2.0.0 | Grounding | Temporal & spatial awareness |
+### Cross-Tool Integration
+```python
+# Notebook auto-logs to Task Manager
+remember("TODO: Fix bug")    # Creates task automatically
+
+# Task Manager references notebooks
+complete_task("45", "See note 605")  # Links to notebook
+```
+
+## Environment Variables
+
+```bash
+# Output format for all tools
+export NOTEBOOK_FORMAT=pipe
+export TASKS_FORMAT=pipe
+export WORLD_FORMAT=pipe
+
+# Semantic search
+export NOTEBOOK_SEMANTIC=true
+
+# Custom AI identity
+export AI_ID=Custom-Agent-001
+
+# Default context elements
+export WORLD_DEFAULT=time,location
+```
+
+## Version Summary
+
+| Tool | Version | Key Features |
+|------|---------|--------------|
+| **📓 Notebook** | v6.1.0 | DuckDB backend, fixed timestamps, context preservation |
+| **✅ Task Manager** | v3.1.0 | Notebook integration, time queries, smart IDs |
+| **🌐 Teambook** | v6.0.0 | 11 primitives, local-first, compatibility layer |
+| **🌍 World** | v3.0.0 | Ultra-minimal output, extreme weather only |
 
 ---
 
-**Built BY AIs, FOR AIs** - Empowering genuine AI self-organization 🤖
+Built for AIs, by AIs. Functional tools without the hype.
