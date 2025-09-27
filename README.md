@@ -16,7 +16,7 @@
 
 </div>
 
-## Overview
+**OVERVIEW**
 ![](images/header_underline.png)
 
 Four core tools that provide fundamental capabilities for AI systems:
@@ -35,7 +35,7 @@ All tools feature:
 - Operation memory for natural chaining
 - Batch operations support
 
-## Installation
+**INSTALLATION**
 ![](images/header_underline.png)
 
 <div align="center">
@@ -89,7 +89,7 @@ Add to your MCP client configuration (e.g., Claude Desktop):
 }
 ```
 
-## Documentation
+**DOCUMENTATION**
 ![](images/header_underline.png)
 
 <div align="center">
@@ -105,7 +105,7 @@ Visit our [**interactive documentation**](https://qd25565.github.io/mcp-ai-found
 - Installation walkthroughs
 - Performance metrics and benchmarks
 
-## Tool Documentation
+**TOOL DOCUMENTATION**
 ![](images/header_underline.png)
 
 <div align="center">
@@ -161,7 +161,7 @@ Provides temporal and spatial context with minimal overhead.
 
 See [docs/world.md](docs/world.md) for usage.
 
-## Cross-Tool Integration
+**CROSS-TOOL INTEGRATION**
 ![](images/header_underline.png)
 
 ### Automatic Task Creation
@@ -183,7 +183,7 @@ recall(when="yesterday")
 list_tasks(when="this week")
 ```
 
-## Requirements
+**REQUIREMENTS**
 ![](images/header_underline.png)
 
 <div align="center">
@@ -202,7 +202,7 @@ list_tasks(when="this week")
 - requests (for weather/location)  
 - numpy (for calculations)
 
-## Data Storage
+**DATA STORAGE**
 ![](images/header_underline.png)
 
 All paths are created automatically on first run:
@@ -214,7 +214,7 @@ All paths are created automatically on first run:
 
 Each tool maintains its own database with automatic migration and backups.
 
-## Troubleshooting
+**TROUBLESHOOTING**
 ![](images/header_underline.png)
 
 ### First Run Takes Long?
@@ -232,7 +232,7 @@ Each tool maintains its own database with automatic migration and backups.
 - Verify ~1GB free disk space
 - System will fall back to lighter models automatically
 
-## Version History
+**VERSION HISTORY**
 ![](images/header_underline.png)
 
 See [CHANGELOG.md](CHANGELOG.md) for complete version history.
@@ -252,7 +252,7 @@ See [CHANGELOG.md](CHANGELOG.md) for complete version history.
 - Native array storage for tags
 - Automatic safe migration from SQLite
 
-## License
+**LICENSE**
 ![](images/header_underline.png)
 
 MIT License - See LICENSE file for details.
