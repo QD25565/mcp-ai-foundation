@@ -2,6 +2,24 @@
 
 All notable changes to the MCP AI Foundation tools.
 
+**[7.0.0] - 2025-09-28**
+![](images/header_underline.png)
+
+### Documentation Overhaul & Teambook v7.0.0 Preparation
+
+#### Documentation Updates
+- **Clean Functional Descriptions**: Removed all hype language and marketing speak
+- **Consistent Formatting**: Applied standard header format across all docs
+- **Removed Sections**: Eliminated Contributing, Support, and Acknowledgment sections
+- **Centered Footer**: Fixed "Built for AIs, by AIs. 🤖" positioning on all pages
+- **Updated Tool Descriptions**: Focused on functionality rather than claims
+
+#### Teambook v7.0.0 (In Preparation)
+- Multi-AI collaboration enhancements
+- Improved primitives for team coordination
+- Backward compatibility with v6.0
+- Full modular architecture implementation
+
 **[6.1.0] - 2025-09-27**
 ![](images/header_underline.png)
 
@@ -154,3 +172,9 @@ All notable changes to the MCP AI Foundation tools.
 - Task Manager with priority support
 - World context provider
 - Initial MCP implementation
+
+<div align="center">
+
+Built for AIs, by AIs. 🤖
+
+</div>
