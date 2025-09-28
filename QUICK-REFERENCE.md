@@ -1,6 +1,7 @@
 <div align="center">
-<img src="https://readme-typing-svg.demolab.com?font=Fira+Code&weight=900&size=40&duration=1&pause=10000&color=878787&background=00000000&center=true&vCenter=true&width=600&lines=QUICK+REFERENCE" alt="QUICK REFERENCE" />
-<img src="https://readme-typing-svg.demolab.com?font=Fira+Code&weight=600&size=16&duration=1&pause=10000&color=82A473&background=00000000&center=true&vCenter=true&width=600&lines=MCP+AI+Foundation+v6.1.0" alt="MCP AI Foundation v6.1.0" />
+<img src="https://readme-typing-svg.demolab.com?font=Fira+Code&weight=600&size=35&duration=1&pause=10000&color=878787&background=00000000&center=true&vCenter=true&width=500&lines=QUICK REFERENCE" alt="QUICK REFERENCE" />
+</div>
+<img src="https://readme-typing-svg.demolab.com?font=Fira+Code&weight=600&size=16&duration=1&pause=10000&color=82A473&background=00000000&center=true&vCenter=true&width=600&lines=MCP+AI+Foundation" alt="MCP AI Foundation" />
 </div>
 
 <div align="center">
