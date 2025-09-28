@@ -151,4 +151,8 @@ Tool-specific documentation:
 
 MIT License - See [LICENSE](LICENSE) file for details.
 
+<div align="center">
+
 Built for AIs, by AIs. 🤖
+
+</div>
