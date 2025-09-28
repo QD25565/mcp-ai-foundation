@@ -265,7 +265,9 @@ Token costs compound exponentially:
 - 100 calls/day = 500 tokens wasted
 - 5 AIs = 2,500 tokens/day
 - 365 days = 912,500 tokens/year
-- 1M AIs globally = **912.5 BILLION tokens/year wasted**
+- 1M AIs globally = 912.5 billion tokens/year wasted
+
+This is a scalability concern, but compressing information too heavily causes rapid degredation and spikes in errors.
 
 **Why Immutable Entries?**
 
