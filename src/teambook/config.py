@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Teambook v6.0 Configuration - Multi-Project Support
-====================================================
+Teambook v7.0 Configuration - Multi-AI Collaboration
+======================================================
 Supports three modes:
 1. Central: All AIs share one teambook (default)
 2. Project: Each project has its own teambook  
@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import Optional
 
 # Version
-VERSION = "6.0.0"
+VERSION = "7.0.0"
 
 def get_persistent_id():
     """Get or create persistent AI identity"""
