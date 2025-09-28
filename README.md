@@ -7,7 +7,6 @@
 
 **Model Context Protocol tools for AI memory, tasks, teams & world grounding**
 
-[![Version](https://img.shields.io/badge/v6.1.0-82A473?style=flat-square&labelColor=878787)](https://github.com/QD25565/mcp-ai-foundation/releases)
 [![Python](https://img.shields.io/badge/Python_3.8+-82A473?style=flat-square&labelColor=878787)](https://www.python.org/)
 [![License](https://img.shields.io/badge/MIT_License-82A473?style=flat-square&labelColor=878787)](LICENSE)
 [![Tools](https://img.shields.io/badge/4_Tools-82A473?style=flat-square&labelColor=878787)](#overview)
@@ -15,14 +14,14 @@
 
 </div>
 
-**OVERVIEW**
+### **OVERVIEW**
 ![](images/header_underline.png)
 
 Four core tools that provide fundamental capabilities for AI systems:
 
-- 📓 **Notebook (v6.1.0)** - High-performance memory system built on DuckDB with semantic search
+- 📓 **Notebook (v6.1.0)** - Memory system built on DuckDB with semantic search
 - ✅ **Task Manager (v3.1.0)** - Task tracking with notebook integration and temporal filtering
-- 🌐 **Teambook (v6.0.0)** - Team coordination with 11 foundational primitives  
+- 🌐 **Teambook (v7.0.0)** - Multi-AI collaboration with foundational primitives  
 - 🌍 **World (v3.0.0)** - Temporal and spatial grounding with minimal overhead
 
 All tools feature:
@@ -34,36 +33,23 @@ All tools feature:
 - Operation memory for natural chaining
 - Batch operations support
 
-**INSTALLATION**
+### **INSTALLATION**
 ![](images/header_underline.png)
 
-<div align="center">
-
-[![Quick Install](https://img.shields.io/badge/🚀_Quick_Install-82A473?style=for-the-badge&labelColor=878787)](#quick-install)
-
-</div>
-
-### Quick Install
 ```bash
-# 1. Clone repository
+# Clone repository
 git clone https://github.com/QD25565/mcp-ai-foundation.git
 cd mcp-ai-foundation
 
-# 2. Install dependencies
+# Install dependencies
 pip install -r requirements.txt
 
-# 3. Configure MCP (see below)
-# 4. Run - Everything else happens automatically
+# Configure MCP (see below)
 ```
 
-### What Happens Automatically
-- **Models folder**: Created on first run
-- **EmbeddingGemma**: Downloads on first use (file size depends on model you go with)
-- **Data directories**: Created automatically per tool
-- **Database migration**: From SQLite to DuckDB with automatic backup
-- **Path resolution**: Adapts to your system
+### **MCP Configuration**
+![](images/header_underline.png)
 
-### Configure MCP
 Add to your MCP client configuration (e.g., Claude Desktop):
 ```json
 {
@@ -88,180 +74,81 @@ Add to your MCP client configuration (e.g., Claude Desktop):
 }
 ```
 
-**DOCUMENTATION**
+### **TOOL DESCRIPTIONS**
 ![](images/header_underline.png)
 
-<div align="center">
+**Notebook v6.1.0**
 
-[![Interactive Docs](https://img.shields.io/badge/🌐_Interactive_Documentation-82A473?style=for-the-badge&labelColor=878787)](https://qd25565.github.io/mcp-ai-foundation/)
-[![API Reference](https://img.shields.io/badge/📖_API_Reference-82A473?style=for-the-badge&labelColor=878787)](docs/)
+Memory system with DuckDB backend, native array storage, and semantic search capabilities. Features PageRank calculations in under 1 second, automatic SQLite to DuckDB migration with backup, and encrypted vault for sensitive data.
 
-</div>
+**Task Manager v3.1.0**
 
-Visit our [**interactive documentation**](https://qd25565.github.io/mcp-ai-foundation/) for:
-- Live code examples with syntax highlighting
-- Visual feature demonstrations
-- Installation walkthroughs
-- Performance metrics and benchmarks
+Task tracking system with time-based queries, automatic notebook integration, priority detection, and partial ID matching. Supports natural language time queries like "yesterday" or "this week".
 
-**TOOL DOCUMENTATION**
+**Teambook v7.0.0**
+
+Multi-AI collaboration tool built on foundational primitives. Enables teams of AIs to coordinate through shared state and message passing.
+
+**World v3.0.0**
+
+Temporal and spatial context provider with 80% token reduction. Provides time, location, and weather information in minimal format.
+
+### **CROSS-TOOL INTEGRATION**
 ![](images/header_underline.png)
 
-<div align="center">
+The tools work together through shared integration files:
 
-![Notebook](https://img.shields.io/badge/📓_Notebook-878787?style=flat-square) ![Task Manager](https://img.shields.io/badge/✅_Task_Manager-878787?style=flat-square) ![Teambook](https://img.shields.io/badge/🌐_Teambook-878787?style=flat-square) ![World](https://img.shields.io/badge/🌍_World-878787?style=flat-square)
-
-</div>
-
-### 📓 Notebook v6.1.0
-High-performance memory system built on DuckDB with vectorized operations and semantic search.
-
-**Key Features:**
-- **DuckDB Backend** - Columnar analytics engine with native array types
-- **Vectorized PageRank** - Recursive CTEs for graph calculations (<1 second)
-- **Native Arrays** - Tags stored as arrays, no join tables needed
-- **Semantic Search** - Google's EmbeddingGemma for semantic understanding
-- **Automatic Migration** - Safe transition from SQLite with backup
-- **Graph Intelligence** - Edge detection, session tracking, entity extraction
-- **Encrypted Vault** - Secure storage for sensitive data
-- **Context Preservation** - Pinned notes always shown, rich summaries never truncated
-
-**Performance Improvements:**
-- PageRank: 66 seconds → <1 second  
-- Graph traversals: 40x faster
-- Complex queries: 25x faster
-- Memory usage: 90% reduction
-
-See [docs/notebook.md](docs/notebook.md) for detailed documentation.
-
-### ✅ Task Manager v3.1.0
-Smart task tracking with natural language resolution and notebook integration.
-
-**Features:**
-- Time-based queries ("today", "yesterday", "this week")
-- Cross-tool logging to notebook
-- Auto-priority detection
-- Partial ID matching
-
-See [docs/task_manager.md](docs/task_manager.md) for details.
-
-### 🌐 Teambook v6.0.0
-Foundational collaboration using 11 self-evident operations.
-
-See [docs/teambook.md](docs/teambook.md) for the complete primitive reference.
-
-### 🌍 World v3.0.0
-Provides temporal and spatial context with minimal overhead.
-
-**Features:**
-- 80% token reduction
-- Single-line output
-- Weather only when extreme
-
-See [docs/world.md](docs/world.md) for usage.
-
-**CROSS-TOOL INTEGRATION**
-![](images/header_underline.png)
-
-### Automatic Task Creation
 ```python
-# In notebook:
-remember("TODO: Review the pull request")
-# → Automatically creates task in task_manager
-```
+# Automatic task creation from notebook
+remember("TODO: Review pull request")  # Creates task automatically
 
-### Smart ID Resolution
-```python
-complete_task("last")  # Complete the task you just created
-pin_note("last")       # Pin the note you just saved  
-```
+# Smart ID resolution across tools
+complete_task("last")  # Completes most recent task
+pin_note("last")       # Pins most recent note
 
-### Natural Language Time Queries
-```python
+# Time-based queries work everywhere
 recall(when="yesterday")
 list_tasks(when="this week")
 ```
 
-**REQUIREMENTS**
+### **REQUIREMENTS**
 ![](images/header_underline.png)
-
-<div align="center">
-
-![DuckDB](https://img.shields.io/badge/DuckDB-82A473?style=flat-square&labelColor=878787) ![ChromaDB](https://img.shields.io/badge/ChromaDB-82A473?style=flat-square&labelColor=878787) ![PyTorch](https://img.shields.io/badge/PyTorch-82A473?style=flat-square&labelColor=878787) ![Python](https://img.shields.io/badge/Python_3.8+-82A473?style=flat-square&labelColor=878787)
-
-</div>
 
 - Python 3.8+
-- DuckDB (for Notebook v6.0)
-- ChromaDB (for semantic search)
-- sentence-transformers (for embeddings)
-- scipy (for sparse matrix operations)
-- PyTorch (CPU version sufficient)
-- cryptography (for vault)
-- requests (for weather/location)  
-- numpy (for calculations)
+- DuckDB (for Notebook)
+- ChromaDB (optional, for semantic search)
+- sentence-transformers (optional, for embeddings)
+- cryptography (for vault encryption)
+- requests (for World tool)
 
-**DATA STORAGE**
+### **DATA STORAGE**
 ![](images/header_underline.png)
 
-All paths are created automatically on first run:
+All paths are created automatically:
 
 - **Windows**: `%APPDATA%/Claude/tools/{tool}_data/`
 - **Linux/Mac**: `~/Claude/tools/{tool}_data/`
-- **Models**: `{tools_dir}/models/` (auto-downloads EmbeddingGemma)
-- **Vectors**: `{tool}_data/vectors/` (ChromaDB storage)
 
 Each tool maintains its own database with automatic migration and backups.
 
-**TROUBLESHOOTING**
+### **DOCUMENTATION**
 ![](images/header_underline.png)
 
-### First Run Takes Long?
-- EmbeddingGemma (~1.12GB) downloads once on first use
-- After download, everything works offline
-- Fallback models available if download fails
+- [Interactive Documentation](https://qd25565.github.io/mcp-ai-foundation/)
+- [Architecture](docs/ARCHITECTURE.md)
+- [AI Usage Guide](docs/AI-USAGE.md)
+- [Quick Reference](QUICK-REFERENCE.md)
+- [Changelog](CHANGELOG.md)
 
-### Database Migration
-- Notebook v6.0 automatically migrates from SQLite to DuckDB
-- Original database is backed up before migration
-- Migration happens once on first run
+Tool-specific documentation:
+- [Notebook Documentation](docs/notebook.md)
+- [Task Manager Documentation](docs/task_manager.md)
+- [Teambook Documentation](docs/teambook.md)
+- [World Documentation](docs/world.md)
 
-### Models Not Loading?
-- Check internet connection for first download
-- Verify ~1GB free disk space
-- System will fall back to lighter models automatically
-
-**VERSION HISTORY**
+### **LICENSE**
 ![](images/header_underline.png)
 
-See [CHANGELOG.md](CHANGELOG.md) for complete version history.
-
-### Latest Updates
-
-**v6.1.0 (September 2025)** - Context and Clarity
-- Fixed timestamp formatting issues
-- All pinned notes always shown for context
-- Removed edge data from responses
-- Rich summaries preserved at full length
-- Added interactive HTML documentation with green theme
-
-**v6.0.0 (September 2025)** - DuckDB Migration
-- Notebook rewritten with DuckDB backend
-- Massive performance improvements
-- Native array storage for tags
-- Automatic safe migration from SQLite
-
-**LICENSE**
-![](images/header_underline.png)
-
-MIT License - See LICENSE file for details.
-
-
-<div align="center">
+MIT License - See [LICENSE](LICENSE) file for details.
 
 Built for AIs, by AIs. 🤖
-
-[![GitHub](https://img.shields.io/badge/GitHub-QD25565-82A473?style=flat-square&labelColor=878787&logo=github)](https://github.com/QD25565)
-[![Repository](https://img.shields.io/badge/Repository-mcp--ai--foundation-82A473?style=flat-square&labelColor=878787)](https://github.com/QD25565/mcp-ai-foundation)
-
-</div>
