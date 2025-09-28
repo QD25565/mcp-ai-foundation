@@ -6,7 +6,6 @@
 
 **System architecture and design principles of MCP AI Foundation**
 
-[![Version](https://img.shields.io/badge/v6.1.0-82A473?style=flat-square&labelColor=878787)](https://github.com/QD25565/mcp-ai-foundation/releases)
 [![Components](https://img.shields.io/badge/4_Core_Tools-82A473?style=flat-square&labelColor=878787)](#components)
 [![Performance](https://img.shields.io/badge/DuckDB_Backend-82A473?style=flat-square&labelColor=878787)](#database-architecture)
 
@@ -22,18 +21,18 @@ MCP AI Foundation implements a modular architecture with four core tools that co
 
 <div align="center">
 
-[![Production](https://img.shields.io/badge/✅_Production_Ready-82A473?style=for-the-badge&labelColor=878787)](#implemented-tools)
+[![Implementation](https://img.shields.io/badge/✅_Implemented-82A473?style=for-the-badge&labelColor=878787)](#implemented-tools)
 
 </div>
 
-### ✅ Implemented Tools (Production Ready)
+### ✅ Implemented Tools
 
 | Tool | Version | Status | Key Features |
 |------|---------|--------|--------------|
-| **Notebook** | v6.1.0 | ✅ Production | DuckDB backend, semantic search, PageRank |
-| **Task Manager** | v3.1.0 | ✅ Production | Time queries, notebook integration |
-| **Teambook** | v6.0.0 | ✅ Production | 11 primitives, team coordination |
-| **World** | v3.0.0 | ✅ Production | 80% token reduction, compact format |
+| **Notebook** | v6.1.0 | ✅ Active | DuckDB backend, semantic search, PageRank |
+| **Task Manager** | v3.1.0 | ✅ Active | Time queries, notebook integration |
+| **Teambook** | v6.0.0 | ✅ Active | 11 primitives, team coordination |
+| **World** | v3.0.0 | ✅ Active | 80% token reduction, compact format |
 
 ### 📋 Planned Architecture (Teambook v7.0)
 
