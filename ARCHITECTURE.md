@@ -4,7 +4,7 @@
 
 <div align="center">
 
-**System architecture and design principles of MCP AI Foundation**
+<img src="https://readme-typing-svg.demolab.com?font=Fira+Code&weight=600&size=16&duration=1&pause=10000&color=82A473&background=00000000&center=true&vCenter=true&width=700&lines=System+architecture+and+design+principles+of+MCP+AI+Foundation" alt="System architecture and design principles of MCP AI Foundation" />
 
 [![Components](https://img.shields.io/badge/4_Core_Tools-82A473?style=flat-square&labelColor=878787)](#components)
 [![Performance](https://img.shields.io/badge/DuckDB_Backend-82A473?style=flat-square&labelColor=878787)](#database-architecture)
