@@ -11,7 +11,7 @@
 
 </div>
 
-***OVERVIEW***
+# **OVERVIEW**
 ![](images/header_underline.png)
 
 MCP AI Foundation implements a modular architecture with four core tools that communicate via the Model Context Protocol. Each tool maintains its own persistent storage while enabling cross-tool integration through shared conventions and standardized interfaces.
