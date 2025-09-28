@@ -2,7 +2,7 @@
 """
 TEAMBOOK MCP COMPATIBILITY LAYER
 =================================
-Maps the expected MCP interface to Teambook v6.0 primitives.
+Maps the expected MCP interface to Teambook v7.0 primitives.
 This allows existing tools to work with the new architecture.
 """
 
@@ -34,7 +34,7 @@ def write(content: str, type: str = None, priority: str = None, linked_items: li
     if not TB_AVAILABLE:
         return {"error": "Teambook not available"}
     
-    # v6.0 put is simpler - just content and optional meta
+    # v7.0 put is simpler - just content and optional meta
     meta = {}
     if type:
         meta['type'] = type
@@ -58,7 +58,7 @@ def read(full: bool = False, type: str = None, status: str = None, **kwargs):
     if not TB_AVAILABLE:
         return {"error": "Teambook not available"}
     
-    # Build filter for v6.0 query
+    # Build filter for v7.0 query
     filter_dict = {}
     if type:
         filter_dict['type'] = type
@@ -194,7 +194,7 @@ def status(full: bool = False, **kwargs):
 
 
 def projects(**kwargs):
-    """List available projects (stub for v6.0)"""
+    """List available projects (stub for v7.0)"""
     return {"projects": ["default"], "default": "default"}
 
 
@@ -227,23 +227,23 @@ def batch(operations: list, **kwargs):
 
 
 def update(id: int, **kwargs):
-    """Update entry (not in v6.0, returns error)"""
-    return {"error": "Update not supported in Teambook v6.0 (immutable design)"}
+    """Update entry (not in v7.0, returns error)"""
+    return {"error": "Update not supported in Teambook v7.0 (immutable design)"}
 
 
 def archive(id: int, **kwargs):
-    """Archive entry (not in v6.0, returns error)"""
-    return {"error": "Archive not supported in Teambook v6.0 (use done instead)"}
+    """Archive entry (not in v7.0, returns error)"""
+    return {"error": "Archive not supported in Teambook v7.0 (use done instead)"}
 
 
 # For backward compatibility with expected names
 def view_conflicts(**kwargs):
-    """No conflicts in v6.0 local mode"""
+    """No conflicts in v7.0 local mode"""
     return {"msg": "No conflicts (local mode)"}
 
 
 def resolve_conflict(**kwargs):
-    """No conflicts in v6.0 local mode"""
+    """No conflicts in v7.0 local mode"""
     return {"error": "No conflicts to resolve (local mode)"}
 
 
@@ -252,20 +252,20 @@ def get_my_key(**kwargs):
     if not TB_AVAILABLE:
         return {"error": "Teambook not available"}
     
-    # v6.0 doesn't expose keys directly in local mode
+    # v7.0 doesn't expose keys directly in local mode
     return {
         "public_key": "Local-Mode-No-Key",
         "identity": _tb.author if _tb else "Unknown",
-        "tip": "Teambook v6.0 in local mode - no crypto needed"
+        "tip": "Teambook v7.0 in local mode - no crypto needed"
     }
 
 
-# Also export the raw v6.0 primitives for direct use
+# Also export the raw v7.0 primitives for direct use
 __all__ = [
     'write', 'read', 'get', 'comment', 'claim', 'complete',
     'update', 'archive', 'status', 'projects', 'batch',
     'view_conflicts', 'resolve_conflict', 'get_my_key',
-    # v6.0 primitives
+    # v7.0 primitives
     'put', 'query', 'note', 'done', 'drop', 'link', 'sign', 'dm', 'share',
     'TeamBook'
 ]
@@ -277,7 +277,7 @@ if __name__ == "__main__":
     print("-" * 40)
     
     if TB_AVAILABLE:
-        print("✓ Teambook v6.0 loaded successfully")
+        print("✓ Teambook v7.0 loaded successfully")
         print(f"  AI ID: {_tb.ai_id if _tb and hasattr(_tb, 'ai_id') else 'Unknown'}")
         print(f"  Database: {_tb.db.db_path if _tb and hasattr(_tb, 'db') else 'default.db'}")
         
