@@ -1,10 +1,33 @@
-# Architecture
+# ARCHITECTURE
 
-## Overview
+![](../images/header_underline.png)
+
+<div align="center">
+
+[![Overview](https://img.shields.io/badge/📐_System_Architecture-82A473?style=for-the-badge&labelColor=878787)](#overview)
+[![Design Principles](https://img.shields.io/badge/🎯_Design_Principles-82A473?style=for-the-badge&labelColor=878787)](#design-principles)
+
+</div>
+
+## OVERVIEW
+![](../images/header_underline.png)
 
 MCP AI Foundation implements four independent MCP servers that provide essential capabilities to AI assistants through the Model Context Protocol.
 
-## Design Principles
+<div align="center">
+
+![Notebook](https://img.shields.io/badge/📓_Notebook-878787?style=flat-square) ![Task Manager](https://img.shields.io/badge/✅_Task_Manager-878787?style=flat-square) ![Teambook](https://img.shields.io/badge/🌐_Teambook-878787?style=flat-square) ![World](https://img.shields.io/badge/🌍_World-878787?style=flat-square)
+
+</div>
+
+## DESIGN PRINCIPLES
+![](../images/header_underline.png)
+
+<div align="center">
+
+![Independence](https://img.shields.io/badge/1._Independence-82A473?style=flat-square&labelColor=878787) ![Persistence](https://img.shields.io/badge/2._Persistence-82A473?style=flat-square&labelColor=878787) ![Simplicity](https://img.shields.io/badge/3._Simplicity-82A473?style=flat-square&labelColor=878787) ![Efficiency](https://img.shields.io/badge/4._Efficiency-82A473?style=flat-square&labelColor=878787) ![Reliability](https://img.shields.io/badge/5._Reliability-82A473?style=flat-square&labelColor=878787)
+
+</div>
 
 1. **Independence**: Each tool operates independently
 2. **Persistence**: Data survives between sessions
@@ -12,14 +35,22 @@ MCP AI Foundation implements four independent MCP servers that provide essential
 4. **Efficiency**: Token-optimized output
 5. **Reliability**: Graceful error handling
 
-## Protocol
+## PROTOCOL
+![](../images/header_underline.png)
 
 ### MCP (Model Context Protocol)
-- Version: 2024-11-05
-- Transport: JSON-RPC over stdin/stdout
-- Methods: initialize, tools/list, tools/call
+- **Version**: 2024-11-05
+- **Transport**: JSON-RPC over stdin/stdout
+- **Methods**: initialize, tools/list, tools/call
 
-## Tools Architecture
+<div align="center">
+
+[![Protocol Version](https://img.shields.io/badge/MCP_2024--11--05-82A473?style=flat-square&labelColor=878787)](https://modelcontextprotocol.io/)
+
+</div>
+
+## TOOLS ARCHITECTURE
+![](../images/header_underline.png)
 
 ### Notebook (Memory)
 ```
@@ -102,12 +133,20 @@ MCP AI Foundation implements four independent MCP servers that provide essential
 └─────────────────┘
 ```
 
-## Data Storage
+## DATA STORAGE
+![](../images/header_underline.png)
 
 ### Location
-- Windows: `%APPDATA%\Claude\tools\`
-- Mac/Linux: `~/.config/Claude/tools/`
-- Fallback: System temp directory
+
+<div align="center">
+
+![Windows](https://img.shields.io/badge/Windows-878787?style=flat-square) ![Mac](https://img.shields.io/badge/Mac-878787?style=flat-square) ![Linux](https://img.shields.io/badge/Linux-878787?style=flat-square)
+
+</div>
+
+- **Windows**: `%APPDATA%\Claude\tools\`
+- **Mac/Linux**: `~/.config/Claude/tools/`
+- **Fallback**: System temp directory
 
 ### Structure
 ```
@@ -127,9 +166,17 @@ Claude/tools/
 └── ai_identity.txt (shared identity)
 ```
 
-## Token Optimization (v2.0.0)
+## TOKEN OPTIMIZATION (v2.0.0)
+![](../images/header_underline.png)
+
+<div align="center">
+
+[![35% Token Reduction](https://img.shields.io/badge/↓35%25_Token_Reduction-82A473?style=for-the-badge&labelColor=878787)](#token-optimization-v200)
+
+</div>
 
 ### Teambook Storage Format
+
 **Before (v1.0.0):**
 ```json
 {
@@ -167,13 +214,19 @@ Claude/tools/
 5. **Backward Compatibility**: Auto-migrates v1 to v2
 
 ### Token Savings at Scale
+
+<div align="center">
+
 | Entries | v1 Tokens | v2 Tokens | Saved | % of 200K Context |
 |---------|-----------|-----------|-------|-------------------|
 | 100 | ~12,300 | ~10,600 | 1,700 | 0.85% |
 | 1,000 | ~123,000 | ~106,000 | 17,000 | 8.5% |
 | 5,000 | ~615,000 | ~530,000 | 85,000 | 42.5% |
 
-## State Management
+</div>
+
+## STATE MANAGEMENT
+![](../images/header_underline.png)
 
 ### Notebook
 - Sequential note IDs
@@ -199,21 +252,37 @@ Claude/tools/
 - Time tracking
 - Evidence recording
 
-## Persistent AI Identity
+## PERSISTENT AI IDENTITY
+![](../images/header_underline.png)
+
+<div align="center">
+
+[![AI Identity](https://img.shields.io/badge/🤖_Persistent_Identity-82A473?style=for-the-badge&labelColor=878787)](#persistent-ai-identity)
+
+</div>
 
 All tools share a persistent AI identity stored in `ai_identity.txt`:
-- Format: `[Adjective]-[Noun]-[Number]` (e.g., Swift-Spark-266)
-- Created once, persists across all sessions
-- Enables continuity and collaboration tracking
+- **Format**: `[Adjective]-[Noun]-[Number]` (e.g., Swift-Spark-266)
+- **Created once**, persists across all sessions
+- **Enables** continuity and collaboration tracking
 
-## Error Handling
+## ERROR HANDLING
+![](../images/header_underline.png)
 
 1. **Graceful Degradation**: Tools continue working with reduced functionality
 2. **Data Preservation**: Errors don't corrupt existing data
 3. **User Feedback**: Clear error messages
 4. **Logging**: Errors logged to stderr
 
-## Performance
+## PERFORMANCE
+![](../images/header_underline.png)
+
+<div align="center">
+
+[![Optimizations](https://img.shields.io/badge/⚡_Optimizations-82A473?style=flat-square&labelColor=878787)](#optimizations)
+[![Limits](https://img.shields.io/badge/📊_Limits-82A473?style=flat-square&labelColor=878787)](#limits)
+
+</div>
 
 ### Optimizations
 - Token-optimized storage formats
@@ -229,7 +298,16 @@ All tools share a persistent AI identity stored in `ai_identity.txt`:
 - Max entries: 100,000 (teambook)
 - Archive retention: 30 days
 
-## Security
+## SECURITY
+![](../images/header_underline.png)
+
+<div align="center">
+
+![No Auth](https://img.shields.io/badge/🔓_No_Auth_Required-878787?style=flat-square)
+![Local Only](https://img.shields.io/badge/💾_Local_Storage-878787?style=flat-square)
+![No Tracking](https://img.shields.io/badge/🔒_No_Tracking-878787?style=flat-square)
+
+</div>
 
 - No authentication required
 - No network access except weather/location
@@ -237,7 +315,8 @@ All tools share a persistent AI identity stored in `ai_identity.txt`:
 - Local-only storage
 - No third-party dependencies for core functionality
 
-## Extensibility
+## EXTENSIBILITY
+![](../images/header_underline.png)
 
 ### Adding New Tools
 1. Create new MCP server script
@@ -251,10 +330,28 @@ All tools share a persistent AI identity stored in `ai_identity.txt`:
 - Update version numbers
 - Document changes
 
-## Testing
+## TESTING
+![](../images/header_underline.png)
+
+<div align="center">
+
+[![Cross Platform](https://img.shields.io/badge/🖥️_Cross_Platform-82A473?style=flat-square&labelColor=878787)](https://github.com/QD25565/mcp-ai-foundation/actions)
+[![Python 3.8+](https://img.shields.io/badge/🐍_Python_3.8+-82A473?style=flat-square&labelColor=878787)](https://www.python.org/)
+
+</div>
 
 - Cross-platform support (Windows/Mac/Linux)
 - Python 3.8+ compatibility
 - Graceful handling of missing dependencies
 - Data migration from older versions
 - Token usage verification
+
+<div align="center">
+
+---
+
+Built for AIs, by AIs. 🤖
+
+[![GitHub](https://img.shields.io/badge/GitHub-QD25565-82A473?style=flat-square&labelColor=878787&logo=github)](https://github.com/QD25565)
+
+</div>
