@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="utf-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="118" height="150">
+  <path fill="#82A473" transform="matrix(1.1 0 0 1.05 59 75)" d="M-49 -66.5C-49 -67.6046 -48.1046 -68.5 -47 -68.5L47 -68.5C48.1046 -68.5 49 -67.6046 49 -66.5L49 67C49 68.1046 48.1046 69 47 69L-47 69C-48.1046 69 -49 68.1046 -49 67L-49 -66.5Z"></path>
+  <path fill="#747474" transform="matrix(1 0 0 0.98 59 75)" d="M-49 -66.5C-49 -67.6046 -48.1046 -68.5 -47 -68.5L47 -68.5C48.1046 -68.5 49 -67.6046 49 -66.5L49 67C49 68.1046 48.1046 69 47 69L-47 69C-48.1046 69 -49 68.1046 -49 67L-49 -66.5Z"></path>
+  <defs>
+    <linearGradient id="gradient_0" gradientUnits="userSpaceOnUse" x1="-25" y1="0" x2="25" y2="0">
+      <stop offset="0" stop-color="#82A473"></stop>
+      <stop offset="0.32738096" stop-color="#82A473"></stop>
+      <stop offset="0.64880955" stop-color="#404E3D"></stop>
+      <stop offset="1" stop-color="#404E3D"></stop>
+    </linearGradient>
+  </defs>
+  <path fill="url(#gradient_0)" transform="translate(40.5 32.75)" d="M-25 -2.5L25 -2.5L25 2.5L-25 2.5L-25 -2.5Z"></path>
+  <defs>
+    <linearGradient id="gradient_1" gradientUnits="userSpaceOnUse" x1="-24.999998" y1="0" x2="25.000002" y2="0">
+      <stop offset="0" stop-color="#82A473"></stop>
+      <stop offset="0.32738096" stop-color="#82A473"></stop>
+      <stop offset="0.64880955" stop-color="#404E3D"></stop>
+      <stop offset="1" stop-color="#404E3D"></stop>
+    </linearGradient>
+  </defs>
+  <path fill="url(#gradient_1)" transform="matrix(1.15 0 0 1 44 42.75)" d="M-25 -2.5L25 -2.5L25 2.5L-25 2.5L-25 -2.5Z"></path>
+  <defs>
+    <linearGradient id="gradient_2" gradientUnits="userSpaceOnUse" x1="-25" y1="0" x2="25" y2="0">
+      <stop offset="0" stop-color="#82A473"></stop>
+      <stop offset="0.32738096" stop-color="#82A473"></stop>
+      <stop offset="0.64880955" stop-color="#404E3D"></stop>
+      <stop offset="1" stop-color="#404E3D"></stop>
+    </linearGradient>
+  </defs>
+  <path fill="url(#gradient_2)" transform="matrix(0.95 0 0 1 39 52.75)" d="M-25 -2.5L25 -2.5L25 2.5L-25 2.5L-25 -2.5Z"></path>
+  <defs>
+    <linearGradient id="gradient_3" gradientUnits="userSpaceOnUse" x1="-24.999998" y1="0" x2="25.000002" y2="0">
+      <stop offset="0" stop-color="#82A473"></stop>
+      <stop offset="0.32738096" stop-color="#82A473"></stop>
+      <stop offset="0.64880955" stop-color="#404E3D"></stop>
+      <stop offset="1" stop-color="#404E3D"></stop>
+    </linearGradient>
+  </defs>
+  <path fill="url(#gradient_3)" transform="matrix(0.9 0 0 1 38 63.25)" d="M-25 -2.5L25 -2.5L25 2.5L-25 2.5L-25 -2.5Z"></path>
+  <defs>
+    <linearGradient id="gradient_4" gradientUnits="userSpaceOnUse" x1="-24.999998" y1="0" x2="25.000002" y2="0">
+      <stop offset="0" stop-color="#82A473"></stop>
+      <stop offset="0.32738096" stop-color="#82A473"></stop>
+      <stop offset="0.64880955" stop-color="#404E3D"></stop>
+      <stop offset="1" stop-color="#404E3D"></stop>
+    </linearGradient>
+  </defs>
+  <path fill="url(#gradient_4)" transform="matrix(0.9 0 0 1 38 97.25)" d="M-25 -2.5L25 -2.5L25 2.5L-25 2.5L-25 -2.5Z"></path>
+  <defs>
+    <linearGradient id="gradient_5" gradientUnits="userSpaceOnUse" x1="-24.999998" y1="0" x2="25.000002" y2="0">
+      <stop offset="0" stop-color="#82A473"></stop>
+      <stop offset="0.32738096" stop-color="#82A473"></stop>
+      <stop offset="0.64880955" stop-color="#404E3D"></stop>
+      <stop offset="1" stop-color="#404E3D"></stop>
+    </linearGradient>
+  </defs>
+  <path fill="url(#gradient_5)" transform="translate(40.5 106.75)" d="M-25 -2.5L25 -2.5L25 2.5L-25 2.5L-25 -2.5Z"></path>
+  <defs>
+    <linearGradient id="gradient_6" gradientUnits="userSpaceOnUse" x1="-24.999998" y1="0" x2="25.000002" y2="0">
+      <stop offset="0" stop-color="#82A473"></stop>
+      <stop offset="0.32738096" stop-color="#82A473"></stop>
+      <stop offset="0.64880955" stop-color="#404E3D"></stop>
+      <stop offset="1" stop-color="#404E3D"></stop>
+    </linearGradient>
+  </defs>
+  <path fill="url(#gradient_6)" transform="matrix(0.7 0 0 1 33 116.25)" d="M-25 -2.5L25 -2.5L25 2.5L-25 2.5L-25 -2.5Z"></path>
+</svg>
