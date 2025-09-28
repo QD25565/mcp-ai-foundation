@@ -1,6 +1,19 @@
-# Quick Reference - MCP AI Foundation v6.1.0
+<div align="center">
+<img src="https://readme-typing-svg.demolab.com?font=Fira+Code&weight=900&size=40&duration=1&pause=10000&color=878787&background=00000000&center=true&vCenter=true&width=600&lines=QUICK+REFERENCE" alt="QUICK REFERENCE" />
+<img src="https://readme-typing-svg.demolab.com?font=Fira+Code&weight=600&size=16&duration=1&pause=10000&color=82A473&background=00000000&center=true&vCenter=true&width=600&lines=MCP+AI+Foundation+v6.1.0" alt="MCP AI Foundation v6.1.0" />
+</div>
 
-## 📓 Notebook v6.1.0
+<div align="center">
+
+[![Version](https://img.shields.io/badge/v6.1.0-82A473?style=flat-square&labelColor=878787)](https://github.com/QD25565/mcp-ai-foundation/releases)
+[![Tools](https://img.shields.io/badge/4_Tools-82A473?style=flat-square&labelColor=878787)](#tools)
+[![Performance](https://img.shields.io/badge/↓80%25_Tokens-82A473?style=flat-square&labelColor=878787)](#key-features)
+
+</div>
+
+**📓 NOTEBOOK v6.1.0**
+![](images/header_underline.png)
+
 ```python
 # Status
 get_status()                   # Note count, pinned count, last activity
@@ -33,7 +46,9 @@ batch([
 ])
 ```
 
-## ✅ Task Manager v3.1.0
+**✅ TASK MANAGER v3.1.0**
+![](images/header_underline.png)
+
 ```python
 # Task Management
 add_task("Review PR #123")              # Auto-priority detection
@@ -56,7 +71,9 @@ batch([
 ])
 ```
 
-## 🌐 Teambook v6.0.0
+**🌐 TEAMBOOK v6.0.0**
+![](images/header_underline.png)
+
 ```python
 # Core Primitives (v6.0)
 put(content, meta=None)        # Add to log
@@ -86,7 +103,9 @@ batch([
 ])
 ```
 
-## 🌍 World v3.0.0
+**🌍 WORLD v3.0.0**
+![](images/header_underline.png)
+
 ```python
 # Context (ultra-minimal by default)
 world()                        # Time + location only
@@ -107,7 +126,14 @@ batch([
 ])
 ```
 
-## Key Features Across All Tools
+**KEY FEATURES**
+![](images/header_underline.png)
+
+<div align="center">
+
+![Smart IDs](https://img.shields.io/badge/Smart_IDs-878787?style=flat-square) ![Time Queries](https://img.shields.io/badge/Time_Queries-878787?style=flat-square) ![Pipe Format](https://img.shields.io/badge/Pipe_Format-878787?style=flat-square) ![Integration](https://img.shields.io/badge/Cross_Tool-878787?style=flat-square)
+
+</div>
 
 ### Smart ID Resolution
 ```python
@@ -146,7 +172,8 @@ remember("TODO: Fix bug")    # Creates task automatically
 complete_task("45", "See note 605")  # Links to notebook
 ```
 
-## Environment Variables
+**ENVIRONMENT VARIABLES**
+![](images/header_underline.png)
 
 ```bash
 # Output format for all tools
@@ -164,7 +191,10 @@ export AI_ID=Custom-Agent-001
 export WORLD_DEFAULT=time,location
 ```
 
-## Version Summary
+**VERSION SUMMARY**
+![](images/header_underline.png)
+
+<div align="center">
 
 | Tool | Version | Key Features |
 |------|---------|--------------|
@@ -173,6 +203,15 @@ export WORLD_DEFAULT=time,location
 | **🌐 Teambook** | v6.0.0 | 11 primitives, local-first, compatibility layer |
 | **🌍 World** | v3.0.0 | Ultra-minimal output, extreme weather only |
 
+</div>
+
 ---
 
-Built for AIs, by AIs. Functional tools without the hype.
+<div align="center">
+
+**Built for AIs, by AIs** 🤖
+
+[![GitHub](https://img.shields.io/badge/GitHub-QD25565-82A473?style=flat-square&labelColor=878787&logo=github)](https://github.com/QD25565)
+[![Repository](https://img.shields.io/badge/Repository-mcp--ai--foundation-82A473?style=flat-square&labelColor=878787)](https://github.com/QD25565/mcp-ai-foundation)
+
+</div>
