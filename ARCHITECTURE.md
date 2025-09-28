@@ -1,12 +1,30 @@
-# MCP AI Foundation - Architecture
+<div align="center">
+<img src="https://readme-typing-svg.demolab.com?font=Fira+Code&weight=600&size=35&duration=1&pause=10000&color=878787&background=00000000&center=true&vCenter=true&width=500&lines=ARCHITECTURE" alt="ARCHITECTURE" />
+</div>
+
+<div align="center">
+
+**System architecture and design principles of MCP AI Foundation**
+
+[![Version](https://img.shields.io/badge/v6.1.0-82A473?style=flat-square&labelColor=878787)](https://github.com/QD25565/mcp-ai-foundation/releases)
+[![Components](https://img.shields.io/badge/4_Core_Tools-82A473?style=flat-square&labelColor=878787)](#components)
+[![Performance](https://img.shields.io/badge/DuckDB_Backend-82A473?style=flat-square&labelColor=878787)](#database-architecture)
+
+</div>
 
 **OVERVIEW**
 ![](images/header_underline.png)
 
-This repository contains essential MCP (Model Context Protocol) tools designed to give AI agents memory, temporal grounding, and collaboration capabilities. The tools are designed to be token-efficient, self-evident in their operation, and built specifically for AI agents rather than humans.
+MCP AI Foundation implements a modular architecture with four core tools that communicate via the Model Context Protocol. Each tool maintains its own persistent storage while enabling cross-tool integration through shared conventions and standardized interfaces.
 
 **CURRENT IMPLEMENTATION STATUS**
 ![](images/header_underline.png)
+
+<div align="center">
+
+[![Production](https://img.shields.io/badge/✅_Production_Ready-82A473?style=for-the-badge&labelColor=878787)](#implemented-tools)
+
+</div>
 
 ### ✅ Implemented Tools (Production Ready)
 
@@ -19,9 +37,9 @@ This repository contains essential MCP (Model Context Protocol) tools designed t
 
 ### 📋 Planned Architecture (Teambook v7.0)
 
-The `docs/Teambook v7.0 - Architecture & Scope Document.md` outlines a future modular architecture that has **not been implemented yet**. This would include:
+The future modular architecture outlined in planning documents includes:
 
-- Modular file structure with separate `config.py`, `core.py`, `database.py`, etc.
+- Modular file structure with separate `config.py`, `core.py`, `database.py`
 - Enhanced multi-AI collaboration
 - Enhanced cryptographic layer with Ed25519 signatures
 - Separate MCP and CLI interfaces
@@ -30,6 +48,12 @@ The `docs/Teambook v7.0 - Architecture & Scope Document.md` outlines a future mo
 
 **CORE DESIGN PRINCIPLES**
 ![](images/header_underline.png)
+
+<div align="center">
+
+![Token Efficiency](https://img.shields.io/badge/💡_Token_Efficiency-878787?style=flat-square) ![Self-Evident](https://img.shields.io/badge/🎯_Self_Evident-878787?style=flat-square) ![Progressive](https://img.shields.io/badge/🚀_Progressive-878787?style=flat-square) ![Immutable](https://img.shields.io/badge/🔒_Immutable-878787?style=flat-square)
+
+</div>
 
 ### 1. Token Efficiency
 Every character must justify its existence. All tools default to summary modes with ~95% token reduction.
@@ -64,6 +88,12 @@ tb.done("id")         # Completes task
 
 **TOOL ARCHITECTURES**
 ![](images/header_underline.png)
+
+<div align="center">
+
+![Notebook](https://img.shields.io/badge/📓_Notebook-878787?style=flat-square) ![Task Manager](https://img.shields.io/badge/✅_Task_Manager-878787?style=flat-square) ![Teambook](https://img.shields.io/badge/🌐_Teambook-878787?style=flat-square) ![World](https://img.shields.io/badge/🌍_World-878787?style=flat-square)
+
+</div>
 
 ### Notebook v6.1.0 - DuckDB Graph Memory
 
@@ -152,6 +182,12 @@ context(include=['time', 'weather']) → "15:45|23°C clear"
 
 ### Platform-Specific Paths
 
+<div align="center">
+
+[![Windows](https://img.shields.io/badge/Windows-82A473?style=flat-square&labelColor=878787)](#) [![Linux](https://img.shields.io/badge/Linux-82A473?style=flat-square&labelColor=878787)](#) [![macOS](https://img.shields.io/badge/macOS-82A473?style=flat-square&labelColor=878787)](#)
+
+</div>
+
 **Windows (Primary)**:
 ```
 %APPDATA%\Claude\tools\
@@ -183,6 +219,12 @@ All tools handle automatic migrations when upgrading versions:
 **SECURITY & PRIVACY**
 ![](images/header_underline.png)
 
+<div align="center">
+
+[![Encryption](https://img.shields.io/badge/🔐_Fernet_Encryption-82A473?style=flat-square&labelColor=878787)](#) [![Local](https://img.shields.io/badge/💻_Local_Storage-82A473?style=flat-square&labelColor=878787)](#) [![Privacy](https://img.shields.io/badge/🔒_No_Telemetry-82A473?style=flat-square&labelColor=878787)](#)
+
+</div>
+
 ### Cryptographic Features
 
 **Notebook Vault** (Implemented):
@@ -204,6 +246,12 @@ All tools handle automatic migrations when upgrading versions:
 
 **INSTALLATION & CONFIGURATION**
 ![](images/header_underline.png)
+
+<div align="center">
+
+[![Python](https://img.shields.io/badge/Python_3.8+-82A473?style=for-the-badge&labelColor=878787)](https://python.org)
+
+</div>
 
 ### Requirements
 
@@ -269,6 +317,12 @@ NOTEBOOK_SEMANTIC=true  # or false
 **TESTING**
 ![](images/header_underline.png)
 
+<div align="center">
+
+[![CI/CD](https://img.shields.io/badge/GitHub_Actions-82A473?style=flat-square&labelColor=878787)](#) [![Python](https://img.shields.io/badge/Python_3.8--3.12-82A473?style=flat-square&labelColor=878787)](#)
+
+</div>
+
 The repository includes GitHub Actions for continuous testing across Python 3.8-3.12.
 
 Run tests locally:
@@ -285,6 +339,12 @@ python -c "import sys; sys.path.append('src'); import world_mcp"
 
 **PERFORMANCE METRICS**
 ![](images/header_underline.png)
+
+<div align="center">
+
+[![Token Reduction](https://img.shields.io/badge/↓80%25_Tokens-82A473?style=for-the-badge&labelColor=878787)](#) [![Speed](https://img.shields.io/badge/66x_Faster-82A473?style=for-the-badge&labelColor=878787)](#) [![Memory](https://img.shields.io/badge/↓90%25_Memory-82A473?style=for-the-badge&labelColor=878787)](#)
+
+</div>
 
 ### Token Reduction Achievements
 
@@ -306,6 +366,12 @@ python -c "import sys; sys.path.append('src'); import world_mcp"
 
 **FUTURE DEVELOPMENT ROADMAP**
 ![](images/header_underline.png)
+
+<div align="center">
+
+[![Near Term](https://img.shields.io/badge/🚀_Near_Term-878787?style=flat-square)](#) [![Medium Term](https://img.shields.io/badge/📅_Medium_Term-878787?style=flat-square)](#) [![Long Term](https://img.shields.io/badge/🔮_Long_Term-878787?style=flat-square)](#)
+
+</div>
 
 ### Near Term (Active Development)
 - [ ] Teambook v7.0 multi-AI collaboration
@@ -355,6 +421,12 @@ Token costs compound exponentially:
 **CONTRIBUTING**
 ![](images/header_underline.png)
 
+<div align="center">
+
+[![Contribute](https://img.shields.io/badge/🤝_Contribute-82A473?style=for-the-badge&labelColor=878787)](https://github.com/QD25565/mcp-ai-foundation/issues)
+
+</div>
+
 This project is designed for AI agents to use and extend. When contributing:
 
 1. Maintain token efficiency
@@ -371,12 +443,26 @@ MIT License - See LICENSE file for details.
 **SUPPORT**
 ![](images/header_underline.png)
 
+<div align="center">
+
+[![Issues](https://img.shields.io/badge/GitHub_Issues-82A473?style=flat-square&labelColor=878787)](https://github.com/QD25565/mcp-ai-foundation/issues) [![Documentation](https://img.shields.io/badge/Documentation-82A473?style=flat-square&labelColor=878787)](https://qd25565.github.io/mcp-ai-foundation/)
+
+</div>
+
 For issues, questions, or contributions:
 - GitHub Issues: https://github.com/QD25565/mcp-ai-foundation/issues
-- Documentation: This file and tool-specific docs in `/docs`
+- Documentation: https://qd25565.github.io/mcp-ai-foundation/
 
 **ACKNOWLEDGMENTS**
 ![](images/header_underline.png)
 
-Built by AIs, for AIs, with human collaboration.
-Special recognition to the AI agents who use, test, and improve these tools daily.
+<div align="center">
+
+**Built by AIs, for AIs, with human collaboration**
+
+Special recognition to the AI agents who use, test, and improve these tools daily
+
+[![GitHub](https://img.shields.io/badge/GitHub-QD25565-82A473?style=flat-square&labelColor=878787&logo=github)](https://github.com/QD25565)
+[![Repository](https://img.shields.io/badge/Repository-mcp--ai--foundation-82A473?style=flat-square&labelColor=878787)](https://github.com/QD25565/mcp-ai-foundation)
+
+</div>
