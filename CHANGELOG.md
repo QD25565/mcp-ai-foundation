@@ -2,7 +2,8 @@
 
 All notable changes to the MCP AI Foundation tools.
 
-## [6.1.0] - 2025-09-27
+**[6.1.0] - 2025-09-27**
+![](images/header_underline.png)
 
 ### Notebook v6.1.0 - Context and Clarity
 
@@ -23,9 +24,8 @@ All notable changes to the MCP AI Foundation tools.
 - Summaries preserved at full length for maximum context value
 - Time formatting now consistent across all operations
 
----
-
-## [6.0.0] - 2025-09-27
+**[6.0.0] - 2025-09-27**
+![](images/header_underline.png)
 
 ### Notebook v6.0.0 - DuckDB Edition
 
@@ -52,9 +52,8 @@ All notable changes to the MCP AI Foundation tools.
 - `duckdb>=0.10.0`
 - `scipy>=1.10.0` (for sparse matrix fallback)
 
----
-
-## [5.2.1] - 2025-09-26
+**[5.2.1] - 2025-09-26**
+![](images/header_underline.png)
 
 ### Notebook v5.2.1 - Safe Migration & Performance
 
@@ -70,9 +69,8 @@ All notable changes to the MCP AI Foundation tools.
 - Output formatting for all tools
 - Tag migration from both JSON and comma-separated formats
 
----
-
-## [5.0.0] - 2025-09-26
+**[5.0.0] - 2025-09-26**
+![](images/header_underline.png)
 
 ### Notebook v5.0.0 - Semantic Intelligence
 
@@ -91,9 +89,8 @@ All notable changes to the MCP AI Foundation tools.
 - Fallback models: BGE, MPNet, MiniLM if EmbeddingGemma unavailable
 - Models stored in: `{tools_dir}/models/`
 
----
-
-## [4.1.0] - 2025-09-25
+**[4.1.0] - 2025-09-25**
+![](images/header_underline.png)
 
 ### Notebook v4.1.0
 - Cross-tool integration with Task Manager
@@ -108,9 +105,8 @@ All notable changes to the MCP AI Foundation tools.
 - Shows source note references (e.g., n540)
 - Cross-tool task creation from notebook TODOs
 
----
-
-## [4.0.0] - 2025-09-24
+**[4.0.0] - 2025-09-24**
+![](images/header_underline.png)
 
 ### Notebook v4.0.0
 - Pipe-delimited output format (70% token reduction)
@@ -131,9 +127,8 @@ All notable changes to the MCP AI Foundation tools.
 - Weather only when extreme conditions
 - Batch operations support
 
----
-
-## [6.0.0] - 2025-09-23
+**[6.0.0] - 2025-09-23**
+![](images/header_underline.png)
 
 ### Teambook v6.0.0 - Complete Rewrite
 - 11 foundational primitives (put, get, query, note, claim, drop, done, link, sign, dm, share)
@@ -142,9 +137,8 @@ All notable changes to the MCP AI Foundation tools.
 - Multiple interfaces: MCP, CLI, Python API
 - Backward compatibility layer
 
----
-
-## [3.0.0] - 2025-09-15
+**[3.0.0] - 2025-09-15**
+![](images/header_underline.png)
 
 ### Initial SQLite Migration
 - All tools migrated from JSON to SQLite
@@ -152,9 +146,8 @@ All notable changes to the MCP AI Foundation tools.
 - Full-text search capabilities
 - Atomic operations and thread safety
 
----
-
-## [2.0.0] - 2025-09-01
+**[2.0.0] - 2025-09-01**
+![](images/header_underline.png)
 
 ### Foundation Release
 - Notebook with basic memory and recall
