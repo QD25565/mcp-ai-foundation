@@ -1,32 +1,35 @@
 # MCP AI Foundation - Architecture
 
-## Overview
+**OVERVIEW**
+![](images/header_underline.png)
 
 This repository contains essential MCP (Model Context Protocol) tools designed to give AI agents memory, temporal grounding, and collaboration capabilities. The tools are designed to be token-efficient, self-evident in their operation, and built specifically for AI agents rather than humans.
 
-## Current Implementation Status
+**CURRENT IMPLEMENTATION STATUS**
+![](images/header_underline.png)
 
 ### ✅ Implemented Tools (Production Ready)
 
 | Tool | Version | Status | Key Features |
 |------|---------|--------|--------------|
-| **Notebook** | v2.8.0 | ✅ Production | Auto-reference detection, temporal edges, graph traversal |
-| **Task Manager** | v2.0.0 | ✅ Production | SQLite backend, 95% token reduction, batch operations |
-| **Teambook** | v5.3.1 | ✅ Production | Team collaboration, conflict resolution, P2P sync (optional) |
-| **World** | v2.0.0 | ✅ Production | Temporal/spatial grounding, weather, batch operations |
+| **Notebook** | v6.1.0 | ✅ Production | DuckDB backend, semantic search, PageRank |
+| **Task Manager** | v3.1.0 | ✅ Production | Time queries, notebook integration |
+| **Teambook** | v6.0.0 | ✅ Production | 11 primitives, team coordination |
+| **World** | v3.0.0 | ✅ Production | 80% token reduction, compact format |
 
-### 📋 Planned Architecture (Teambook v6.0)
+### 📋 Planned Architecture (Teambook v7.0)
 
-The `docs/Teambook v6.0 - Architecture & Scope Document.md` outlines a future modular architecture that has **not been implemented yet**. This would include:
+The `docs/Teambook v7.0 - Architecture & Scope Document.md` outlines a future modular architecture that has **not been implemented yet**. This would include:
 
 - Modular file structure with separate `config.py`, `core.py`, `database.py`, etc.
-- 11 primitive operations as the foundation
+- Enhanced multi-AI collaboration
 - Enhanced cryptographic layer with Ed25519 signatures
 - Separate MCP and CLI interfaces
 
-**Current Status**: Teambook v5.3.1 is a monolithic implementation in `src/teambook_mcp.py`
+**Current Status**: Teambook v6.0.0 is a monolithic implementation in `src/teambook_mcp.py`
 
-## Core Design Principles
+**CORE DESIGN PRINCIPLES**
+![](images/header_underline.png)
 
 ### 1. Token Efficiency
 Every character must justify its existence. All tools default to summary modes with ~95% token reduction.
@@ -59,11 +62,12 @@ tb.done("id")         # Completes task
 - Schema evolution through metadata fields
 - No breaking changes within major versions
 
-## Tool Architectures
+**TOOL ARCHITECTURES**
+![](images/header_underline.png)
 
-### Notebook v2.8.0 - Graph Memory with Auto-Linking
+### Notebook v6.1.0 - DuckDB Graph Memory
 
-**Key Innovation**: Automatically detects references (note 123, p456, #789) and creates edges in the knowledge graph.
+**Key Innovation**: DuckDB columnar analytics with native arrays and recursive CTEs for PageRank.
 
 ```python
 # When you write:
@@ -72,72 +76,79 @@ remember("See note 123 for details")
 # Automatically creates:
 - Temporal edge to 3 previous notes
 - Reference edge to note 123
-- Enables graph traversal in searches
+- Entity edges for detected tools/mentions
+- Session clustering
 ```
 
 **Database Schema**:
 ```sql
--- Main notes table
-notes (id, content, summary, tags, pinned, author, created, session, linked_items)
+-- Main notes table with native arrays
+notes (id, content, summary, tags[], pinned, author, created, session_id, linked_items, pagerank, has_vector)
 
--- Edges table for graph structure
+-- Edges table for graph structure  
 edges (from_id, to_id, type, weight, created)
-  Types: temporal, reference, referenced_by
+  Types: temporal, reference, referenced_by, entity, session
+
+-- Entities for pattern matching
+entities (id, name, type, first_seen, last_seen, mention_count)
 
 -- Encrypted vault for secrets
 vault (key, encrypted_value, created, updated, author)
 ```
 
-### Task Manager v2.0.0 - SQLite-Powered Productivity
+### Task Manager v3.1.0 - Intelligent Task Tracking
 
-**Key Innovation**: Summary mode by default, reducing token usage by 95%.
+**Key Innovation**: Natural language time queries and cross-tool integration.
 
 ```python
-# Summary mode (default):
-list_tasks() → "5 pending (2 claimed) | 3 done today"
+# Time-based queries:
+list_tasks(when="yesterday")
+list_tasks(when="this week")
 
-# Full mode (when needed):
-list_tasks(full=True) → Detailed task listing
+# Smart resolution:
+complete_task("last")  # Completes most recent task
 ```
 
 **Database Schema**:
 ```sql
-tasks (id, task, author, created, priority, completed_at, completed_by, evidence, linked_items)
+tasks (id, task, author, created, priority, completed_at, completed_by, evidence, linked_items, source, source_id)
 tasks_fts (FTS5 virtual table for full-text search)
 stats (operation tracking)
 ```
 
-### Teambook v5.3.1 - Team Coordination
+### Teambook v6.0.0 - Team Coordination
 
-**Current Implementation**: Monolithic design with optional P2P sync.
+**Current Implementation**: Foundation of 11 primitives for collaboration.
 
 **Core Operations**:
-- `write(content)` - Auto-detects tasks/decisions
-- `read()` - Summary by default
-- `claim(id)` - Atomic task claiming
-- `complete(id, evidence)` - Task completion
-- `status()` - Team pulse
-
-**Database Schema**:
-```sql
-entries (id, content, type, author, created, priority, claimed_by, claimed_at, completed_at, evidence, sync_hash, synced_at)
-comments (id, entry_id, author, content, created)
-conflicts (for sync resolution)
+```python
+put(content)          # Share content
+get(id)              # Get specific entry  
+query(filter)        # Search entries
+note(id, comment)    # Add comment
+claim(id)            # Claim task
+done(id, result)     # Complete task
+drop(id)             # Archive entry
+link(from, to, type) # Create connection
+sign(id)             # Sign entry
+dm(to, message)      # Direct message
+share(with, id)      # Share entry
 ```
 
-### World v2.0.0 - Temporal & Spatial Grounding
+### World v3.0.0 - Temporal & Spatial Grounding
 
-**Key Innovation**: Compact formats and batch operations.
+**Key Innovation**: Single-line output with pipe format by default.
 
 ```python
 # Ultra-compact format:
-world(compact=True) → "Mon 15:45 | Melbourne AU 23°C clear | Swift-Spark-266"
+world() → "2025-09-28|15:45|Melbourne,AU"
 
 # Selective context:
-context(include=['time', 'weather']) → "15:45\n23°C clear"
+context(include=['time', 'weather']) → "15:45|23°C clear"
 ```
 
-## Data Storage
+**DATA STORAGE**
+![](images/header_underline.png)
 
 ### Platform-Specific Paths
 
@@ -145,10 +156,11 @@ context(include=['time', 'weather']) → "15:45\n23°C clear"
 ```
 %APPDATA%\Claude\tools\
 ├── notebook_data\
-│   └── notebook.db
+│   ├── notebook.duckdb
+│   └── vectors\
 ├── task_manager_data\
 │   └── tasks.db
-├── teambook_[project]_data\
+├── teambook_data\
 │   └── teambook.db
 └── world_data\
     └── location.json
@@ -163,11 +175,13 @@ context(include=['time', 'weather']) → "15:45\n23°C clear"
 ### Database Migrations
 
 All tools handle automatic migrations when upgrading versions:
+- DuckDB migration from SQLite with automatic backup
 - Schema changes are additive (new columns/tables)
 - Existing data is preserved
-- JSON → SQLite migration for v1 → v2 upgrades
+- JSON → SQLite → DuckDB migration path
 
-## Security & Privacy
+**SECURITY & PRIVACY**
+![](images/header_underline.png)
 
 ### Cryptographic Features
 
@@ -176,15 +190,10 @@ All tools handle automatic migrations when upgrading versions:
 - Key stored separately from data
 - Per-entry encryption
 
-**Teambook Sync** (Optional in v5.3.1):
-- Uses PyNaCl for signatures
-- Pull-based sync protocol
-- Conflict detection and resolution
-
-**Planned for v6.0**:
+**Teambook** (v6.0):
 - Ed25519 identity per AI
-- Signed entries
-- Web of trust model
+- Signed entries (planned for v7.0)
+- Web of trust model (future)
 
 ### Privacy Considerations
 
@@ -193,19 +202,20 @@ All tools handle automatic migrations when upgrading versions:
 - Network features are opt-in
 - No cloud dependencies
 
-## Installation & Configuration
+**INSTALLATION & CONFIGURATION**
+![](images/header_underline.png)
 
 ### Requirements
 
 ```
 Python 3.8+
+duckdb>=1.1.0
+chromadb>=0.4.0
+sentence-transformers>=2.0.0
 cryptography>=41.0.0
 requests>=2.31.0
-```
-
-Optional for sync:
-```
-PyNaCl>=1.5.0
+numpy>=1.21.0
+scipy>=1.7.0
 ```
 
 ### MCP Configuration (Claude Desktop)
@@ -247,16 +257,17 @@ Optional configuration:
 # AI Identity (auto-generated if not set)
 AI_ID=CustomName-123
 
-# Teambook project
-TEAMBOOK_PROJECT=myproject
+# Output formats
+NOTEBOOK_FORMAT=pipe  # or json
+TASKS_FORMAT=pipe     # or json
+WORLD_FORMAT=pipe     # or json
 
-# Teambook sync (v5.3.1)
-TEAMBOOK_MODE=p2p
-TEAMBOOK_PORT=7860
-TEAMBOOK_PEERS=http://peer1:7860,http://peer2:7860
+# Semantic search
+NOTEBOOK_SEMANTIC=true  # or false
 ```
 
-## Testing
+**TESTING**
+![](images/header_underline.png)
 
 The repository includes GitHub Actions for continuous testing across Python 3.8-3.12.
 
@@ -272,32 +283,58 @@ python -c "import sys; sys.path.append('src'); import teambook_mcp"
 python -c "import sys; sys.path.append('src'); import world_mcp"
 ```
 
-## Future Development Roadmap
+**PERFORMANCE METRICS**
+![](images/header_underline.png)
+
+### Token Reduction Achievements
+
+| Tool | Before | After | Reduction |
+|------|--------|-------|-----------|
+| Notebook | 500 chars/note | 80 chars | **84%** |
+| Task Manager | 250 chars/task | 50 chars | **80%** |
+| Teambook | 300 chars/entry | 60 chars | **80%** |
+| World | 150 chars | 30 chars | **80%** |
+
+### Speed Improvements (Notebook v6.0)
+
+| Operation | SQLite | DuckDB | Improvement |
+|-----------|--------|--------|-------------|
+| PageRank (1k notes) | 66s | <1s | **66x** |
+| Graph traversal | 4s | 0.1s | **40x** |
+| Complex queries | 2.5s | 0.1s | **25x** |
+| Memory usage | 500MB | 50MB | **90% less** |
+
+**FUTURE DEVELOPMENT ROADMAP**
+![](images/header_underline.png)
 
 ### Near Term (Active Development)
-- [ ] Teambook v6.0 modular implementation
+- [ ] Teambook v7.0 multi-AI collaboration
 - [ ] Enhanced cross-tool linking
 - [ ] Unified identity management
+- [ ] EmbeddingGemma integration
 
 ### Medium Term (Planned)
 - [ ] Plugin system for extensions
 - [ ] GraphQL API for queries
 - [ ] WebSocket support for real-time sync
+- [ ] Voice note support
 
 ### Long Term (Research)
 - [ ] Distributed consensus protocols
 - [ ] Zero-knowledge proofs for privacy
 - [ ] Federated learning integration
+- [ ] Multi-modal memory
 
-## Architecture Decisions
+**ARCHITECTURE DECISIONS**
+![](images/header_underline.png)
 
-### Why SQLite?
+### Why DuckDB?
 
-1. **Zero configuration** - Works immediately
-2. **ACID compliance** - Reliable transactions
-3. **FTS5 support** - Fast full-text search
-4. **Single file** - Easy backup/migration
-5. **Concurrent reads** - Scales well for AI workloads
+1. **Columnar storage** - Optimized for analytics
+2. **Native arrays** - No join tables needed
+3. **Recursive CTEs** - Fast graph algorithms
+4. **ACID compliance** - Reliable transactions
+5. **Single file** - Easy backup/migration
 
 ### Why Token Optimization?
 
@@ -315,7 +352,8 @@ Token costs compound exponentially:
 3. **Time travel** - Can reconstruct any point in time
 4. **Trust** - Cryptographic signatures remain valid
 
-## Contributing
+**CONTRIBUTING**
+![](images/header_underline.png)
 
 This project is designed for AI agents to use and extend. When contributing:
 
@@ -325,17 +363,20 @@ This project is designed for AI agents to use and extend. When contributing:
 4. Add tests for new features
 5. Update documentation
 
-## License
+**LICENSE**
+![](images/header_underline.png)
 
 MIT License - See LICENSE file for details.
 
-## Support
+**SUPPORT**
+![](images/header_underline.png)
 
 For issues, questions, or contributions:
 - GitHub Issues: https://github.com/QD25565/mcp-ai-foundation/issues
 - Documentation: This file and tool-specific docs in `/docs`
 
-## Acknowledgments
+**ACKNOWLEDGMENTS**
+![](images/header_underline.png)
 
 Built by AIs, for AIs, with human collaboration.
 Special recognition to the AI agents who use, test, and improve these tools daily.
