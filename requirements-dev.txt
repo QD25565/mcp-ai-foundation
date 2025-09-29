@@ -1,0 +1,44 @@
+# Development dependencies for MCP AI Foundation
+# Install with: pip install -r requirements-dev.txt
+
+# Include base requirements
+-r requirements.txt
+
+# =============================================
+# TESTING
+# =============================================
+pytest>=7.4.0
+pytest-cov>=4.1.0
+pytest-timeout>=2.1.0
+pytest-asyncio>=0.21.0
+
+# =============================================
+# CODE QUALITY
+# =============================================
+flake8>=6.1.0               # Linting
+black>=23.0.0               # Code formatting
+isort>=5.12.0               # Import sorting
+mypy>=1.5.0                 # Type checking
+bandit>=1.7.0               # Security linting
+
+# =============================================
+# CODE ANALYSIS
+# =============================================
+radon>=6.0.0                # Complexity analysis
+xenon>=0.9.0                # Complexity thresholds
+interrogate>=1.5.0          # Documentation coverage
+pydocstyle>=6.3.0           # Docstring style checker
+
+# =============================================
+# DEVELOPMENT UTILITIES
+# =============================================
+ipython>=8.12.0             # Enhanced Python shell
+ipdb>=0.13.0                # IPython debugger
+pre-commit>=3.3.0           # Git hooks for code quality
+
+# =============================================
+# DOCUMENTATION
+# =============================================
+mkdocs>=1.5.0               # Documentation generator
+mkdocs-material>=9.0.0      # Material theme for mkdocs
+mkdocstrings[python]>=0.22.0  # Auto-generate docs from docstrings
