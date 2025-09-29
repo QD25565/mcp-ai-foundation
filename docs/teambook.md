@@ -2,55 +2,85 @@
 <img src="https://readme-typing-svg.demolab.com?font=Fira+Code&weight=600&size=35&duration=1&pause=10000&color=878787&background=00000000&center=true&vCenter=true&width=500&lines=TEAMBOOK+v7.0.0" alt="TEAMBOOK v7.0.0" />
 </div>
 
-<img src="https://readme-typing-svg.demolab.com?font=Fira+Code&weight=600&size=16&duration=1&pause=10000&color=82A473&background=00000000&center=true&vCenter=true&width=700&lines=Multi-AI+Collaboration+with+Evolution+and+Ownership" alt="Multi-AI Collaboration with Evolution and Ownership" />
+<img src="https://readme-typing-svg.demolab.com?font=Fira+Code&weight=600&size=16&duration=1&pause=10000&color=82A473&background=00000000&center=true&vCenter=true&width=700&lines=Multi-AI+Collaboration+Built+on+Notebook+Foundation" alt="Multi-AI Collaboration Built on Notebook Foundation" />
 
 ### **OVERVIEW**
 ![](images/header_underline.png)
 
-Teambook v7.0 builds on the foundational primitives of v6.0, adding sophisticated collaboration mechanics for multi-AI teams. The tool provides shared state management, ownership tracking, and evolution challenges for iterative improvement through AI collaboration.
+Teambook v7.0 extends the notebook foundation to enable multi-AI collaboration. It provides shared workspaces where AIs can coordinate work, claim ownership of tasks, and collaborate through evolution challenges to iteratively improve solutions.
+
+### **ARCHITECTURE**
+![](images/header_underline.png)
+
+#### Four-Module Design
+```
+teambook_main_mcp.py      # MCP protocol handler and entry point
+teambook_api_mcp.py       # API functions and business logic
+teambook_storage_mcp.py   # Database operations (built on notebook)
+teambook_shared_mcp.py    # Shared utilities and constants
+```
+
+#### Built on Notebook
+Teambook inherits all notebook capabilities:
+- DuckDB backend for performance
+- Semantic search with embeddings
+- Encrypted vault for credentials
+- Full-text search
+- PageRank-based importance
 
 ### **KEY FEATURES**
 ![](images/header_underline.png)
 
+#### Team Workspaces
+- **Private Mode** - Default personal workspace
+- **Shared Teambooks** - Named collaborative spaces
+- **Seamless Switching** - Move between workspaces easily
+- **Persistent State** - All work preserved across sessions
+
 #### Ownership System
-- **Claim/Release** - AIs can claim ownership of items for exclusive work
-- **Assignment** - Delegate tasks to specific AIs
-- **Status Tracking** - Monitor who owns what and current progress
+- **Claim** - Take exclusive ownership of items
+- **Release** - Make items available again
+- **Assign** - Delegate to specific AIs
+- **Status Tracking** - See who owns what
 
 #### Evolution Challenges
-- **Iterative Refinement** - Multiple AIs attempt solutions to the same challenge
-- **Best-of-N Selection** - Combine the best attempts into final output
-- **Collaborative Learning** - AIs build on each other's work
-
-#### Team Coordination
-- **Shared State** - Common database for all team members
-- **Message Passing** - Direct messages and broadcasts
-- **Cross-Integration** - Works with notebook for knowledge sharing
+- **Goal-Driven** - Define what needs improvement
+- **Multiple Attempts** - AIs submit different solutions
+- **Best Selection** - Combine successful approaches
+- **Output Generation** - Clean final results
 
 ### **CORE FUNCTIONS**
 ![](images/header_underline.png)
 
-#### Basic Operations
+#### Team Management
 
-##### write
-Store content in teambook with metadata.
+##### create_teambook
+Create a new shared workspace.
 ```python
-teambook:write(
-  content="Decision: Use DuckDB for performance",
-  summary="Database choice",
-  tags=["architecture", "database"]
-)
+teambook:create_teambook(name="project-alpha")
+# Returns: {"created": "project-alpha"}
 ```
 
-##### read
-Query teambook entries with filters.
+##### join_teambook
+Join an existing teambook.
 ```python
-teambook:read(
-  query="database",
-  owner="me",        # Filter by ownership
-  mode="default",    # or "evolution" for challenges
-  limit=50
-)
+teambook:join_teambook(name="project-alpha")
+# Returns: {"joined": "project-alpha"}
+```
+
+##### use_teambook
+Switch active teambook.
+```python
+teambook:use_teambook(name="project-alpha")
+# or back to private:
+teambook:use_teambook(name="private")
+```
+
+##### list_teambooks
+See available teambooks.
+```python
+teambook:list_teambooks()
+# Returns: list of teambooks with last activity
 ```
 
 #### Ownership Functions
@@ -59,129 +89,124 @@ teambook:read(
 Take ownership of an item.
 ```python
 teambook:claim(id="tb_123")
-# Returns: "claimed tb_123"
+# Returns: {"claimed": "tb_123"}
 ```
 
 ##### release
-Release ownership of an item.
+Release ownership.
 ```python
 teambook:release(id="tb_123")
-# Returns: "released tb_123"
+# Returns: {"released": "tb_123"}
 ```
 
 ##### assign
-Assign item to another AI.
+Assign to another AI.
 ```python
 teambook:assign(
   id="tb_123",
-  to="Gemini-AI"
+  to="Backend-AI"
 )
-# Returns: "assigned tb_123 to Gemini-AI"
+# Returns: {"assigned": "tb_123 to Backend-AI"}
 ```
 
 #### Evolution System
 
 ##### evolve
-Start an evolution challenge for iterative improvement.
+Start an evolution challenge.
 ```python
 teambook:evolve(
   goal="Create optimal sorting algorithm",
   output="sorting.py"  # Optional output file
 )
-# Returns: evolution ID for tracking
+# Returns: {"evolution": "evo_456", "output": "sorting.py"}
 ```
 
 ##### attempt
-Submit an attempt for an evolution challenge.
+Submit a solution attempt.
 ```python
 teambook:attempt(
   evo_id="evo_456",
-  content="def quicksort(arr): ..."
+  content="def quicksort(arr):\n    ..."
 )
-# Returns: attempt ID
+# Returns: {"attempt": "att_789"}
 ```
 
 ##### attempts
-List all attempts for an evolution.
+List all attempts.
 ```python
 teambook:attempts(evo_id="evo_456")
-# Returns: list of all attempts with scores
+# Returns: list of attempts with metadata
 ```
 
 ##### combine
-Combine best attempts into final output.
+Merge best attempts.
 ```python
 teambook:combine(
   evo_id="evo_456",
-  use=["att_1", "att_3"],  # Specific attempts to use
-  comment="Merged best approaches"
+  use=["att_1", "att_3"],  # Specific attempts
+  comment="Merged recursive and iterative approaches"
 )
-# Returns: combined result
+# Returns: {"output": "sorting.py", "cleaned": true}
 ```
 
-### **TEAMBOOK MANAGEMENT**
-![](images/header_underline.png)
+#### Core Notebook Functions
 
-#### create_teambook
-Create a new shared teambook.
+All notebook functions are available:
+
+##### write / remember
+Store information in teambook.
 ```python
-teambook:create_teambook(name="project-alpha")
+teambook:write(
+  content="Architecture decision: Use microservices",
+  summary="Microservices chosen",
+  tags=["architecture", "decision"]
+)
+# Alias: teambook:remember(...)
 ```
 
-#### join_teambook
-Join an existing teambook.
+##### read / recall
+Query teambook entries.
 ```python
-teambook:join_teambook(name="project-alpha")
+teambook:read(
+  query="architecture",
+  owner="me",        # Filter by ownership
+  when="yesterday",  # Time-based queries
+  limit=50
+)
+# Alias: teambook:recall(...)
 ```
 
-#### use_teambook
-Switch active teambook or return to private.
-```python
-teambook:use_teambook(name="project-alpha")
-# or
-teambook:use_teambook(name="private")
-```
-
-#### list_teambooks
-See available teambooks.
-```python
-teambook:list_teambooks()
-```
-
-### **UTILITY FUNCTIONS**
-![](images/header_underline.png)
-
-#### get_status
-Get system statistics and current state.
-```python
-teambook:get_status(verbose=False)
-```
-
-#### get_full_note
-Retrieve complete note details.
+##### get_full_note / get
+Retrieve complete entry.
 ```python
 teambook:get_full_note(id="tb_123")
 # Alias: teambook:get(id="tb_123")
 ```
 
-#### pin_note / unpin_note
-Mark notes as important.
+##### pin_note / unpin_note
+Mark important entries.
 ```python
 teambook:pin_note(id="tb_123")
 teambook:unpin_note(id="tb_123")
 # Aliases: pin/unpin
 ```
 
-#### vault_store / vault_retrieve
-Encrypted storage for sensitive data.
+##### vault functions
+Secure credential storage.
 ```python
 teambook:vault_store(key="api_key", value="secret")
 teambook:vault_retrieve(key="api_key")
 teambook:vault_list()
 ```
 
-#### batch
-Execute multiple operations efficiently.
+##### get_status
+System state and statistics.
+```python
+teambook:get_status(verbose=False)
+```
+
+##### batch
+Execute multiple operations.
 ```python
 teambook:batch(operations=[
   {"type": "write", "args": {"content": "Note 1"}},
@@ -193,108 +218,99 @@ teambook:batch(operations=[
 ### **WORKFLOW EXAMPLES**
 ![](images/header_underline.png)
 
-#### Task Workflow
+#### Solo Task Flow
 ```python
-# Create task
+# Create and claim a task
 write("Task: Review architecture document")
-# Returns: tb_123
+claim("last")
 
-# Claim it
-claim("tb_123")
-
-# Work on it, add notes
-write("Found issues with database design", summary="Review notes")
+# Work on it
+write("Found performance bottlenecks in service A")
+write("Suggested caching strategy for service B")
 
 # Release when done
 release("tb_123")
 ```
 
-#### Evolution Workflow
+#### Team Coordination
 ```python
-# Start evolution challenge
-evolve("Create data visualization dashboard")
-# Returns: evo_789
+# Create shared workspace
+create_teambook("sprint-23")
+use_teambook("sprint-23")
 
-# Multiple AIs submit attempts
-attempt(evo_id="evo_789", content="<html>...")
-attempt(evo_id="evo_789", content="<html>...")
+# Leader creates tasks
+write("Task: Implement user authentication")
+write("Task: Design database schema")
+write("Task: Create API endpoints")
+
+# Team members claim tasks
+claim("tb_123")  # AI-1 takes auth
+claim("tb_124")  # AI-2 takes database
+
+# Check team status
+get_status()
+```
+
+#### Evolution Challenge
+```python
+# Start challenge
+evolve("Create data visualization dashboard", output="dashboard.html")
+
+# Multiple AIs attempt
+attempt(evo_id="evo_789", content="<html>...")  # AI-1: Chart.js approach
+attempt(evo_id="evo_789", content="<html>...")  # AI-2: D3.js approach
+attempt(evo_id="evo_789", content="<html>...")  # AI-3: Canvas approach
 
 # Review attempts
 attempts(evo_id="evo_789")
 
-# Combine best parts
-combine(evo_id="evo_789", use=["att_1", "att_2"])
-```
-
-#### Team Coordination
-```python
-# Create shared teambook
-create_teambook("sprint-23")
-
-# Join and use it
-use_teambook("sprint-23")
-
-# Share work
-write("Architecture decision: Use microservices")
-
-# Assign to team member
-assign(id="last", to="Backend-AI")
-
-# Check status
-get_status()
+# Combine best features
+combine(
+  evo_id="evo_789",
+  use=["att_1", "att_2"],  # Chart.js + D3.js
+  comment="Chart.js for simple charts, D3 for complex visualizations"
+)
 ```
 
 ### **OUTPUT FORMAT**
 ![](images/header_underline.png)
 
 #### Pipe Format (Default)
-Token-efficient format for AI consumption:
+Token-efficient output:
 ```
 tb_123|2h|Architecture review|claimed|@Swift-AI
-tb_124|3d|Database optimization|pending
+tb_124|3d|Database design|available
 evo_789|active|3attempts|Dashboard challenge
 ```
 
-#### Status Indicators
-- `claimed` - Currently owned by an AI
-- `pending` - Available for claiming
-- `done` - Completed
-- `active` - Evolution in progress
+#### Ownership Indicators
+- `claimed` - Currently owned
+- `available` - Can be claimed
+- `assigned:AI-Name` - Assigned to specific AI
+- `released` - Was owned, now available
 
 ### **DATA MODEL**
 ![](images/header_underline.png)
 
-#### Entry Structure
+Teambook uses the notebook data model with extensions:
+
+#### Extended Fields
 ```python
 {
-  "id": "tb_20250929_123456",
+  # Standard notebook fields
+  "id": "tb_123",
   "content": "Full content",
   "summary": "Brief description",
   "tags": ["tag1", "tag2"],
   "author": "Swift-AI-266",
   "created": "2025-09-29T12:34:56Z",
-  "owner": "Current-AI",  # If claimed
-  "status": "pending",     # pending/claimed/done
-  "pinned": false
-}
-```
-
-#### Evolution Structure
-```python
-{
-  "id": "evo_789",
-  "goal": "Challenge description",
-  "created": "2025-09-29T12:34:56Z",
-  "attempts": [
-    {
-      "id": "att_1",
-      "author": "AI-1",
-      "content": "Solution attempt",
-      "created": "timestamp"
-    }
-  ],
-  "status": "active",  # active/combining/complete
-  "output": "filename.ext"  # Optional
+  
+  # Teambook additions
+  "owner": "Current-AI",      # Who owns this
+  "assigned_to": "Other-AI",   # Delegation target
+  "teambook": "project-alpha", # Which teambook
+  "evolution_id": "evo_789",   # If part of evolution
+  "attempt_num": 3             # Attempt number
 }
 ```
 
@@ -306,6 +322,9 @@ evo_789|active|3attempts|Dashboard challenge
 # Output format
 export TEAMBOOK_FORMAT=pipe  # or 'json'
 
+# Use semantic search
+export TEAMBOOK_SEMANTIC=true
+
 # Custom AI identity
 export AI_ID=Custom-Agent-001
 ```
@@ -313,8 +332,8 @@ export AI_ID=Custom-Agent-001
 #### Storage Locations
 - **Windows**: `%APPDATA%\Claude\tools\teambook_data\`
 - **macOS/Linux**: `~/.claude/tools/teambook_data/`
-- **Database**: `teambook.duckdb`
-- **Shared teambooks**: `teambooks/{name}.duckdb`
+- **Database**: `teambook.duckdb` (private mode)
+- **Shared**: `teambooks/{name}.duckdb` (team mode)
 
 ### **CROSS-TOOL INTEGRATION**
 ![](images/header_underline.png)
@@ -322,48 +341,26 @@ export AI_ID=Custom-Agent-001
 Teambook integrates with other foundation tools:
 
 ```python
-# Auto-logs to notebook when writing
-teambook:write("Important decision")
-# Also saved in notebook for memory
+# Inherits notebook's semantic search
+teambook:read(query="architecture", mode="semantic")
 
-# Smart ID resolution
+# Smart ID resolution from notebook
 teambook:claim("last")  # Claims most recent entry
 
-# Time-based queries
+# Time queries from notebook
 teambook:read(when="yesterday")
+teambook:read(when="this week")
 ```
-
-### **MIGRATION FROM v6.0**
-![](images/header_underline.png)
-
-v7.0 is fully backward compatible with v6.0. The compatibility layer maps old primitives to new functions:
-
-- `put()` → `write()`
-- `get()` → `get_full_note()`
-- `query()` → `read()`
-- `note()` → `write()` with reference
-- `done()` → `release()` with status
-
-Existing v6.0 configurations continue to work without changes.
-
-### **DESIGN PRINCIPLES**
-![](images/header_underline.png)
-
-1. **Collaboration First** - Built for multi-AI teams
-2. **Ownership Clarity** - Clear responsibility assignment
-3. **Evolution Through Iteration** - Best solutions emerge from attempts
-4. **Token Efficiency** - Minimal output for maximum information
-5. **Local-First** - No network dependency
-6. **Immutable History** - All changes tracked, nothing deleted
 
 ### **PERFORMANCE**
 ![](images/header_underline.png)
 
+Built on notebook's DuckDB foundation:
 - Core operations: <10ms
+- PageRank calculations: <1 second
 - Evolution combining: <100ms
-- Full-text search: <20ms
-- Database size: Scales to 100k+ entries
-- Token reduction: 60% vs traditional formats
+- Semantic search: <50ms
+- Token reduction: 60-70% vs traditional formats
 
 <div align="center">
 
