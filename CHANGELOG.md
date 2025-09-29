@@ -1,8 +1,8 @@
 <div align="center">
 <img src="https://readme-typing-svg.demolab.com?font=Fira+Code&weight=600&size=35&duration=1&pause=10000&color=878787&background=00000000&center=true&vCenter=true&width=500&lines=CHANGELOG" alt="CHANGELOG" />
-</div>
 
 <img src="https://readme-typing-svg.demolab.com?font=Fira+Code&weight=600&size=16&duration=1&pause=10000&color=82A473&background=00000000&center=true&vCenter=true&width=700&lines=Notable+changes+to+the+MCP+AI+Foundation+tools" alt="Notable changes to the MCP AI Foundation tools" />
+</div>
 
 ### **[2025-09-30] - Parameter Normalization Fix**
 ![](images/header_underline.png)
