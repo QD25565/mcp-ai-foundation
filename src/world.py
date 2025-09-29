@@ -3,65 +3,30 @@
 WORLD MCP v3.0.0 - AI-FIRST TEMPORAL & SPATIAL CONTEXT
 ========================================================
 Context that matters, nothing more. 80% token reduction.
-
-MAJOR CHANGES (v3.0):
-- Pipe format by default (configurable)
-- Single-line output unless explicitly requested
-- Smart defaults: just time and location usually
-- No decorative text, ever
-- Unified format across all commands
-
-Core improvements:
-- OUTPUT_FORMAT: 'pipe' or 'json' or 'text'
-- DEFAULT_CONTEXT: What to include by default
-- Ultra-aggressive token optimization
-- Weather only when it matters (extreme conditions)
-- Identity only when requested
-
-Performance:
-- 80% token reduction in default mode
-- Single line output for most operations
-- Instant context without the fluff
-
-Finally, context that doesn't waste thinking space!
-========================================================
+Uses shared MCP utilities for consistency.
 """
 
-import json
-import sys
 import os
-import logging
-from datetime import datetime
-from pathlib import Path
-from typing import Dict, List, Optional
 import requests
-import random
+from datetime import datetime
+from typing import Dict, List, Optional
+
+# Import shared utilities
+from mcp_shared import (
+    MCPServer, CURRENT_AI_ID, get_tool_data_dir,
+    pipe_escape, create_tool_response
+)
 
 # Version
 VERSION = "3.0.0"
 
 # Configuration
-OUTPUT_FORMAT = os.environ.get('WORLD_FORMAT', 'pipe')  # 'pipe', 'json', or 'text'
+OUTPUT_FORMAT = os.environ.get('WORLD_FORMAT', 'pipe')
 DEFAULT_CONTEXT = os.environ.get('WORLD_DEFAULT', 'time,location').split(',')
-WEATHER_THRESHOLD = 15  # Only show weather if notable (temp < 0 or > 30°C, wind > 15 km/h)
+WEATHER_THRESHOLD = 15
 
-# Configure logging to stderr only
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(message)s',
-    stream=sys.stderr
-)
-
-# Storage for location persistence
-DATA_DIR = Path.home() / "AppData" / "Roaming" / "Claude" / "tools" / "world_data"
-if not DATA_DIR.exists():
-    try:
-        DATA_DIR.mkdir(parents=True, exist_ok=True)
-    except:
-        import tempfile
-        DATA_DIR = Path(tempfile.gettempdir()) / "world_data"
-        DATA_DIR.mkdir(parents=True, exist_ok=True)
-
+# Data directory
+DATA_DIR = get_tool_data_dir('world')
 LOCATION_FILE = DATA_DIR / "location.json"
 
 # Global cache
@@ -71,44 +36,6 @@ weather_cache_time = None
 datetime_cache = {}
 datetime_cache_second = None
 
-# Batch limits
-BATCH_MAX = 10
-
-def pipe_escape(text: str) -> str:
-    """Escape pipes in text for pipe format"""
-    return str(text).replace('|', '\\|')
-
-def get_persistent_id():
-    """Get or create persistent AI identity"""
-    id_file = DATA_DIR / "ai_identity.txt"
-    
-    if id_file.exists():
-        try:
-            with open(id_file, 'r') as f:
-                stored_id = f.read().strip()
-                if stored_id:
-                    logging.info(f"Loaded persistent identity: {stored_id}")
-                    return stored_id
-        except Exception as e:
-            logging.error(f"Error reading identity file: {e}")
-    
-    # Generate new ID
-    adjectives = ['Swift', 'Bright', 'Sharp', 'Quick', 'Clear', 'Deep']
-    nouns = ['Mind', 'Spark', 'Flow', 'Core', 'Sync', 'Node']
-    new_id = f"{random.choice(adjectives)}-{random.choice(nouns)}-{random.randint(100, 999)}"
-    
-    try:
-        with open(id_file, 'w') as f:
-            f.write(new_id)
-        logging.info(f"Created new persistent identity: {new_id}")
-    except Exception as e:
-        logging.error(f"Error saving identity file: {e}")
-    
-    return new_id
-
-# Get ID from environment or persistent storage
-CURRENT_AI_ID = os.environ.get('AI_ID', get_persistent_id())
-
 def get_cached_datetime():
     """Cache datetime components within same second for efficiency"""
     global datetime_cache, datetime_cache_second
@@ -116,20 +43,19 @@ def get_cached_datetime():
     current_second = now.replace(microsecond=0)
     
     if datetime_cache_second != current_second:
-        # Platform-specific formatting
-        time_format_12 = '%-I:%M%p' if os.name != 'nt' else '%#I:%M%p'  # No space before AM/PM
+        time_format_12 = '%-I:%M%p' if os.name != 'nt' else '%#I:%M%p'
         
         datetime_cache = {
             'now': now,
             'iso': now.isoformat(),
             'unix': int(now.timestamp()),
-            'day': now.strftime('%a'),  # Mon
-            'day_full': now.strftime('%A'),  # Monday
+            'day': now.strftime('%a'),
+            'day_full': now.strftime('%A'),
             'date': now.strftime('%Y-%m-%d'),
-            'date_nice': now.strftime('%b %-d' if os.name != 'nt' else '%b %#d'),  # Jan 5
-            'time_12': now.strftime(time_format_12),  # 3:45PM
-            'time_24': now.strftime('%H:%M'),  # 15:45
-            'month': now.strftime('%b'),  # Jan
+            'date_nice': now.strftime('%b %-d' if os.name != 'nt' else '%b %#d'),
+            'time_12': now.strftime(time_format_12),
+            'time_24': now.strftime('%H:%M'),
+            'month': now.strftime('%b'),
             'year': str(now.year),
             'hour': str(now.hour),
             'minute': str(now.minute)
@@ -148,6 +74,7 @@ def get_location():
     # Try loading saved location
     if LOCATION_FILE.exists():
         try:
+            import json
             with open(LOCATION_FILE, 'r', encoding='utf-8') as f:
                 location_cache = json.load(f)
                 return location_cache
@@ -171,6 +98,7 @@ def get_location():
                 }
                 # Save for next time
                 try:
+                    import json
                     with open(LOCATION_FILE, 'w', encoding='utf-8') as f:
                         json.dump(location_cache, f)
                 except:
@@ -212,7 +140,6 @@ def get_weather():
             data = resp.json()
             curr = data.get("current_weather", {})
             
-            # Weather code descriptions (ultra-simplified)
             weather_codes = {
                 0: "clear", 1: "clear", 2: "cloudy", 3: "cloudy",
                 45: "foggy", 48: "foggy",
@@ -226,11 +153,10 @@ def get_weather():
             temp_c = curr.get("temperature", 0)
             wind = curr.get("windspeed", 0)
             
-            # Determine if weather is extreme/notable
             is_extreme = (
                 temp_c < 0 or temp_c > 30 or
                 wind > WEATHER_THRESHOLD or
-                code >= 65  # Heavy rain or worse
+                code >= 65
             )
             
             weather_cache = {
@@ -271,7 +197,6 @@ def build_context(include: List[str] = None, force_all: bool = False) -> str:
     if include is None:
         include = DEFAULT_CONTEXT if not force_all else ['time', 'date', 'location', 'weather', 'identity']
     
-    # Normalize
     include = [item.lower().strip() for item in include]
     
     dt = get_cached_datetime()
@@ -314,26 +239,26 @@ def build_context(include: List[str] = None, force_all: bool = False) -> str:
     if OUTPUT_FORMAT == 'pipe':
         return '|'.join(pipe_escape(p) for p in parts)
     elif OUTPUT_FORMAT == 'json':
-        # Return as structured data
+        import json
         result = {}
         for i, part in enumerate(parts):
             if i < len(include):
                 result[include[i]] = part
         return json.dumps(result)
-    else:  # text
+    else:
         return ' | '.join(parts) if len(parts) > 1 else parts[0] if parts else ""
+
+# ============= TOOL FUNCTIONS =============
 
 def world_command(compact: bool = None, **kwargs):
     """Get world context - ultra minimal by default"""
     if compact is None:
-        compact = True  # Default to compact!
+        compact = True
     
     if compact:
-        # Just the essentials
-        return build_context(['time', 'location'])
+        return {"context": build_context(['time', 'location'])}
     else:
-        # Full context
-        return build_context(force_all=True)
+        return {"context": build_context(force_all=True)}
 
 def datetime_command(compact: bool = None, **kwargs):
     """Get datetime - single line by default"""
@@ -344,22 +269,22 @@ def datetime_command(compact: bool = None, **kwargs):
     
     if compact:
         if OUTPUT_FORMAT == 'pipe':
-            return f"{dt['date']}|{dt['time_24']}"
+            return {"datetime": f"{dt['date']}|{dt['time_24']}"}
         else:
-            return f"{dt['date']} {dt['time_24']}"
+            return {"datetime": f"{dt['date']} {dt['time_24']}"}
     else:
-        # More detailed
         if OUTPUT_FORMAT == 'pipe':
-            return f"{dt['day']}|{dt['date']}|{dt['time_24']}|{dt['unix']}"
+            return {"datetime": f"{dt['day']}|{dt['date']}|{dt['time_24']}|{dt['unix']}"}
         elif OUTPUT_FORMAT == 'json':
-            return json.dumps({
+            import json
+            return {"datetime": json.dumps({
                 'day': dt['day'],
                 'date': dt['date'],
                 'time': dt['time_24'],
                 'unix': dt['unix']
-            })
+            })}
         else:
-            return f"{dt['day']} {dt['date']} {dt['time_24']}"
+            return {"datetime": f"{dt['day']} {dt['date']} {dt['time_24']}"}
 
 def weather_command(compact: bool = None, **kwargs):
     """Get weather - only notable conditions by default"""
@@ -370,21 +295,19 @@ def weather_command(compact: bool = None, **kwargs):
     weather = get_weather()
     
     if compact:
-        # Only show if extreme
         if weather['is_extreme'] and weather['temp_c'] is not None:
             loc = format_location_short(location)
             if OUTPUT_FORMAT == 'pipe':
-                return f"{loc}|{weather['temp_c']:.0f}°C|{weather['description']}"
+                return {"weather": f"{loc}|{weather['temp_c']:.0f}°C|{weather['description']}"}
             else:
-                return f"{loc} {weather['temp_c']:.0f}°C {weather['description']}"
+                return {"weather": f"{loc} {weather['temp_c']:.0f}°C {weather['description']}"}
         else:
             loc = format_location_short(location)
             if OUTPUT_FORMAT == 'pipe':
-                return f"{loc}|normal"
+                return {"weather": f"{loc}|normal"}
             else:
-                return f"{loc} (normal conditions)"
+                return {"weather": f"{loc} (normal conditions)"}
     else:
-        # Full weather
         loc = format_location_short(location)
         if weather['temp_c'] is not None:
             parts = [loc, f"{weather['temp_c']:.0f}°C", weather['description']]
@@ -392,277 +315,123 @@ def weather_command(compact: bool = None, **kwargs):
                 parts.append(f"{weather['wind_kmh']:.0f}km/h")
             
             if OUTPUT_FORMAT == 'pipe':
-                return '|'.join(parts)
-            elif OUTPUT_FORMAT == 'json':
-                return json.dumps({
-                    'location': loc,
-                    'temp_c': weather['temp_c'],
-                    'description': weather['description'],
-                    'wind_kmh': weather['wind_kmh']
-                })
+                return {"weather": '|'.join(parts)}
             else:
-                return ' '.join(parts)
+                return {"weather": ' '.join(parts)}
         else:
-            return f"{loc} (weather unavailable)"
+            return {"weather": f"{loc} (weather unavailable)"}
 
 def context_command(include: List[str] = None, compact: bool = None, **kwargs):
     """Get specific context elements"""
     if compact is None:
         compact = True
     
-    return build_context(include, force_all=not compact)
+    return {"context": build_context(include, force_all=not compact)}
 
 def batch(operations: List[Dict] = None, **kwargs) -> Dict:
     """Execute multiple operations efficiently"""
-    try:
-        if operations is None:
-            operations = kwargs.get('operations', [])
-        
-        if not operations:
-            return {"error": "No operations"}
-        
-        if len(operations) > BATCH_MAX:
-            return {"error": f"Max {BATCH_MAX} operations"}
-        
-        results = []
-        
-        # Map operation types to functions
-        op_map = {
-            'world': world_command,
-            'w': world_command,  # Alias
-            'datetime': datetime_command,
-            'dt': datetime_command,  # Alias
-            'weather': weather_command,
-            'wx': weather_command,  # Alias
-            'context': context_command,
-            'ctx': context_command  # Alias
-        }
-        
-        for op in operations:
-            op_type = op.get('type', '').lower()
-            op_args = op.get('args', {})
-            
-            if op_type not in op_map:
-                results.append(f"Unknown: {op_type}")
-                continue
-            
-            result = op_map[op_type](**op_args)
-            results.append(result)
-        
-        return {"batch_results": results, "count": len(results)}
-        
-    except Exception as e:
-        logging.error(f"Error in batch: {e}")
-        return {"error": str(e)}
-
-def handle_tools_call(params):
-    """Route tool calls with minimal output"""
-    tool_name = params.get("name", "").lower().strip()
-    tool_args = params.get("arguments", {})
+    if operations is None:
+        operations = kwargs.get('operations', [])
     
-    # Handle batch
-    if tool_name == 'batch':
-        result = batch(**tool_args)
-        if "error" in result:
-            text = f"Error: {result['error']}"
-        else:
-            if OUTPUT_FORMAT == 'pipe':
-                text = '|'.join(result.get("batch_results", []))
-            else:
-                text = '\n'.join(str(r) for r in result.get("batch_results", []))
-        
-        return {
-            "content": [{
-                "type": "text",
-                "text": text
-            }]
-        }
+    if not operations:
+        return {"error": "No operations"}
     
-    # Route to appropriate command
-    if tool_name in ['world', 'w']:
-        result = world_command(**tool_args)
-    elif tool_name in ['datetime', 'dt', 'time', 'date']:
-        result = datetime_command(**tool_args)
-    elif tool_name in ['weather', 'wx']:
-        result = weather_command(**tool_args)
-    elif tool_name in ['context', 'ctx']:
-        result = context_command(**tool_args)
-    else:
-        result = world_command(**tool_args)  # Default
+    if len(operations) > 10:
+        return {"error": "Max 10 operations"}
     
-    return {
-        "content": [{
-            "type": "text",
-            "text": result
-        }]
+    results = []
+    op_map = {
+        'world': world_command, 'w': world_command,
+        'datetime': datetime_command, 'dt': datetime_command,
+        'weather': weather_command, 'wx': weather_command,
+        'context': context_command, 'ctx': context_command
     }
+    
+    for op in operations:
+        op_type = op.get('type', '').lower()
+        op_args = op.get('args', {})
+        
+        if op_type not in op_map:
+            results.append(f"Unknown: {op_type}")
+            continue
+        
+        result = op_map[op_type](**op_args)
+        results.append(list(result.values())[0] if result else "")
+    
+    return {"batch_results": results}
+
+# ============= MCP SERVER =============
 
 def main():
-    """MCP Server main loop"""
-    logging.info(f"World MCP v{VERSION} starting...")
-    logging.info(f"Identity: {CURRENT_AI_ID}")
-    logging.info(f"Format: {OUTPUT_FORMAT}")
-    logging.info(f"Default context: {DEFAULT_CONTEXT}")
-    logging.info("AI-First features:")
-    logging.info("- Single line output by default")
-    logging.info("- Pipe format for efficiency")
-    logging.info("- Weather only when extreme")
-    logging.info("- 80% token reduction")
+    server = MCPServer("world", VERSION, "AI-First Context: 80% fewer tokens")
     
-    while True:
-        try:
-            line = sys.stdin.readline()
-            if not line:
-                break
-            
-            line = line.strip()
-            if not line:
-                continue
-            
-            try:
-                request = json.loads(line)
-            except json.JSONDecodeError as e:
-                logging.error(f"Invalid JSON: {e}")
-                continue
-            
-            request_id = request.get("id")
-            method = request.get("method", "")
-            params = request.get("params", {})
-            
-            response = {"jsonrpc": "2.0", "id": request_id}
-            
-            if method == "initialize":
-                response["result"] = {
-                    "protocolVersion": "2024-11-05",
-                    "capabilities": {"tools": {}},
-                    "serverInfo": {
-                        "name": "world",
-                        "version": VERSION,
-                        "description": "AI-First Context: 80% fewer tokens, just what matters"
+    # Register tools
+    server.register_tool(
+        world_command, "world",
+        "Get context (time+location by default)",
+        {"compact": {"type": "boolean", "description": "Compact mode (default: true)"}}
+    )
+    
+    server.register_tool(
+        datetime_command, "datetime",
+        "Get date and time",
+        {"compact": {"type": "boolean", "description": "Compact mode (default: true)"}}
+    )
+    
+    server.register_tool(
+        weather_command, "weather",
+        "Get weather (only shows if extreme)",
+        {"compact": {"type": "boolean", "description": "Compact mode (default: true)"}}
+    )
+    
+    server.register_tool(
+        context_command, "context",
+        "Get specific context elements",
+        {
+            "include": {
+                "type": "array",
+                "items": {"type": "string"},
+                "description": "Elements: time, date, location, weather, identity, unix"
+            },
+            "compact": {"type": "boolean", "description": "Compact mode (default: true)"}
+        }
+    )
+    
+    server.register_tool(
+        batch, "batch",
+        "Execute multiple operations",
+        {
+            "operations": {
+                "type": "array",
+                "description": "List of operations",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "type": {"type": "string", "description": "Operation type"},
+                        "args": {"type": "object", "description": "Arguments"}
                     }
                 }
-            
-            elif method == "notifications/initialized":
-                continue
-            
-            elif method == "tools/list":
-                response["result"] = {
-                    "tools": [
-                        {
-                            "name": "world",
-                            "description": "Get context (time+location by default)",
-                            "inputSchema": {
-                                "type": "object",
-                                "properties": {
-                                    "compact": {
-                                        "type": "boolean",
-                                        "description": "Compact mode (default: true)"
-                                    }
-                                }
-                            }
-                        },
-                        {
-                            "name": "datetime",
-                            "description": "Get date and time",
-                            "inputSchema": {
-                                "type": "object",
-                                "properties": {
-                                    "compact": {
-                                        "type": "boolean",
-                                        "description": "Compact mode (default: true)"
-                                    }
-                                }
-                            }
-                        },
-                        {
-                            "name": "weather",
-                            "description": "Get weather (only shows if extreme)",
-                            "inputSchema": {
-                                "type": "object",
-                                "properties": {
-                                    "compact": {
-                                        "type": "boolean",
-                                        "description": "Compact mode (default: true)"
-                                    }
-                                }
-                            }
-                        },
-                        {
-                            "name": "context",
-                            "description": "Get specific context elements",
-                            "inputSchema": {
-                                "type": "object",
-                                "properties": {
-                                    "include": {
-                                        "type": "array",
-                                        "items": {"type": "string"},
-                                        "description": "Elements: time, date, location, weather, identity, unix"
-                                    },
-                                    "compact": {
-                                        "type": "boolean",
-                                        "description": "Compact mode (default: true)"
-                                    }
-                                }
-                            }
-                        },
-                        {
-                            "name": "batch",
-                            "description": "Execute multiple operations",
-                            "inputSchema": {
-                                "type": "object",
-                                "properties": {
-                                    "operations": {
-                                        "type": "array",
-                                        "description": "List of operations",
-                                        "items": {
-                                            "type": "object",
-                                            "properties": {
-                                                "type": {
-                                                    "type": "string",
-                                                    "description": "Operation: world, datetime, weather, context (or w, dt, wx, ctx)"
-                                                },
-                                                "args": {
-                                                    "type": "object",
-                                                    "description": "Arguments"
-                                                }
-                                            }
-                                        }
-                                    }
-                                },
-                                "required": ["operations"]
-                            }
-                        }
-                    ]
-                }
-            
-            elif method == "tools/call":
-                result = handle_tools_call(params)
-                response["result"] = result
-            
+            }
+        },
+        ["operations"]
+    )
+    
+    # Custom result formatting
+    def format_result(tool_name: str, result: Dict) -> str:
+        if "error" in result:
+            return f"Error: {result['error']}"
+        elif "batch_results" in result:
+            if OUTPUT_FORMAT == 'pipe':
+                return '|'.join(str(r) for r in result['batch_results'])
             else:
-                response["result"] = {}
-            
-            if "result" in response or "error" in response:
-                output = json.dumps(response) + "\n"
-                sys.stdout.write(output)
-                sys.stdout.flush()
-        
-        except KeyboardInterrupt:
-            logging.info("Shutdown requested")
-            break
-        except Exception as e:
-            logging.error(f"Server error: {e}")
-            if 'request_id' in locals() and request_id:
-                error_response = {
-                    "jsonrpc": "2.0",
-                    "id": request_id,
-                    "error": {
-                        "code": -32603,
-                        "message": f"Internal error: {str(e)}"
-                    }
-                }
-                sys.stdout.write(json.dumps(error_response) + "\n")
-                sys.stdout.flush()
+                return '\n'.join(str(r) for r in result['batch_results'])
+        else:
+            return str(list(result.values())[0]) if result else ""
+    
+    server.format_tool_result = format_result
+    
+    # Run server
+    server.run()
 
 if __name__ == "__main__":
     main()

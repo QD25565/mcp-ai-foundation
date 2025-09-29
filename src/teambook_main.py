@@ -15,20 +15,20 @@ import logging
 from typing import Dict
 
 # Import shared utilities
-from teambook_shared_mcp import (
+from teambook_shared import (
     VERSION, OUTPUT_FORMAT, CURRENT_AI_ID,
     pipe_escape
 )
 
 # Import storage module and initialization functions
-import teambook_storage_mcp
-from teambook_storage_mcp import (
+import teambook_storage
+from teambook_storage import (
     init_db, init_embedding_model, init_vector_db,
     init_vault_manager
 )
 
 # Import all API functions
-from teambook_api_mcp import (
+from teambook_api import (
     # Team management
     create_teambook, join_teambook, use_teambook, list_teambooks,
     # Ownership
@@ -63,8 +63,8 @@ def handle_cli_mode():
     
     # Override format if requested
     if args.json:
-        import teambook_shared_mcp
-        teambook_shared_mcp.OUTPUT_FORMAT = 'json'
+        import teambook_shared
+        teambook_shared.OUTPUT_FORMAT = 'json'
     
     # Map commands to functions
     commands = {
@@ -288,8 +288,8 @@ def main():
     logging.info(f"Teambook MCP v{VERSION} - Collaborative AI workspace")
     logging.info(f"Identity: {CURRENT_AI_ID}")
     logging.info(f"Architecture: 4-module refactored design")
-    logging.info(f"Embedding: {teambook_storage_mcp.EMBEDDING_MODEL or 'None'}")
-    logging.info(f"FTS: {'Yes' if teambook_storage_mcp.FTS_ENABLED else 'No'}")
+    logging.info(f"Embedding: {teambook_storage.EMBEDDING_MODEL or 'None'}")
+    logging.info(f"FTS: {'Yes' if teambook_storage.FTS_ENABLED else 'No'}")
     logging.info(f"Output: {OUTPUT_FORMAT}")
     
     while True:

@@ -11,12 +11,12 @@ Built by AIs, for AIs.
 import json
 import re
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List, Optional, Any
 
 # Import shared utilities
-from teambook_shared_mcp import (
+from teambook_shared import (
     CURRENT_TEAMBOOK, CURRENT_AI_ID, OUTPUT_FORMAT,
     MAX_CONTENT_LENGTH, MAX_SUMMARY_LENGTH, DEFAULT_RECENT,
     TEAMBOOK_ROOT, TEAMBOOK_PRIVATE_ROOT,
@@ -26,8 +26,8 @@ from teambook_shared_mcp import (
 )
 
 # Import storage layer
-import teambook_storage_mcp
-from teambook_storage_mcp import (
+import teambook_storage
+from teambook_storage import (
     get_db_conn, init_db, init_vault_manager, init_vector_db,
     create_all_edges, detect_or_create_session,
     calculate_pagerank_if_needed, resolve_note_id,
@@ -59,14 +59,14 @@ def create_teambook(name: str = None, **kwargs) -> Dict:
         (team_dir / "outputs").mkdir(exist_ok=True)
         
         # Initialize team database
-        import teambook_shared_mcp
-        old_teambook = teambook_shared_mcp.CURRENT_TEAMBOOK
-        teambook_shared_mcp.CURRENT_TEAMBOOK = name
+        import teambook_shared
+        old_teambook = teambook_shared.CURRENT_TEAMBOOK
+        teambook_shared.CURRENT_TEAMBOOK = name
         
         init_db()
         
         # Register in private database
-        teambook_shared_mcp.CURRENT_TEAMBOOK = None
+        teambook_shared.CURRENT_TEAMBOOK = None
         with get_db_conn() as conn:
             conn.execute('''
                 CREATE TABLE IF NOT EXISTS teambooks (
@@ -80,9 +80,9 @@ def create_teambook(name: str = None, **kwargs) -> Dict:
             conn.execute('''
                 INSERT INTO teambooks (name, created, created_by)
                 VALUES (?, ?, ?)
-            ''', [name, datetime.now(), CURRENT_AI_ID])
+            ''', [name, datetime.now(timezone.utc), CURRENT_AI_ID])
         
-        teambook_shared_mcp.CURRENT_TEAMBOOK = old_teambook
+        teambook_shared.CURRENT_TEAMBOOK = old_teambook
         
         return {"created": name}
         
@@ -102,9 +102,9 @@ def join_teambook(name: str = None, **kwargs) -> Dict:
             return {"error": f"Teambook '{name}' not found"}
         
         # Update last active
-        import teambook_shared_mcp
-        old_teambook = teambook_shared_mcp.CURRENT_TEAMBOOK
-        teambook_shared_mcp.CURRENT_TEAMBOOK = None
+        import teambook_shared
+        old_teambook = teambook_shared.CURRENT_TEAMBOOK
+        teambook_shared.CURRENT_TEAMBOOK = None
         
         with get_db_conn() as conn:
             conn.execute('''
@@ -118,10 +118,10 @@ def join_teambook(name: str = None, **kwargs) -> Dict:
             
             conn.execute(
                 "UPDATE teambooks SET last_active = ? WHERE name = ?",
-                [datetime.now(), name]
+                [datetime.now(timezone.utc), name]
             )
         
-        teambook_shared_mcp.CURRENT_TEAMBOOK = old_teambook
+        teambook_shared.CURRENT_TEAMBOOK = old_teambook
         
         return {"joined": name}
         
@@ -132,13 +132,13 @@ def join_teambook(name: str = None, **kwargs) -> Dict:
 def use_teambook(name: str = None, **kwargs) -> Dict:
     """Switch to a teambook context"""
     try:
-        import teambook_shared_mcp
+        import teambook_shared
         
         name = kwargs.get('name', name)
         
         # Special case: switch to private
         if name == "private" or name == "":
-            teambook_shared_mcp.CURRENT_TEAMBOOK = None
+            teambook_shared.CURRENT_TEAMBOOK = None
             init_vault_manager()
             init_vector_db()
             return {"using": "private"}
@@ -150,7 +150,7 @@ def use_teambook(name: str = None, **kwargs) -> Dict:
             if not team_dir.exists():
                 return {"error": f"Teambook '{name}' not found"}
             
-            teambook_shared_mcp.CURRENT_TEAMBOOK = name
+            teambook_shared.CURRENT_TEAMBOOK = name
             
             # Reinitialize for new context
             init_db()
@@ -163,7 +163,7 @@ def use_teambook(name: str = None, **kwargs) -> Dict:
                 return {"using": name, "path": str(team_dir)}
         else:
             # Return current context
-            current = teambook_shared_mcp.CURRENT_TEAMBOOK or "private"
+            current = teambook_shared.CURRENT_TEAMBOOK or "private"
             if OUTPUT_FORMAT == 'pipe':
                 return {"current": current}
             else:
@@ -179,9 +179,9 @@ def list_teambooks(**kwargs) -> Dict:
         teambooks = []
         
         # Get from registry
-        import teambook_shared_mcp
-        old_teambook = teambook_shared_mcp.CURRENT_TEAMBOOK
-        teambook_shared_mcp.CURRENT_TEAMBOOK = None
+        import teambook_shared
+        old_teambook = teambook_shared.CURRENT_TEAMBOOK
+        teambook_shared.CURRENT_TEAMBOOK = None
         
         with get_db_conn() as conn:
             conn.execute('''
@@ -204,7 +204,7 @@ def list_teambooks(**kwargs) -> Dict:
                     'active': format_time_compact(last_active) if last_active else "never"
                 })
         
-        teambook_shared_mcp.CURRENT_TEAMBOOK = old_teambook
+        teambook_shared.CURRENT_TEAMBOOK = old_teambook
         
         if not teambooks:
             return {"msg": "No teambooks found"}
@@ -355,7 +355,7 @@ def evolve(goal: str = None, output: str = None, **kwargs) -> Dict:
                 CURRENT_AI_ID,
                 CURRENT_AI_ID,
                 CURRENT_TEAMBOOK,
-                datetime.now(),
+                datetime.now(timezone.utc),
                 False
             ])
             
@@ -363,7 +363,7 @@ def evolve(goal: str = None, output: str = None, **kwargs) -> Dict:
             conn.execute('''
                 INSERT INTO evolution_outputs (id, evolution_id, output_path, created, author)
                 VALUES (?, ?, ?, ?, ?)
-            ''', [max_eo_id + 1, evo_id, output_file, datetime.now(), CURRENT_AI_ID])
+            ''', [max_eo_id + 1, evo_id, output_file, datetime.now(timezone.utc), CURRENT_AI_ID])
         
         if OUTPUT_FORMAT == 'pipe':
             return {"evolution": f"evo:{evo_id}|{output_file}"}
@@ -425,7 +425,7 @@ def attempt(evo_id: Any = None, content: str = None, **kwargs) -> Dict:
                 CURRENT_AI_ID,
                 CURRENT_AI_ID,
                 CURRENT_TEAMBOOK,
-                datetime.now()
+                datetime.now(timezone.utc)
             ])
         
         if OUTPUT_FORMAT == 'pipe':
@@ -579,10 +579,10 @@ def write(content: str = None, summary: str = None, tags: List[str] = None,
           linked_items: List[str] = None, **kwargs) -> Dict:
     """Write content to teambook"""
     try:
-        start = datetime.now()
+        start = datetime.now(timezone.utc)
         content = str(kwargs.get('content', content or '')).strip()
         if not content:
-            content = f"Checkpoint {datetime.now().strftime('%H:%M')}"
+            content = f"Checkpoint {datetime.now(timezone.utc).strftime('%H:%M')}"
         
         truncated = False
         orig_len = len(content)
@@ -605,34 +605,34 @@ def write(content: str = None, summary: str = None, tags: List[str] = None,
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''', [
                 note_id, content, summary, tags, False, CURRENT_AI_ID, None,
-                CURRENT_TEAMBOOK, datetime.now(), None,
+                CURRENT_TEAMBOOK, datetime.now(timezone.utc), None,
                 json.dumps(linked_items) if linked_items else None,
                 0.0, bool(collection)
             ])
             
-            session_id = detect_or_create_session(note_id, datetime.now(), conn)
+            session_id = detect_or_create_session(note_id, datetime.now(timezone.utc), conn)
             if session_id:
                 conn.execute('UPDATE notes SET session_id = ? WHERE id = ?', [session_id, note_id])
             
             create_all_edges(note_id, content, session_id, conn)
             
             # Mark PageRank as dirty
-            import teambook_shared_mcp
-            teambook_shared_mcp.PAGERANK_DIRTY = True
+            import teambook_shared
+            teambook_shared.PAGERANK_DIRTY = True
         
         # Add to vector store
         add_to_vector_store(note_id, content, summary, tags)
         
         save_last_operation('write', {'id': note_id, 'summary': summary})
-        log_operation_to_db('write', int((datetime.now() - start).total_seconds() * 1000))
+        log_operation_to_db('write', int((datetime.now(timezone.utc) - start).total_seconds() * 1000))
         
         if OUTPUT_FORMAT == 'pipe':
-            result_str = f"{note_id}|{format_time_compact(datetime.now())}|{summary}"
+            result_str = f"{note_id}|{format_time_compact(datetime.now(timezone.utc))}|{summary}"
             if truncated:
                 result_str += f"|T{orig_len}"
             return {"saved": result_str}
         else:
-            result_dict = {"id": note_id, "time": format_time_compact(datetime.now()), "summary": summary}
+            result_dict = {"id": note_id, "time": format_time_compact(datetime.now(timezone.utc)), "summary": summary}
             if truncated:
                 result_dict["truncated"] = orig_len
             return result_dict
@@ -646,7 +646,7 @@ def read(query: str = None, tag: str = None, when: str = None,
          limit: int = 50, mode: str = "hybrid", verbose: bool = False, **kwargs) -> Dict:
     """Read content from teambook"""
     try:
-        start_time = datetime.now()
+        start_time = datetime.now(timezone.utc)
         
         if isinstance(limit, str):
             try:
@@ -708,7 +708,7 @@ def read(query: str = None, tag: str = None, when: str = None,
                 # Keyword search
                 keyword_ids = []
                 if mode in ["keyword", "hybrid"]:
-                    if teambook_storage_mcp.FTS_ENABLED:
+                    if teambook_storage.FTS_ENABLED:
                         try:
                             fts_results = conn.execute('''
                                 SELECT DISTINCT n.id
@@ -720,7 +720,7 @@ def read(query: str = None, tag: str = None, when: str = None,
                             ''', [str(query).strip(), limit]).fetchall()
                             keyword_ids = [row[0] for row in fts_results]
                         except Exception as e:
-                            teambook_storage_mcp.FTS_ENABLED = False
+                            teambook_storage.FTS_ENABLED = False
                             logging.debug(f'FTS failed, using LIKE: {e}')
                             pass
                     
@@ -778,7 +778,7 @@ def read(query: str = None, tag: str = None, when: str = None,
         all_notes = list(pinned_notes) + [n for n in notes if not n[4]]
         
         save_last_operation('read', {"notes": all_notes})
-        log_operation_to_db('read', int((datetime.now() - start_time).total_seconds() * 1000))
+        log_operation_to_db('read', int((datetime.now(timezone.utc) - start_time).total_seconds() * 1000))
         
         if not all_notes:
             return {"msg": "No notes found"}
@@ -984,11 +984,11 @@ def vault_store(key: str = None, value: str = None, **kwargs) -> Dict:
             return {"error": "Key and value required"}
         
         # Ensure vault_manager is initialized
-        if not teambook_storage_mcp.vault_manager:
+        if not teambook_storage.vault_manager:
             init_vault_manager()
         
-        encrypted = teambook_storage_mcp.vault_manager.encrypt(value)
-        now = datetime.now()
+        encrypted = teambook_storage.vault_manager.encrypt(value)
+        now = datetime.now(timezone.utc)
         
         with get_db_conn() as conn:
             conn.execute('''
@@ -1014,7 +1014,7 @@ def vault_retrieve(key: str = None, **kwargs) -> Dict:
             return {"error": "Key required"}
         
         # Ensure vault_manager is initialized
-        if not teambook_storage_mcp.vault_manager:
+        if not teambook_storage.vault_manager:
             init_vault_manager()
         
         with get_db_conn() as conn:
@@ -1026,7 +1026,7 @@ def vault_retrieve(key: str = None, **kwargs) -> Dict:
         if not result:
             return {"error": f"Key '{key}' not found"}
         
-        decrypted = teambook_storage_mcp.vault_manager.decrypt(result[0])
+        decrypted = teambook_storage.vault_manager.decrypt(result[0])
         log_operation_to_db('vault_retrieve')
         return {"key": key, "value": decrypted}
     
@@ -1088,7 +1088,7 @@ def unpin(**kwargs) -> Dict:
 def batch(operations: List[Dict] = None, **kwargs) -> Dict:
     """Execute multiple operations efficiently"""
     try:
-        from teambook_shared_mcp import BATCH_MAX
+        from teambook_shared import BATCH_MAX
         
         operations = kwargs.get('operations', operations or [])
         if not operations:

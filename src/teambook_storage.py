@@ -14,7 +14,7 @@ import sys
 import time
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, List, Tuple, Any
 from pathlib import Path
 from cryptography.fernet import Fernet
@@ -45,7 +45,7 @@ except ImportError:
 import numpy as np
 
 # Import shared utilities
-from teambook_shared_mcp import (
+from teambook_shared import (
     get_db_file, get_vector_dir, get_vault_key_file,
     KNOWN_ENTITIES, CURRENT_AI_ID, CURRENT_TEAMBOOK,
     TEMPORAL_EDGES, SESSION_GAP_MINUTES, PAGERANK_ITERATIONS,
@@ -482,7 +482,7 @@ def detect_or_create_session(note_id: int, created: datetime, conn: duckdb.DuckD
 # ============= EDGE CREATION =============
 def create_all_edges(note_id: int, content: str, session_id: Optional[int], conn: duckdb.DuckDBPyConnection):
     """Create all edge types efficiently"""
-    now = datetime.now()
+    now = datetime.now(timezone.utc)
     edges_to_add = []
     
     # Temporal edges
@@ -643,7 +643,7 @@ def calculate_pagerank_duckdb(conn: duckdb.DuckDBPyConnection):
 
 def calculate_pagerank_if_needed(conn: duckdb.DuckDBPyConnection):
     """Calculate PageRank when needed"""
-    from teambook_shared_mcp import PAGERANK_DIRTY, PAGERANK_CACHE_TIME, PAGERANK_CACHE_SECONDS
+    from teambook_shared import PAGERANK_DIRTY, PAGERANK_CACHE_TIME, PAGERANK_CACHE_SECONDS
     
     count = conn.execute("SELECT COUNT(*) FROM notes").fetchone()[0]
     if count < 50:
@@ -653,9 +653,9 @@ def calculate_pagerank_if_needed(conn: duckdb.DuckDBPyConnection):
     if PAGERANK_DIRTY or (current_time - PAGERANK_CACHE_TIME > PAGERANK_CACHE_SECONDS):
         calculate_pagerank_duckdb(conn)
         # Update shared state
-        import teambook_shared_mcp
-        teambook_shared_mcp.PAGERANK_DIRTY = False
-        teambook_shared_mcp.PAGERANK_CACHE_TIME = current_time
+        import teambook_shared
+        teambook_shared.PAGERANK_DIRTY = False
+        teambook_shared.PAGERANK_CACHE_TIME = current_time
 
 # ============= STATS TRACKING =============
 def log_operation_to_db(op: str, dur_ms: int = None):
@@ -665,7 +665,7 @@ def log_operation_to_db(op: str, dur_ms: int = None):
             max_id = conn.execute("SELECT COALESCE(MAX(id), 0) FROM stats").fetchone()[0]
             conn.execute(
                 'INSERT INTO stats (id, operation, ts, dur_ms, author) VALUES (?, ?, ?, ?, ?)',
-                [max_id + 1, op, datetime.now(), dur_ms, CURRENT_AI_ID]
+                [max_id + 1, op, datetime.now(timezone.utc), dur_ms, CURRENT_AI_ID]
             )
     except:
         pass
@@ -673,7 +673,7 @@ def log_operation_to_db(op: str, dur_ms: int = None):
 # ============= NOTE ID RESOLUTION =============
 def resolve_note_id(id_param: Any) -> Optional[int]:
     """Resolve note ID including database lookup for 'last'"""
-    from teambook_shared_mcp import get_note_id, get_last_operation
+    from teambook_shared import get_note_id, get_last_operation
     
     if id_param == "last":
         last_op = get_last_operation()
@@ -699,7 +699,7 @@ def add_to_vector_store(note_id: int, content: str, summary: str, tags: List[str
             embeddings=[embedding.tolist()],
             documents=[content],
             metadatas={
-                "created": datetime.now().isoformat(),
+                "created": datetime.now(timezone.utc).isoformat(),
                 "summary": summary,
                 "tags": json.dumps(tags)
             },
