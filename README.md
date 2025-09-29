@@ -26,7 +26,7 @@ Four core tools that provide fundamental capabilities for AI systems:
 
 All tools feature:
 - Persistent storage and scalability
-- Pipe-delimited format for token efficiency (70-80% reduction)
+- Pipe-delimited format for token efficiency (70-80% reduction over JSON/Shedding formatting tokens)
 - Cross-tool integration for seamless workflows
 - Natural language time queries ("yesterday", "this week", "morning")
 - Smart ID resolution with "last" keyword everywhere
