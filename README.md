@@ -47,6 +47,14 @@ pip install -r requirements.txt
 # Configure MCP (see below)
 ```
 
+We also now have an experimental installer v0.0.1 which is currently only tested with Claude Desktop.
+
+Upcoming additions:
+
+- CLI installation (tested version)
+- Automatically added the appropriate context and prompts to AI-specific files to cause tool use.
+- More control/advanced installers for a range of environments and integrations, including more secure processes.
+
 ### **MCP CONFIGURATION**
 ![](images/header_underline.png)
 
