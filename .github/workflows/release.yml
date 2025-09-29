@@ -1,0 +1,141 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (e.g., v1.0.0)'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  create-release:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install build twine
+    
+    - name: Get version
+      id: version
+      run: |
+        if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+          VERSION="${{ github.event.inputs.version }}"
+        else
+          VERSION=${GITHUB_REF#refs/tags/}
+        fi
+        echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+        echo "Version: $VERSION"
+    
+    - name: Verify tool versions match tag
+      run: |
+        VERSION="${{ steps.version.outputs.VERSION }}"
+        VERSION_NUM="${VERSION#v}"  # Remove 'v' prefix
+        
+        echo "Checking if internal versions need updating..."
+        python -c "
+import sys
+import re
+sys.path.insert(0, 'src')
+
+from notebook_shared import VERSION as NOTEBOOK_VERSION
+from task_manager_mcp import VERSION as TASK_VERSION
+from teambook_shared_mcp import VERSION as TEAMBOOK_VERSION
+from world_mcp import VERSION as WORLD_VERSION
+
+print('Current tool versions:')
+print(f'  Notebook:     v{NOTEBOOK_VERSION}')
+print(f'  Task Manager: v{TASK_VERSION}')
+print(f'  Teambook:     v{TEAMBOOK_VERSION}')
+print(f'  World:        v{WORLD_VERSION}')
+print('')
+print('Tag version: $VERSION_NUM')
+print('')
+print('Note: Individual tool versions are managed independently.')
+print('This release packages all tools together.')
+"
+    
+    - name: Generate changelog
+      id: changelog
+      run: |
+        echo "CHANGELOG<<EOF" >> $GITHUB_OUTPUT
+        echo "## What's Changed" >> $GITHUB_OUTPUT
+        echo "" >> $GITHUB_OUTPUT
+        
+        # Get commits since last tag
+        LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+        if [ -z "$LAST_TAG" ]; then
+          echo "Initial release of MCP AI Foundation tools" >> $GITHUB_OUTPUT
+        else
+          git log $LAST_TAG..HEAD --pretty=format:"- %s (%an)" >> $GITHUB_OUTPUT
+        fi
+        
+        echo "" >> $GITHUB_OUTPUT
+        echo "" >> $GITHUB_OUTPUT
+        echo "## Tool Versions" >> $GITHUB_OUTPUT
+        echo "" >> $GITHUB_OUTPUT
+        python -c "
+import sys
+sys.path.insert(0, 'src')
+from notebook_shared import VERSION as NV
+from task_manager_mcp import VERSION as TV
+from teambook_shared_mcp import VERSION as TBV
+from world_mcp import VERSION as WV
+print(f'- **Notebook**: v{NV}')
+print(f'- **Task Manager**: v{TV}')
+print(f'- **Teambook**: v{TBV}')
+print(f'- **World**: v{WV}')
+" >> $GITHUB_OUTPUT
+        echo "EOF" >> $GITHUB_OUTPUT
+    
+    - name: Create GitHub Release
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: ${{ steps.version.outputs.VERSION }}
+        name: MCP AI Foundation ${{ steps.version.outputs.VERSION }}
+        body: ${{ steps.changelog.outputs.CHANGELOG }}
+        draft: false
+        prerelease: false
+        generate_release_notes: true
+    
+    - name: Package tools
+      run: |
+        # Create distribution packages
+        mkdir -p dist
+        
+        # Create a simple archive of all tools
+        tar -czf dist/mcp-ai-foundation-${{ steps.version.outputs.VERSION }}.tar.gz \
+          --exclude=__pycache__ \
+          --exclude=*.pyc \
+          --exclude=.git \
+          --exclude=dist \
+          --exclude=models \
+          src/ *.md *.yml LICENSE
+        
+        echo "Package created: dist/mcp-ai-foundation-${{ steps.version.outputs.VERSION }}.tar.gz"
+        ls -lh dist/
+    
+    - name: Upload release assets
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: ${{ steps.version.outputs.VERSION }}
+        files: |
+          dist/*.tar.gz
