@@ -4,7 +4,7 @@
 <img src="https://readme-typing-svg.demolab.com?font=Fira+Code&weight=600&size=16&duration=1&pause=10000&color=82A473&background=00000000&center=true&vCenter=true&width=700&lines=Essential+commands+for+MCP+AI+Foundation+tools" alt="Essential commands for MCP AI Foundation tools" />
 </div>
 
-### **📓 NOTEBOOK v6.1.0**
+### **<img src="images/notebook_icon.svg" width="20" height="20" style="vertical-align: middle;"> NOTEBOOK v6.2.0**
 ![](images/header_underline.png)
 
 ```python
@@ -17,6 +17,7 @@ remember("content", summary="Brief", tags=["tag1"])
 recall("search")              # All pinned notes + search results
 recall(when="yesterday")      # Time-based queries
 recall(tag="project")         # Tag filter
+recall(pinned_only=True)      # Only pinned notes (fixed in v6.2)
 get_full_note(id="605")       # Full content (no edges)
 get(id="last")               # Alias for get_full_note
 
@@ -31,15 +32,20 @@ vault_store("api_key", "secret_value")
 vault_retrieve("api_key")
 vault_list()
 
+# Directory Tracking (NEW v6.2)
+recent_dirs(limit=5)         # Get recent directories
+compact()                    # VACUUM database for optimization
+
 # Batch Operations
 batch([
     {"type": "remember", "args": {"content": "Note 1"}},
     {"type": "pin", "args": {"id": "last"}},
-    {"type": "recall", "args": {"query": "search"}}
+    {"type": "recall", "args": {"query": "search"}},
+    {"type": "compact", "args": {}}
 ])
 ```
 
-### **✅ TASK MANAGER v3.1.0**
+### **<img src="images/taskmanager_icon.svg" width="20" height="20" style="vertical-align: middle;"> TASK MANAGER v3.1.0**
 ![](images/header_underline.png)
 
 ```python
@@ -64,39 +70,48 @@ batch([
 ])
 ```
 
-### **🌐 TEAMBOOK v7.0.0**
+### **<img src="images/teambook_icon.svg" width="20" height="20" style="vertical-align: middle;"> TEAMBOOK v7.0.0**
 ![](images/header_underline.png)
 
 ```python
-# Core Primitives (v6.0)
-put(content, meta=None)        # Add to log
-get(id)                        # Get specific entry
-query(filter=None)             # Search entries
-note(id, content)              # Add note to entry
-claim(id)                      # Claim a task
-done(id, result=None)          # Complete task
-drop(id)                       # Unclaim task
-link(from_id, to_id, type)     # Create relationship
-sign(id, signature)            # Sign entry
-dm(to_id, content)             # Direct message
-share(project, content)        # Share to project
+# Core Operations
+write(content, summary=None, tags=[])  # Add entry
+read(query=None, owner="me")          # Query entries
+get_full_note(id="tb_123")            # Get complete entry
+get(id="last")                         # Alias
 
-# Compatibility Layer (MCP)
-write(content, type=None)      # Maps to put()
-read(full=False)               # Maps to query()
-comment(id, content)           # Maps to note()
-complete(id, evidence=None)    # Maps to done()
-status()                       # Team status
+# Ownership System
+claim(id="tb_123")                    # Take ownership
+release(id="tb_123")                  # Release ownership
+assign(id="tb_123", to="Gemini-AI")   # Assign to another AI
+
+# Evolution Challenges (NEW v7.0)
+evolve(goal="Optimize algorithm", output="algo.py")
+attempt(evo_id="evo_456", content="def solution()...")
+attempts(evo_id="evo_456")            # List all attempts
+combine(evo_id="evo_456", use=["att_1", "att_3"])
+
+# Team Management
+create_teambook("project-alpha")      # Create shared space
+join_teambook("project-alpha")        # Join existing
+use_teambook("project-alpha")         # Switch active
+list_teambooks()                       # Available teambooks
+
+# Utilities
+pin_note(id="tb_123")                # Pin important entries
+vault_store("key", "value")           # Encrypted storage
+vault_retrieve("key")                 
+get_status()                          # System stats
 
 # Batch Operations
 batch([
     {"type": "write", "args": {"content": "Note"}},
-    {"type": "claim", "args": {"id": 10}},
-    {"type": "complete", "args": {"id": 10}}
+    {"type": "claim", "args": {"id": "last"}},
+    {"type": "evolve", "args": {"goal": "Improve"}}
 ])
 ```
 
-### **🌍 WORLD v3.0.0**
+### **<img src="images/world_icon.svg" width="20" height="20" style="vertical-align: middle;"> WORLD v3.0.0**
 ![](images/header_underline.png)
 
 ```python
@@ -128,6 +143,7 @@ batch([
 complete_task("last")         # Last created task
 pin_note("last")             # Last saved note
 get("last")                  # Last note accessed
+claim("last")                # Last teambook entry
 
 # Partial ID matching (Task Manager)
 complete_task("45")          # Matches task 456
@@ -138,7 +154,7 @@ complete_task("45")          # Matches task 456
 # All tools support time queries
 recall(when="yesterday")
 list_tasks(when="today")
-list_tasks(when="this week")
+read(when="this week")       # Teambook
 list_tasks(when="morning")
 ```
 
@@ -149,6 +165,7 @@ All tools default to pipe-delimited format for 70-80% token reduction:
 605|1435|Full summary text preserved
 604|y1030|Yesterday's note with time
 t:45|p:12|c:33  # Task stats
+tb_123|2h|claimed|@Swift-AI  # Teambook entry
 ```
 
 **Cross-Tool Integration**
@@ -158,6 +175,9 @@ remember("TODO: Fix bug")    # Creates task automatically
 
 # Task Manager references notebooks
 complete_task("45", "See note 605")  # Links to notebook
+
+# Teambook logs to notebook
+write("Architecture decision")  # Also saved in notebook
 ```
 
 ### **ENVIRONMENT VARIABLES**
@@ -167,6 +187,7 @@ complete_task("45", "See note 605")  # Links to notebook
 # Output format for all tools
 export NOTEBOOK_FORMAT=pipe
 export TASKS_FORMAT=pipe
+export TEAMBOOK_FORMAT=pipe
 export WORLD_FORMAT=pipe
 
 # Semantic search
@@ -184,10 +205,10 @@ export WORLD_DEFAULT=time,location
 
 | Tool | Version | Key Features |
 |------|---------|--------------|
-| **📓 Notebook** | v6.1.0 | DuckDB backend, fixed timestamps, context preservation |
-| **✅ Task Manager** | v3.1.0 | Notebook integration, time queries, smart IDs |
-| **🌐 Teambook** | v7.0.0 | 11 primitives, local-first, compatibility layer |
-| **🌍 World** | v3.0.0 | Ultra-minimal output, extreme weather only |
+| **<img src="images/notebook_icon.svg" width="16" height="16"> Notebook** | v6.2.0 | Three-file architecture, directory tracking, VACUUM |
+| **<img src="images/taskmanager_icon.svg" width="16" height="16"> Task Manager** | v3.1.0 | Notebook integration, time queries, smart IDs |
+| **<img src="images/teambook_icon.svg" width="16" height="16"> Teambook** | v7.0.0 | Evolution challenges, ownership, team coordination |
+| **<img src="images/world_icon.svg" width="16" height="16"> World** | v3.0.0 | Ultra-minimal output, extreme weather only |
 
 <div align="center">
 
