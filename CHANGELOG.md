@@ -4,6 +4,21 @@
 
 <img src="https://readme-typing-svg.demolab.com?font=Fira+Code&weight=600&size=16&duration=1&pause=10000&color=82A473&background=00000000&center=true&vCenter=true&width=700&lines=Notable+changes+to+the+MCP+AI+Foundation+tools" alt="Notable changes to the MCP AI Foundation tools" />
 
+### **[2025-09-29] - Documentation Corrections**
+![](images/header_underline.png)
+
+#### MCP Configuration Fixes
+- **Fixed teambook path** - Changed from `teambook_mcp.py` to `teambook_main_mcp.py`
+- **Updated all documentation** - Removed references to non-existent primitives
+- **Corrected architecture** - Teambook documented as built on notebook foundation
+
+#### Teambook v7.0.0 Documentation
+- **Accurate implementation** - Now reflects actual 4-module architecture
+- **Built on notebook** - Not separate primitives system
+- **Evolution challenges** - Properly documented `evolve`, `attempt`, `combine`
+- **Ownership system** - Clear documentation of `claim`, `release`, `assign`
+- **Team management** - Documented teambook creation and switching
+
 ### **[2025-09-29] - Documentation Update**
 ![](images/header_underline.png)
 
@@ -21,7 +36,7 @@
 - **Evolution Challenges** - `evolve()`, `attempt()`, `attempts()`, `combine()` for iterative improvement
 - **Ownership System** - `claim()`, `release()`, `assign()` for task ownership
 - **Team Coordination** - `create_teambook()`, `join_teambook()`, `use_teambook()`, `list_teambooks()`
-- **Backward Compatible** - All v6.0 operations still work
+- **Built on Notebook** - Inherits all notebook capabilities
 - **Cross-Tool Integration** - Auto-logs to notebook, supports time queries
 
 ### **[6.2.0] - 2025-09-27**
