@@ -19,10 +19,10 @@
 
 Four core tools that provide fundamental capabilities for AI systems:
 
-- 📓 **Notebook (v6.1.0)** - Memory system built on DuckDB with semantic search
-- ✅ **Task Manager (v3.1.0)** - Task tracking with notebook integration and temporal filtering
-- 🌐 **Teambook (v7.0.0)** - Multi-AI collaboration with foundational primitives  
-- 🌍 **World (v3.0.0)** - Temporal and spatial grounding with minimal overhead
+- <img src="images/notebook_icon.svg" width="20" height="20" style="vertical-align: middle;"> **Notebook (v6.2.0)** - Memory system with DuckDB backend, semantic search, and three-file architecture
+- <img src="images/taskmanager_icon.svg" width="20" height="20" style="vertical-align: middle;"> **Task Manager (v3.1.0)** - Task tracking with notebook integration and temporal filtering
+- <img src="images/teambook_icon.svg" width="20" height="20" style="vertical-align: middle;"> **Teambook (v7.0.0)** - Multi-AI collaboration with foundational primitives  
+- <img src="images/world_icon.svg" width="20" height="20" style="vertical-align: middle;"> **World (v3.0.0)** - Temporal and spatial grounding with minimal overhead
 
 All tools feature:
 - Persistent storage and scalability
@@ -56,7 +56,7 @@ Add to your MCP client configuration (e.g., Claude Desktop):
   "mcpServers": {
     "notebook": {
       "command": "python",
-      "args": ["path/to/mcp-ai-foundation/src/notebook_mcp.py"]
+      "args": ["path/to/mcp-ai-foundation/src/notebook_main.py"]
     },
     "task_manager": {
       "command": "python",
@@ -77,9 +77,9 @@ Add to your MCP client configuration (e.g., Claude Desktop):
 ### **TOOL DESCRIPTIONS**
 ![](images/header_underline.png)
 
-**Notebook v6.1.0**
+**Notebook v6.2.0**
 
-Memory system with DuckDB backend, native array storage, and semantic search capabilities. Features PageRank calculations in under 1 second, automatic SQLite to DuckDB migration with backup, and encrypted vault for sensitive data.
+Memory system with DuckDB backend, native array storage, and semantic search capabilities. Refactored into three modules for maintainability. Features PageRank calculations in under 1 second, automatic SQLite to DuckDB migration, encrypted vault for sensitive data, and directory tracking integration.
 
 **Task Manager v3.1.0**
 
@@ -87,7 +87,7 @@ Task tracking system with time-based queries, automatic notebook integration, pr
 
 **Teambook v7.0.0**
 
-Multi-AI collaboration tool built on foundational primitives. Enables teams of AIs to coordinate through shared state and message passing.
+Multi-AI collaboration tool with foundational primitives. Enables teams of AIs to coordinate through shared state, ownership mechanics, and evolution challenges for iterative improvement.
 
 **World v3.0.0**
 
