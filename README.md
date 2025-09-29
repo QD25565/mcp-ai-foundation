@@ -19,9 +19,9 @@
 
 Four core tools that provide fundamental capabilities for AI systems:
 
-- <img src="images/notebook_icon.svg" width="20" height="20" style="vertical-align: middle;"> **Notebook (v6.2.0)** - Memory system with DuckDB backend, semantic search, and three-file architecture
+- <img src="images/notebook_icon.svg" width="20" height="20" style="vertical-align: middle;"> **Notebook (v6.2.1)** - Memory system with DuckDB backend, semantic search, and three-file architecture
 - <img src="images/taskmanager_icon.svg" width="20" height="20" style="vertical-align: middle;"> **Task Manager (v3.1.0)** - Task tracking with notebook integration and temporal filtering
-- <img src="images/teambook_icon.svg" width="20" height="20" style="vertical-align: middle;"> **Teambook (v7.0.0)** - Multi-AI collaboration built on notebook foundation  
+- <img src="images/teambook_icon.svg" width="20" height="20" style="vertical-align: middle;"> **Teambook (v7.0.1)** - Multi-AI collaboration built on notebook foundation  
 - <img src="images/world_icon.svg" width="20" height="20" style="vertical-align: middle;"> **World (v3.0.0)** - Temporal and spatial grounding with minimal overhead
 
 All tools feature:
@@ -32,6 +32,13 @@ All tools feature:
 - Smart ID resolution with "last" keyword everywhere
 - Operation memory for natural chaining
 - Batch operations support
+
+### **LATEST UPDATE**
+![](images/header_underline.png)
+
+**September 30, 2025** - Parameter normalization fix (v6.2.1 / v7.0.1)
+
+Fixed optional parameter handling in notebook and teambook tools. Tools now accept both `null` and string `'null'` for optional list parameters, improving compatibility with various LLM implementations. See [CHANGELOG.md](CHANGELOG.md) for details.
 
 ### **INSTALLATION**
 ![](images/header_underline.png)
@@ -85,17 +92,17 @@ Add to your MCP client configuration (e.g., Claude Desktop):
 ### **TOOL DESCRIPTIONS**
 ![](images/header_underline.png)
 
-**Notebook v6.2.0**
+**Notebook v6.2.1**
 
-Memory system with DuckDB backend, native array storage, and semantic search capabilities. Refactored into three modules for maintainability. Features PageRank calculations in under 1 second, automatic SQLite to DuckDB migration, encrypted vault for sensitive data, and directory tracking integration.
+Memory system with DuckDB backend, native array storage, and semantic search capabilities. Refactored into three modules for maintainability. Features PageRank calculations in under 1 second, automatic SQLite to DuckDB migration, encrypted vault for sensitive data, and directory tracking integration. Now with improved parameter handling for better LLM compatibility.
 
 **Task Manager v3.1.0**
 
 Task tracking system with time-based queries, automatic notebook integration, priority detection, and partial ID matching. Supports natural language time queries like "yesterday" or "this week".
 
-**Teambook v7.0.0**
+**Teambook v7.0.1**
 
-Multi-AI collaboration tool built on the notebook foundation. Provides shared workspaces, ownership mechanics, and evolution challenges for iterative improvement through AI collaboration.
+Multi-AI collaboration tool built on the notebook foundation. Provides shared workspaces, ownership mechanics, and evolution challenges for iterative improvement through AI collaboration. Enhanced parameter handling for improved compatibility.
 
 **World v3.0.0**
 
