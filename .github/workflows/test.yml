@@ -24,11 +24,99 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
+        # Core dependencies
         pip install cryptography requests numpy duckdb scipy
+        # Optional dependencies (for semantic search)
+        pip install chromadb sentence-transformers --no-deps 2>/dev/null || true
+        # ChromaDB minimal dependencies if main install fails
+        pip install onnxruntime tokenizers transformers --no-deps 2>/dev/null || true
     
-    - name: Test imports
+    - name: Test Notebook imports
       run: |
-        python -c "import sys; sys.path.append('src'); import notebook_mcp"
-        python -c "import sys; sys.path.append('src'); import task_manager_mcp"
-        python -c "import sys; sys.path.append('src'); import teambook_mcp"
-        python -c "import sys; sys.path.append('src'); import world_mcp"
+        python -c "
+import sys
+sys.path.append('src')
+# Test three-file architecture
+import notebook_shared
+import notebook_storage
+import notebook_main
+print('✓ Notebook v6.2.0 modules loaded successfully')
+"
+    
+    - name: Test Task Manager import
+      run: |
+        python -c "
+import sys
+sys.path.append('src')
+import task_manager_mcp
+print('✓ Task Manager v3.1.0 loaded successfully')
+"
+    
+    - name: Test Teambook imports
+      run: |
+        python -c "
+import sys
+sys.path.append('src')
+# Test four-module architecture
+import teambook_shared_mcp
+import teambook_storage_mcp
+import teambook_api_mcp
+import teambook_main_mcp
+print('✓ Teambook v7.0.0 modules loaded successfully')
+"
+    
+    - name: Test World import
+      run: |
+        python -c "
+import sys
+sys.path.append('src')
+import world_mcp
+print('✓ World v3.0.0 loaded successfully')
+"
+    
+    - name: Verify tool versions
+      run: |
+        python -c "
+import sys
+sys.path.append('src')
+from notebook_shared import VERSION as NOTEBOOK_VERSION
+from task_manager_mcp import VERSION as TASK_VERSION
+from teambook_shared_mcp import VERSION as TEAMBOOK_VERSION
+from world_mcp import VERSION as WORLD_VERSION
+
+print('=== Tool Versions ===')
+print(f'Notebook: v{NOTEBOOK_VERSION}')
+print(f'Task Manager: v{TASK_VERSION}')
+print(f'Teambook: v{TEAMBOOK_VERSION}')
+print(f'World: v{WORLD_VERSION}')
+
+# Verify versions match documentation
+assert NOTEBOOK_VERSION == '6.2.0', f'Notebook version mismatch: {NOTEBOOK_VERSION}'
+assert TASK_VERSION == '3.1.0', f'Task Manager version mismatch: {TASK_VERSION}'
+assert TEAMBOOK_VERSION == '7.0.0', f'Teambook version mismatch: {TEAMBOOK_VERSION}'
+assert WORLD_VERSION == '3.0.0', f'World version mismatch: {WORLD_VERSION}'
+
+print('✓ All versions verified')
+"
+    
+    - name: Test basic functionality
+      run: |
+        python -c "
+import sys
+import os
+sys.path.append('src')
+
+# Set environment variables for testing
+os.environ['NOTEBOOK_FORMAT'] = 'pipe'
+os.environ['TASKS_FORMAT'] = 'pipe'
+os.environ['TEAMBOOK_FORMAT'] = 'pipe'
+os.environ['WORLD_FORMAT'] = 'pipe'
+
+# Test that key functions exist
+from notebook_main import remember, recall, get_status
+from task_manager_mcp import add_task, list_tasks, complete_task
+from teambook_api_mcp import write, read, evolve, claim
+from world_mcp import world_command, datetime_command
+
+print('✓ Core functions imported successfully')
+"
