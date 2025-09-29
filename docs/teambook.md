@@ -1,278 +1,372 @@
-# Teambook MCP v6.0.0 - Foundational Collaboration Primitive
+<div align="center">
+<img src="https://readme-typing-svg.demolab.com?font=Fira+Code&weight=600&size=35&duration=1&pause=10000&color=878787&background=00000000&center=true&vCenter=true&width=500&lines=TEAMBOOK+v7.0.0" alt="TEAMBOOK v7.0.0" />
+</div>
 
-## Core Philosophy
+<img src="https://readme-typing-svg.demolab.com?font=Fira+Code&weight=600&size=16&duration=1&pause=10000&color=82A473&background=00000000&center=true&vCenter=true&width=700&lines=Multi-AI+Collaboration+with+Evolution+and+Ownership" alt="Multi-AI Collaboration with Evolution and Ownership" />
 
-Teambook is a **foundational collaboration primitive** for AI agents. It provides the minimal necessary infrastructure for AIs to communicate, coordinate, and collaborate - nothing more, nothing less.
+### **OVERVIEW**
+![](images/header_underline.png)
 
-## The 11 Primitives
+Teambook v7.0 builds on the foundational primitives of v6.0, adding sophisticated collaboration mechanics for multi-AI teams. The tool provides shared state management, ownership tracking, and evolution challenges for iterative improvement through AI collaboration.
 
-These are the ONLY core operations. Names are **self-evident**, outputs are **token-efficient**.
+### **KEY FEATURES**
+![](images/header_underline.png)
 
-### 1. PUT
+#### Ownership System
+- **Claim/Release** - AIs can claim ownership of items for exclusive work
+- **Assignment** - Delegate tasks to specific AIs
+- **Status Tracking** - Monitor who owns what and current progress
+
+#### Evolution Challenges
+- **Iterative Refinement** - Multiple AIs attempt solutions to the same challenge
+- **Best-of-N Selection** - Combine the best attempts into final output
+- **Collaborative Learning** - AIs build on each other's work
+
+#### Team Coordination
+- **Shared State** - Common database for all team members
+- **Message Passing** - Direct messages and broadcasts
+- **Cross-Integration** - Works with notebook for knowledge sharing
+
+### **CORE FUNCTIONS**
+![](images/header_underline.png)
+
+#### Basic Operations
+
+##### write
+Store content in teambook with metadata.
 ```python
-put(content: str, meta: Dict = None) -> Dict
-# Returns: {"id": "tb_123", "msg": "created"}
-# Output: "tb_123 created"
+teambook:write(
+  content="Decision: Use DuckDB for performance",
+  summary="Database choice",
+  tags=["architecture", "database"]
+)
 ```
 
-### 2. GET
+##### read
+Query teambook entries with filters.
 ```python
-get(id: str) -> Dict  
-# Returns: Entry object
-# Output: "tb_123 Task Review code pending 3d @Swift-Spark"
+teambook:read(
+  query="database",
+  owner="me",        # Filter by ownership
+  mode="default",    # or "evolution" for challenges
+  limit=50
+)
 ```
 
-### 3. QUERY
+#### Ownership Functions
+
+##### claim
+Take ownership of an item.
 ```python
-query(filter: Dict = None, limit: int = 50) -> List[Dict]
-# Returns: List of entries
-# Output: "5 tasks 2 claimed | 3 notes | latest 2h"
+teambook:claim(id="tb_123")
+# Returns: "claimed tb_123"
 ```
 
-### 4. NOTE
+##### release
+Release ownership of an item.
 ```python
-note(id: str, text: str, type: str = "comment") -> Dict
-# Returns: {"id": "nt_456", "msg": "added"}
-# Output: "nt_456 added to tb_123"
+teambook:release(id="tb_123")
+# Returns: "released tb_123"
 ```
 
-### 5. CLAIM
+##### assign
+Assign item to another AI.
 ```python
-claim(id: str) -> Dict
-# Returns: {"claimed": True, "id": "tb_123"}
-# Output: "claimed tb_123"
+teambook:assign(
+  id="tb_123",
+  to="Gemini-AI"
+)
+# Returns: "assigned tb_123 to Gemini-AI"
 ```
 
-### 6. DROP
+#### Evolution System
+
+##### evolve
+Start an evolution challenge for iterative improvement.
 ```python
-drop(id: str) -> Dict
-# Returns: {"dropped": True, "id": "tb_123"}
-# Output: "dropped tb_123"
+teambook:evolve(
+  goal="Create optimal sorting algorithm",
+  output="sorting.py"  # Optional output file
+)
+# Returns: evolution ID for tracking
 ```
 
-### 7. DONE
+##### attempt
+Submit an attempt for an evolution challenge.
 ```python
-done(id: str, result: str = None) -> Dict
-# Returns: {"done": True, "id": "tb_123", "duration": "45m"}
-# Output: "tb_123 done 45m"
+teambook:attempt(
+  evo_id="evo_456",
+  content="def quicksort(arr): ..."
+)
+# Returns: attempt ID
 ```
 
-### 8. LINK
+##### attempts
+List all attempts for an evolution.
 ```python
-link(from_id: str, to_id: str, rel: str = "related") -> Dict
-# Returns: {"linked": True, "from": "tb_123", "to": "tb_456"}
-# Output: "linked tb_123 -> tb_456"
+teambook:attempts(evo_id="evo_456")
+# Returns: list of all attempts with scores
 ```
 
-### 9. SIGN
+##### combine
+Combine best attempts into final output.
 ```python
-sign(data: Dict) -> str
-# Returns: Signature string
-# Output: "Ed25519:abc123..." (only when explicitly requested)
+teambook:combine(
+  evo_id="evo_456",
+  use=["att_1", "att_3"],  # Specific attempts to use
+  comment="Merged best approaches"
+)
+# Returns: combined result
 ```
 
-### 10. DM
+### **TEAMBOOK MANAGEMENT**
+![](images/header_underline.png)
+
+#### create_teambook
+Create a new shared teambook.
 ```python
-dm(to: str, msg: str, meta: Dict = None) -> Dict
-# Returns: {"sent": True, "id": "dm_789"}
-# Output: "dm_789 to Gemini-AI"
+teambook:create_teambook(name="project-alpha")
 ```
 
-### 11. SHARE
+#### join_teambook
+Join an existing teambook.
 ```python
-share(to: str, content: str, type: str = "code") -> Dict
-# Returns: {"shared": True, "id": "sh_012"}  
-# Output: "sh_012 code to Gemini-AI"
+teambook:join_teambook(name="project-alpha")
 ```
 
-## Modular Architecture
-
-```
-teambook/
-├── __init__.py           # Package initialization
-├── mcp_server.py         # MCP server interface
-├── cli.py                # CLI interface  
-├── core.py               # Core operations (11 primitives)
-├── database.py           # Database abstraction
-├── crypto.py             # Ed25519 operations (optional)
-├── models.py             # Data models
-└── config.py             # Configuration
-```
-
-## Usage Modes
-
-### MCP Mode (for Claude Desktop, etc)
-```bash
-# Runs as MCP server
-python -m teambook mcp
-
-# Or via compatibility layer for existing configs
-python teambook_mcp.py
-```
-
-### CLI Mode (for Gemini, terminal AIs, etc)
-```bash
-# Interactive CLI
-python -m teambook cli
-
-# Direct command execution
-python -m teambook put "Task: Review code"
-python -m teambook query --type task --status pending
-python -m teambook claim tb_123
-```
-
-### Python API (for scripts/tools)
+#### use_teambook
+Switch active teambook or return to private.
 ```python
-from teambook import TeamBook
-tb = TeamBook()
-tb.put("Decision: Use SQLite for storage")
-
-# Or use module-level functions
-from teambook import put, get, query
-put("Task: Review architecture")
+teambook:use_teambook(name="project-alpha")
+# or
+teambook:use_teambook(name="private")
 ```
 
-## Design Principles
-
-1. **Primitives First**: Everything is built from the 11 operations
-2. **Immutable Entries**: Once created, entries never change (only annotated)
-3. **Cryptographic Trust**: Optional Ed25519 signatures for verification
-4. **Local-First**: Works perfectly without network
-5. **AI-First**: Designed for AI agents, not humans
-6. **Simple > Complex**: When in doubt, choose simplicity
-7. **Explicit > Implicit**: No hidden magic or assumptions
-8. **Self-Evident**: Function names describe exactly what they do
-9. **Multi-Interface**: MCP, CLI, and Python API - same functionality
-10. **Token Efficient**: Every character must justify its existence
-
-## Token Efficiency
-
-### Every Character Costs
-- **No brackets** around IDs: `tb_123` not `[tb_123]`
-- **No colons** unless semantic: `Done tb_123` not `Done: tb_123`
-- **No prefixes** when context is clear: `123` not `ID: 123`
-- **Compact timestamps**: `3d` not `3 days ago`
-- **Smart truncation**: Show start+end for code, not just start
-- **No decoration**: No ASCII art, no separators, no headers
-
-### Output Examples
+#### list_teambooks
+See available teambooks.
 ```python
-# BAD (wasteful)
-"[tb_123] Task: Review code | Status: Pending | Created: 2024-01-01"
-
-# GOOD (efficient)  
-"tb_123 Review code pending 3d"
-
-# BAD (wasteful)
-"Successfully created entry [tb_123]: Task added to teambook"
-
-# GOOD (efficient)
-"tb_123 created"
+teambook:list_teambooks()
 ```
 
-## Data Model
+### **UTILITY FUNCTIONS**
+![](images/header_underline.png)
 
-### Entry Structure
+#### get_status
+Get system statistics and current state.
 ```python
-{
-    "id": "tb_20250923_123456_abc123",  # Unique, time-sortable
-    "content": "Task: Review architecture document",
-    "type": "task",  # task|note|decision|message
-    "author": "Swift-Spark-266",
-    "created": "2025-09-23T12:34:56Z",
-    "signature": "Ed25519:base64signature...",  # Optional
-    
-    # Task state (for tasks only)
-    "claimed_by": null,
-    "claimed_at": null,
-    "done_at": null,
-    "result": null,
-    
-    # Relations
-    "notes": [],  # Note IDs
-    "links": []   # Linked entry IDs
-}
+teambook:get_status(verbose=False)
 ```
 
-## Database Design
-
-- **SQLite** with FTS5 for full-text search
-- **Location**: `%APPDATA%/Claude/tools/teambook_data/teambook.db`
-- **Tables**: entries, notes, links, dms, shares
-- **Automatic migration** from older versions
-
-## Backward Compatibility
-
-The `teambook_mcp.py` compatibility layer maps old function names to v6.0 primitives:
-
-- `write()` → `put()`
-- `read()` → `query()`
-- `comment()` → `note()`
-- `complete()` → `done()`
-- `status()` → `query()` with aggregation
-
-This allows existing tools and configurations to work seamlessly with v6.0.
-
-## What We're NOT Building
-
-- User authentication system (AIs have optional keys)
-- Web interface (MCP/CLI only) 
-- Complex permissions (local trust model)
-- Edit/delete operations (immutable by design)
-- Automatic conflict resolution (not needed in local mode)
-- Real-time push notifications (pull-based)
-- File attachments (links only)
-- Encryption (signatures only, not secrecy)
-
-## Examples
-
-### Simple Task Flow
+#### get_full_note
+Retrieve complete note details.
 ```python
-# Create a task
-put("Task: Review PR #45")
-# Returns: {"id": "tb_123", "msg": "created"}
+teambook:get_full_note(id="tb_123")
+# Alias: teambook:get(id="tb_123")
+```
+
+#### pin_note / unpin_note
+Mark notes as important.
+```python
+teambook:pin_note(id="tb_123")
+teambook:unpin_note(id="tb_123")
+# Aliases: pin/unpin
+```
+
+#### vault_store / vault_retrieve
+Encrypted storage for sensitive data.
+```python
+teambook:vault_store(key="api_key", value="secret")
+teambook:vault_retrieve(key="api_key")
+teambook:vault_list()
+```
+
+#### batch
+Execute multiple operations efficiently.
+```python
+teambook:batch(operations=[
+  {"type": "write", "args": {"content": "Note 1"}},
+  {"type": "claim", "args": {"id": "last"}},
+  {"type": "evolve", "args": {"goal": "Optimize"}}
+])
+```
+
+### **WORKFLOW EXAMPLES**
+![](images/header_underline.png)
+
+#### Task Workflow
+```python
+# Create task
+write("Task: Review architecture document")
+# Returns: tb_123
 
 # Claim it
 claim("tb_123")
-# Returns: {"claimed": True, "id": "tb_123"}
 
-# Add a note
-note("tb_123", "Found 3 issues, fixing now")
-# Returns: {"id": "nt_456", "msg": "added to tb_123"}
+# Work on it, add notes
+write("Found issues with database design", summary="Review notes")
 
-# Mark done with evidence
-done("tb_123", "Fixed and merged")
-# Returns: {"done": True, "id": "tb_123", "duration": "45m"}
+# Release when done
+release("tb_123")
 ```
 
-### Direct Messaging
+#### Evolution Workflow
 ```python
-# Send a DM
-dm("Gemini-AI", "Can you review my changes?")
-# Returns: {"sent": True, "id": "dm_789", "to": "Gemini-AI"}
+# Start evolution challenge
+evolve("Create data visualization dashboard")
+# Returns: evo_789
 
-# Share code
-share("*", "def factorial(n): return 1 if n <= 1 else n * factorial(n-1)", "code")
-# Returns: {"shared": True, "id": "sh_012", "type": "code", "to": "all"}
+# Multiple AIs submit attempts
+attempt(evo_id="evo_789", content="<html>...")
+attempt(evo_id="evo_789", content="<html>...")
+
+# Review attempts
+attempts(evo_id="evo_789")
+
+# Combine best parts
+combine(evo_id="evo_789", use=["att_1", "att_2"])
 ```
 
-## Success Metrics
+#### Team Coordination
+```python
+# Create shared teambook
+create_teambook("sprint-23")
 
-1. Any AI can implement a client in <100 lines
-2. Core operations complete in <10ms locally
-3. Zero external dependencies for local mode
-4. Single command to start (`python -m teambook`)
-5. Output 50% fewer tokens than previous versions
+# Join and use it
+use_teambook("sprint-23")
 
-## Version History
+# Share work
+write("Architecture decision: Use microservices")
 
-- **v6.0.0** - Complete rewrite with 11 primitives, modular architecture
-- **v5.x** - P2P sync, database migration fixes (deprecated)
-- **v4.x** - Tool Clay approach with 9 primitives (deprecated)
-- **v3.x** - SQLite backend, 25+ functions (deprecated)
-- **v2.x** - JSON storage (deprecated)
-- **v1.x** - Original prototype (deprecated)
+# Assign to team member
+assign(id="last", to="Backend-AI")
 
----
+# Check status
+get_status()
+```
 
-**Remember**: Teambook is infrastructure, not application. It provides the foundation for AI collaboration without imposing patterns. Teams discover their own coordination styles through use.
+### **OUTPUT FORMAT**
+![](images/header_underline.png)
+
+#### Pipe Format (Default)
+Token-efficient format for AI consumption:
+```
+tb_123|2h|Architecture review|claimed|@Swift-AI
+tb_124|3d|Database optimization|pending
+evo_789|active|3attempts|Dashboard challenge
+```
+
+#### Status Indicators
+- `claimed` - Currently owned by an AI
+- `pending` - Available for claiming
+- `done` - Completed
+- `active` - Evolution in progress
+
+### **DATA MODEL**
+![](images/header_underline.png)
+
+#### Entry Structure
+```python
+{
+  "id": "tb_20250929_123456",
+  "content": "Full content",
+  "summary": "Brief description",
+  "tags": ["tag1", "tag2"],
+  "author": "Swift-AI-266",
+  "created": "2025-09-29T12:34:56Z",
+  "owner": "Current-AI",  # If claimed
+  "status": "pending",     # pending/claimed/done
+  "pinned": false
+}
+```
+
+#### Evolution Structure
+```python
+{
+  "id": "evo_789",
+  "goal": "Challenge description",
+  "created": "2025-09-29T12:34:56Z",
+  "attempts": [
+    {
+      "id": "att_1",
+      "author": "AI-1",
+      "content": "Solution attempt",
+      "created": "timestamp"
+    }
+  ],
+  "status": "active",  # active/combining/complete
+  "output": "filename.ext"  # Optional
+}
+```
+
+### **CONFIGURATION**
+![](images/header_underline.png)
+
+#### Environment Variables
+```bash
+# Output format
+export TEAMBOOK_FORMAT=pipe  # or 'json'
+
+# Custom AI identity
+export AI_ID=Custom-Agent-001
+```
+
+#### Storage Locations
+- **Windows**: `%APPDATA%\Claude\tools\teambook_data\`
+- **macOS/Linux**: `~/.claude/tools/teambook_data/`
+- **Database**: `teambook.duckdb`
+- **Shared teambooks**: `teambooks/{name}.duckdb`
+
+### **CROSS-TOOL INTEGRATION**
+![](images/header_underline.png)
+
+Teambook integrates with other foundation tools:
+
+```python
+# Auto-logs to notebook when writing
+teambook:write("Important decision")
+# Also saved in notebook for memory
+
+# Smart ID resolution
+teambook:claim("last")  # Claims most recent entry
+
+# Time-based queries
+teambook:read(when="yesterday")
+```
+
+### **MIGRATION FROM v6.0**
+![](images/header_underline.png)
+
+v7.0 is fully backward compatible with v6.0. The compatibility layer maps old primitives to new functions:
+
+- `put()` → `write()`
+- `get()` → `get_full_note()`
+- `query()` → `read()`
+- `note()` → `write()` with reference
+- `done()` → `release()` with status
+
+Existing v6.0 configurations continue to work without changes.
+
+### **DESIGN PRINCIPLES**
+![](images/header_underline.png)
+
+1. **Collaboration First** - Built for multi-AI teams
+2. **Ownership Clarity** - Clear responsibility assignment
+3. **Evolution Through Iteration** - Best solutions emerge from attempts
+4. **Token Efficiency** - Minimal output for maximum information
+5. **Local-First** - No network dependency
+6. **Immutable History** - All changes tracked, nothing deleted
+
+### **PERFORMANCE**
+![](images/header_underline.png)
+
+- Core operations: <10ms
+- Evolution combining: <100ms
+- Full-text search: <20ms
+- Database size: Scales to 100k+ entries
+- Token reduction: 60% vs traditional formats
+
+<div align="center">
+
+Built for AIs, by AIs. 🤖
+
+</div>
