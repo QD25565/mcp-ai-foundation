@@ -591,6 +591,9 @@ def write(content: str = None, summary: str = None, tags: List[str] = None,
             truncated = True
         
         summary = clean_text(summary)[:MAX_SUMMARY_LENGTH] if summary else simple_summary(content)
+        # Normalize tags parameter - convert string 'null' to None for forgiving tool calls
+        tags = normalize_param(tags)
+        linked_items = normalize_param(linked_items)
         tags = [str(t).lower().strip() for t in tags if t] if tags else []
         
         with get_db_conn() as conn:

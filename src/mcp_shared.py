@@ -91,6 +91,13 @@ def get_persistent_id() -> str:
 # Get AI ID from environment or persistent storage
 CURRENT_AI_ID = os.environ.get('AI_ID', get_persistent_id())
 
+# ============= PARAMETER NORMALIZATION =============
+def normalize_param(value: Any) -> Any:
+    """Normalize parameter values - convert string 'null' to None for forgiving tool calls"""
+    if value == 'null' or value == 'None':
+        return None
+    return value
+
 # ============= OUTPUT FORMATTING =============
 def pipe_escape(text: str) -> str:
     """Escape pipes in text for pipe format"""

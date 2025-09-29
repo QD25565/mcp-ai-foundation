@@ -23,6 +23,9 @@ from pathlib import Path
 from typing import Dict, List, Optional, Any, Tuple
 from collections import deque
 
+# Import from shared MCP utilities
+from mcp_shared import normalize_param
+
 # Version
 VERSION = "6.2.0"
 

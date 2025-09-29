@@ -22,7 +22,8 @@ from typing import Optional, Dict, Any, Tuple, List
 # Import from shared MCP utilities
 from mcp_shared import (
     BASE_DATA_DIR, CURRENT_AI_ID as MCP_AI_ID,
-    pipe_escape, format_time_compact, get_tool_data_dir
+    pipe_escape, format_time_compact, get_tool_data_dir,
+    normalize_param
 )
 
 # ============= VERSION AND CONFIGURATION =============
