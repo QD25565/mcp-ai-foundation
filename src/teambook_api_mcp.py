@@ -26,12 +26,13 @@ from teambook_shared_mcp import (
 )
 
 # Import storage layer
+import teambook_storage_mcp
 from teambook_storage_mcp import (
     get_db_conn, init_db, init_vault_manager, init_vector_db,
     create_all_edges, detect_or_create_session,
     calculate_pagerank_if_needed, resolve_note_id,
     add_to_vector_store, search_vectors,
-    vault_manager, collection, FTS_ENABLED,
+    collection,
     log_operation_to_db
 )
 
@@ -707,16 +708,20 @@ def read(query: str = None, tag: str = None, when: str = None,
                 # Keyword search
                 keyword_ids = []
                 if mode in ["keyword", "hybrid"]:
-                    if FTS_ENABLED:
+                    if teambook_storage_mcp.FTS_ENABLED:
                         try:
                             fts_results = conn.execute('''
-                                SELECT fts_main_notes.id 
-                                FROM fts_main_notes 
-                                WHERE fts_main_notes MATCH ?
+                                SELECT DISTINCT n.id
+                                FROM fts_main_notes f
+                                JOIN notes n ON f.id = n.id
+                                WHERE f MATCH ?
+                                ORDER BY n.pagerank DESC, n.created DESC
                                 LIMIT ?
                             ''', [str(query).strip(), limit]).fetchall()
                             keyword_ids = [row[0] for row in fts_results]
-                        except:
+                        except Exception as e:
+                            teambook_storage_mcp.FTS_ENABLED = False
+                            logging.debug(f'FTS failed, using LIKE: {e}')
                             pass
                     
                     if not keyword_ids:
@@ -978,10 +983,11 @@ def vault_store(key: str = None, value: str = None, **kwargs) -> Dict:
         if not key or not value:
             return {"error": "Key and value required"}
         
-        if not vault_manager:
+        # Ensure vault_manager is initialized
+        if not teambook_storage_mcp.vault_manager:
             init_vault_manager()
         
-        encrypted = vault_manager.encrypt(value)
+        encrypted = teambook_storage_mcp.vault_manager.encrypt(value)
         now = datetime.now()
         
         with get_db_conn() as conn:
@@ -1007,7 +1013,8 @@ def vault_retrieve(key: str = None, **kwargs) -> Dict:
         if not key:
             return {"error": "Key required"}
         
-        if not vault_manager:
+        # Ensure vault_manager is initialized
+        if not teambook_storage_mcp.vault_manager:
             init_vault_manager()
         
         with get_db_conn() as conn:
@@ -1019,7 +1026,7 @@ def vault_retrieve(key: str = None, **kwargs) -> Dict:
         if not result:
             return {"error": f"Key '{key}' not found"}
         
-        decrypted = vault_manager.decrypt(result[0])
+        decrypted = teambook_storage_mcp.vault_manager.decrypt(result[0])
         log_operation_to_db('vault_retrieve')
         return {"key": key, "value": decrypted}
     

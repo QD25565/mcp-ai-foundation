@@ -244,17 +244,33 @@ def create_duckdb_schema(conn: duckdb.DuckDBPyConnection):
     for idx in indices:
         conn.execute(idx)
     
-    # Try to set up FTS
+    # Try to set up FTS with correct DuckDB syntax
     global FTS_ENABLED
+    FTS_ENABLED = False
+    
     try:
         conn.execute("INSTALL fts")
         conn.execute("LOAD fts")
+        # Create FTS index - this creates a virtual table fts_main_notes
         conn.execute("PRAGMA create_fts_index('notes', 'id', 'content', 'summary')")
+        # Test that it works
+        conn.execute("SELECT COUNT(*) FROM fts_main_notes WHERE fts_main_notes MATCH 'test'").fetchone()
         FTS_ENABLED = True
-        logging.info("DuckDB FTS extension loaded")
-    except Exception as e:
-        FTS_ENABLED = False
-        logging.warning(f"FTS not available: {e}")
+        logging.info("DuckDB FTS extension loaded and configured")
+    except Exception as e1:
+        if "already exists" in str(e1):
+            # FTS index already exists, just test if it works
+            try:
+                conn.execute("LOAD fts")
+                # Test FTS works
+                conn.execute("SELECT COUNT(*) FROM fts_main_notes WHERE fts_main_notes MATCH 'test'").fetchone()
+                FTS_ENABLED = True
+                logging.info("DuckDB FTS already configured")
+            except Exception as e2:
+                logging.warning(f"FTS index exists but not working: {e2}")
+        else:
+            # FTS not available for other reasons
+            logging.info(f"FTS not available, will use LIKE queries (this is fine): {str(e1)[:100]}")
 
 def init_db():
     """Initialize DuckDB database"""
@@ -301,6 +317,29 @@ def init_db():
                         last_active TIMESTAMPTZ
                     )
                 ''')
+            
+            # Try to initialize FTS again if not enabled
+            global FTS_ENABLED
+            if not FTS_ENABLED:
+                try:
+                    conn.execute("LOAD fts")
+                    # Test if FTS works
+                    conn.execute("SELECT COUNT(*) FROM fts_main_notes WHERE fts_main_notes MATCH 'test'").fetchone()
+                    FTS_ENABLED = True
+                    logging.info("FTS enabled on existing database")
+                except Exception as e:
+                    # Try to create the index if it doesn't exist
+                    try:
+                        conn.execute("INSTALL fts")
+                        conn.execute("LOAD fts")
+                        conn.execute("PRAGMA create_fts_index('notes', 'id', 'content', 'summary')")
+                        # Test FTS works
+                        conn.execute("SELECT COUNT(*) FROM fts_main_notes WHERE fts_main_notes MATCH 'test'").fetchone()
+                        FTS_ENABLED = True
+                        logging.info("FTS index created and enabled")
+                    except:
+                        # FTS not available, that's OK
+                        pass
         
         load_known_entities(conn)
         
@@ -319,12 +358,42 @@ def load_known_entities(conn: duckdb.DuckDBPyConnection):
 
 # ============= EMBEDDING AND VECTOR DB =============
 def init_embedding_model():
-    """Initialize embedding model"""
+    """Initialize embedding model with automatic local model detection"""
     global encoder, EMBEDDING_MODEL
     
     if not ST_AVAILABLE or not USE_SEMANTIC:
         logging.info("Semantic search disabled")
         return None
+    
+    # First, try to find local models
+    search_paths = [
+        Path.cwd() / "models",  # Current dir
+        Path.cwd().parent / "models",  # Parent dir  
+        Path(__file__).parent / "models" if '__file__' in globals() else None,  # Script location
+    ]
+    
+    for path in search_paths:
+        if not path or not path.exists():
+            continue
+            
+        # Look for EmbeddingGemma specifically
+        embeddinggemma_path = path / "embeddinggemma-300m"
+        if embeddinggemma_path.exists():
+            # Check if it has the required files
+            required = ["config.json", "model.safetensors", "tokenizer.json"]
+            if all((embeddinggemma_path / f).exists() for f in required):
+                try:
+                    logging.info(f"Loading EmbeddingGemma 300m from {embeddinggemma_path}...")
+                    encoder = SentenceTransformer(str(embeddinggemma_path), device='cpu')
+                    test = encoder.encode("test", convert_to_numpy=True)
+                    EMBEDDING_MODEL = 'embeddinggemma-300m'
+                    logging.info(f"✅ Using local EmbeddingGemma 300m (dim: {test.shape[0]})")
+                    return encoder
+                except Exception as e:
+                    logging.warning(f"Failed to load EmbeddingGemma: {e}")
+    
+    # Fallback to downloading models
+    logging.info("No local models found, downloading online models...")
     
     try:
         models = [

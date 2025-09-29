@@ -20,10 +20,11 @@ from teambook_shared_mcp import (
     pipe_escape
 )
 
-# Import initialization functions from storage
+# Import storage module and initialization functions
+import teambook_storage_mcp
 from teambook_storage_mcp import (
     init_db, init_embedding_model, init_vector_db,
-    init_vault_manager, FTS_ENABLED, EMBEDDING_MODEL
+    init_vault_manager
 )
 
 # Import all API functions
@@ -43,6 +44,61 @@ from teambook_api_mcp import (
     # Aliases
     remember, recall, get, pin, unpin
 )
+
+# ============= CLI COMPATIBILITY =============
+
+def handle_cli_mode():
+    """Handle CLI mode for direct command execution"""
+    import argparse
+    parser = argparse.ArgumentParser(description='Teambook CLI')
+    parser.add_argument('command', help='Command to execute')
+    parser.add_argument('--content', help='Content for write command')
+    parser.add_argument('--query', help='Query for read command')
+    parser.add_argument('--id', help='ID for various commands')
+    parser.add_argument('--name', help='Name for teambook commands')
+    parser.add_argument('--goal', help='Goal for evolution')
+    parser.add_argument('--json', action='store_true', help='Output as JSON')
+    
+    args = parser.parse_args()
+    
+    # Override format if requested
+    if args.json:
+        import teambook_shared_mcp
+        teambook_shared_mcp.OUTPUT_FORMAT = 'json'
+    
+    # Map commands to functions
+    commands = {
+        'write': lambda: write(content=args.content),
+        'read': lambda: read(query=args.query),
+        'status': lambda: get_status(),
+        'create': lambda: create_teambook(name=args.name),
+        'use': lambda: use_teambook(name=args.name),
+        'list': lambda: list_teambooks(),
+        'claim': lambda: claim(id=args.id),
+        'release': lambda: release(id=args.id),
+        'evolve': lambda: evolve(goal=args.goal),
+    }
+    
+    if args.command in commands:
+        result = commands[args.command]()
+        if args.json or OUTPUT_FORMAT == 'json':
+            print(json.dumps(result, indent=2))
+        else:
+            # Format for CLI output
+            if 'error' in result:
+                print(f"Error: {result['error']}", file=sys.stderr)
+            elif 'saved' in result:
+                print(f"Saved: {result['saved']}")
+            elif 'notes' in result:
+                for note in result['notes']:
+                    print(note)
+            elif 'status' in result:
+                print(result['status'])
+            else:
+                print(json.dumps(result, indent=2))
+    else:
+        print(f"Unknown command: {args.command}", file=sys.stderr)
+        sys.exit(1)
 
 # ============= TOOL HANDLER =============
 
@@ -99,7 +155,7 @@ def handle_tools_call(params: Dict) -> Dict:
     if tool_name in ["get_full_note", "get"] and "content" in result and "id" in result:
         text_parts.append(f"=== NOTE {result['id']} ===")
         if result.get('pinned'):
-            text_parts.append("📌 PINNED")
+            text_parts.append("[PINNED]")
         if result.get('owner'):
             text_parts.append(f"Owner: {result['owner']}")
         text_parts.append(f"\n{result['content']}\n")
@@ -109,7 +165,7 @@ def handle_tools_call(params: Dict) -> Dict:
             text_parts.append(f"Entities: {', '.join(result['entities'])}")
     
     elif tool_name == "vault_retrieve" and "value" in result:
-        text_parts.append(f"🔐 {result['key']}: {result['value']}")
+        text_parts.append(f"[VAULT] {result['key']}: {result['value']}")
     
     elif "error" in result:
         text_parts.append(f"Error: {result['error']}")
@@ -209,7 +265,7 @@ def handle_tools_call(params: Dict) -> Dict:
                     elif "saved" in r:
                         text_parts.append(r["saved"])
                     elif "pinned" in r:
-                        text_parts.append(str(r["pinned"]])
+                        text_parts.append(str(r["pinned"]))
                     else:
                         text_parts.append(json.dumps(r))
                 else:
@@ -232,8 +288,8 @@ def main():
     logging.info(f"Teambook MCP v{VERSION} - Collaborative AI workspace")
     logging.info(f"Identity: {CURRENT_AI_ID}")
     logging.info(f"Architecture: 4-module refactored design")
-    logging.info(f"Embedding: {EMBEDDING_MODEL or 'None'}")
-    logging.info(f"FTS: {'Yes' if FTS_ENABLED else 'No'}")
+    logging.info(f"Embedding: {teambook_storage_mcp.EMBEDDING_MODEL or 'None'}")
+    logging.info(f"FTS: {'Yes' if teambook_storage_mcp.FTS_ENABLED else 'No'}")
     logging.info(f"Output: {OUTPUT_FORMAT}")
     
     while True:
@@ -481,4 +537,10 @@ init_embedding_model()
 init_vector_db()
 
 if __name__ == "__main__":
-    main()
+    # Check if running in CLI mode
+    if len(sys.argv) > 1 and not sys.stdin.isatty():
+        # CLI mode - parse arguments
+        handle_cli_mode()
+    else:
+        # MCP server mode - run main loop
+        main()

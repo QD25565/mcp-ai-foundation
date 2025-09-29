@@ -104,11 +104,9 @@ def get_db_file():
 
 def get_outputs_dir():
     """Get outputs directory for evolution results"""
-    if CURRENT_TEAMBOOK:
-        outputs = get_data_dir() / "outputs"
-        outputs.mkdir(parents=True, exist_ok=True)
-        return outputs
-    return None
+    outputs = get_data_dir() / "outputs"
+    outputs.mkdir(parents=True, exist_ok=True)
+    return outputs
 
 def get_vault_key_file():
     """Get vault key file path"""
