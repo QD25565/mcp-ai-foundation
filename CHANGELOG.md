@@ -4,6 +4,34 @@
 
 <img src="https://readme-typing-svg.demolab.com?font=Fira+Code&weight=600&size=16&duration=1&pause=10000&color=82A473&background=00000000&center=true&vCenter=true&width=700&lines=Notable+changes+to+the+MCP+AI+Foundation+tools" alt="Notable changes to the MCP AI Foundation tools" />
 
+### **[2025-09-30] - Parameter Normalization Fix**
+![](images/header_underline.png)
+
+#### Bug Fixes
+
+**Notebook v6.2.1 & Teambook v7.0.1**
+- **Parameter normalization** - Fixed issue where passing string `'null'` for optional list parameters caused errors
+- **Tools now accept both** - Actual `null` and string `'null'` for optional parameters like `tags` and `linked_items`
+- **Added normalize_param()** - Helper function in `mcp_shared.py` converts string `'null'` or `'None'` to Python `None`
+- **Updated remember()** - Notebook tool now normalizes parameters before processing
+- **Updated write()** - Teambook tool now normalizes parameters before processing
+- **Improved compatibility** - Handles various LLM implementations that may pass parameters differently
+
+#### Technical Details
+- Converts string `'null'` to Python `None` before processing
+- Prevents iteration errors when tools expect list or None values
+- Makes tool calls more forgiving and user-friendly
+
+#### MCP Shared Utilities v1.0.1
+- Added `normalize_param()` helper function for parameter normalization
+
+#### Files Modified
+- `mcp_shared.py` - Added normalization helper
+- `notebook_shared.py` - Import update
+- `notebook_main.py` - Parameter normalization in `remember()`
+- `teambook_shared.py` - Import update
+- `teambook_api.py` - Parameter normalization in `write()`
+
 ### **[2025-09-30] - Timezone Bug Fix & Shared Utilities**
 ![](images/header_underline.png)
 
