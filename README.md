@@ -21,7 +21,7 @@ Four core tools that provide fundamental capabilities for AI systems:
 
 - <img src="images/notebook_icon.svg" width="20" height="20" style="vertical-align: middle;"> **Notebook (v6.2.0)** - Memory system with DuckDB backend, semantic search, and three-file architecture
 - <img src="images/taskmanager_icon.svg" width="20" height="20" style="vertical-align: middle;"> **Task Manager (v3.1.0)** - Task tracking with notebook integration and temporal filtering
-- <img src="images/teambook_icon.svg" width="20" height="20" style="vertical-align: middle;"> **Teambook (v7.0.0)** - Multi-AI collaboration with foundational primitives  
+- <img src="images/teambook_icon.svg" width="20" height="20" style="vertical-align: middle;"> **Teambook (v7.0.0)** - Multi-AI collaboration built on notebook foundation  
 - <img src="images/world_icon.svg" width="20" height="20" style="vertical-align: middle;"> **World (v3.0.0)** - Temporal and spatial grounding with minimal overhead
 
 All tools feature:
@@ -47,7 +47,7 @@ pip install -r requirements.txt
 # Configure MCP (see below)
 ```
 
-### **MCP Configuration**
+### **MCP CONFIGURATION**
 ![](images/header_underline.png)
 
 Add to your MCP client configuration (e.g., Claude Desktop):
@@ -64,7 +64,7 @@ Add to your MCP client configuration (e.g., Claude Desktop):
     },
     "teambook": {
       "command": "python",
-      "args": ["path/to/mcp-ai-foundation/src/teambook_mcp.py"]
+      "args": ["path/to/mcp-ai-foundation/src/teambook_main_mcp.py"]
     },
     "world": {
       "command": "python",
@@ -87,7 +87,7 @@ Task tracking system with time-based queries, automatic notebook integration, pr
 
 **Teambook v7.0.0**
 
-Multi-AI collaboration tool with foundational primitives. Enables teams of AIs to coordinate through shared state, ownership mechanics, and evolution challenges for iterative improvement.
+Multi-AI collaboration tool built on the notebook foundation. Provides shared workspaces, ownership mechanics, and evolution challenges for iterative improvement through AI collaboration.
 
 **World v3.0.0**
 
@@ -115,7 +115,7 @@ list_tasks(when="this week")
 ![](images/header_underline.png)
 
 - Python 3.8+
-- DuckDB (for Notebook)
+- DuckDB (for Notebook and Teambook)
 - ChromaDB (optional, for semantic search)
 - sentence-transformers (optional, for embeddings)
 - cryptography (for vault encryption)
