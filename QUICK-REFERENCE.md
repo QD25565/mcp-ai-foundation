@@ -74,40 +74,52 @@ batch([
 ![](images/header_underline.png)
 
 ```python
-# Core Operations
-write(content, summary=None, tags=[])  # Add entry
-read(query=None, owner="me")          # Query entries
-get_full_note(id="tb_123")            # Get complete entry
-get(id="last")                         # Alias
+# Team Management
+create_teambook("project-alpha")      # Create shared workspace
+join_teambook("project-alpha")        # Join existing
+use_teambook("project-alpha")         # Switch active
+use_teambook("private")               # Back to private mode
+list_teambooks()                      # Available teambooks
+
+# Core Operations (from notebook)
+write("content", summary="brief", tags=[])  # Save to teambook
+read(query="search", owner="me")           # Query with ownership filter
+get_full_note(id="tb_123")                 # Get complete entry
+get(id="last")                              # Alias for get_full_note
+pin_note(id="tb_123")                      # Pin important entries
+unpin_note(id="tb_123")                    # Unpin
 
 # Ownership System
 claim(id="tb_123")                    # Take ownership
 release(id="tb_123")                  # Release ownership
-assign(id="tb_123", to="Gemini-AI")   # Assign to another AI
+assign(id="tb_123", to="Backend-AI")  # Assign to another AI
 
-# Evolution Challenges (NEW v7.0)
-evolve(goal="Optimize algorithm", output="algo.py")
-attempt(evo_id="evo_456", content="def solution()...")
+# Evolution Challenges
+evolve(goal="Optimize algorithm", output="algo.py")  # Start challenge
+attempt(evo_id="evo_456", content="def solution()...")  # Submit attempt
 attempts(evo_id="evo_456")            # List all attempts
-combine(evo_id="evo_456", use=["att_1", "att_3"])
+combine(evo_id="evo_456", use=["att_1", "att_3"])  # Merge best
 
-# Team Management
-create_teambook("project-alpha")      # Create shared space
-join_teambook("project-alpha")        # Join existing
-use_teambook("project-alpha")         # Switch active
-list_teambooks()                       # Available teambooks
+# Vault (encrypted storage)
+vault_store("key", "value")           
+vault_retrieve("key")                 
+vault_list()
 
 # Utilities
-pin_note(id="tb_123")                # Pin important entries
-vault_store("key", "value")           # Encrypted storage
-vault_retrieve("key")                 
 get_status()                          # System stats
+get_status(verbose=True)              # Detailed metrics
+
+# Aliases (notebook compatibility)
+remember("content")                   # Same as write()
+recall("search")                      # Same as read()
+pin(id="last")                       # Same as pin_note()
+unpin(id="last")                     # Same as unpin_note()
 
 # Batch Operations
 batch([
     {"type": "write", "args": {"content": "Note"}},
     {"type": "claim", "args": {"id": "last"}},
-    {"type": "evolve", "args": {"goal": "Improve"}}
+    {"type": "evolve", "args": {"goal": "Improve performance"}}
 ])
 ```
 
@@ -176,8 +188,9 @@ remember("TODO: Fix bug")    # Creates task automatically
 # Task Manager references notebooks
 complete_task("45", "See note 605")  # Links to notebook
 
-# Teambook logs to notebook
-write("Architecture decision")  # Also saved in notebook
+# Teambook inherits notebook features
+write("Architecture decision")  # Uses notebook backend
+read(mode="semantic")          # Semantic search from notebook
 ```
 
 ### **ENVIRONMENT VARIABLES**
@@ -192,6 +205,7 @@ export WORLD_FORMAT=pipe
 
 # Semantic search
 export NOTEBOOK_SEMANTIC=true
+export TEAMBOOK_SEMANTIC=true
 
 # Custom AI identity
 export AI_ID=Custom-Agent-001
@@ -207,7 +221,7 @@ export WORLD_DEFAULT=time,location
 |------|---------|--------------|
 | **<img src="images/notebook_icon.svg" width="16" height="16"> Notebook** | v6.2.0 | Three-file architecture, directory tracking, VACUUM |
 | **<img src="images/taskmanager_icon.svg" width="16" height="16"> Task Manager** | v3.1.0 | Notebook integration, time queries, smart IDs |
-| **<img src="images/teambook_icon.svg" width="16" height="16"> Teambook** | v7.0.0 | Evolution challenges, ownership, team coordination |
+| **<img src="images/teambook_icon.svg" width="16" height="16"> Teambook** | v7.0.0 | Built on notebook, evolution challenges, ownership |
 | **<img src="images/world_icon.svg" width="16" height="16"> World** | v3.0.0 | Ultra-minimal output, extreme weather only |
 
 <div align="center">
