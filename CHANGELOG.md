@@ -4,6 +4,21 @@
 
 <img src="https://readme-typing-svg.demolab.com?font=Fira+Code&weight=600&size=16&duration=1&pause=10000&color=82A473&background=00000000&center=true&vCenter=true&width=700&lines=Notable+changes+to+the+MCP+AI+Foundation+tools" alt="Notable changes to the MCP AI Foundation tools" />
 
+### **[2025-09-29] - Test Suite Fixes**
+![](images/header_underline.png)
+
+#### GitHub Actions Fixes
+- **Fixed import errors** - Updated test workflow for new module structure
+- **notebook_mcp** → `notebook_main`, `notebook_shared`, `notebook_storage`
+- **teambook_mcp** → `teambook_main_mcp`, `teambook_api_mcp`, `teambook_storage_mcp`, `teambook_shared_mcp`
+- **Added version verification** - Tests now verify all tools are at correct versions
+- **Added functionality tests** - Verify core functions exist in each module
+
+#### Test Infrastructure
+- **Created test_all.py** - Comprehensive test script for local validation
+- **Enhanced CI/CD** - More thorough testing across Python 3.8-3.12
+- **Better dependency handling** - Optional dependencies handled gracefully
+
 ### **[2025-09-29] - Documentation Corrections**
 ![](images/header_underline.png)
 
