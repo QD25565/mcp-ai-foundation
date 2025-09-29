@@ -4,6 +4,30 @@
 
 <img src="https://readme-typing-svg.demolab.com?font=Fira+Code&weight=600&size=16&duration=1&pause=10000&color=82A473&background=00000000&center=true&vCenter=true&width=700&lines=Notable+changes+to+the+MCP+AI+Foundation+tools" alt="Notable changes to the MCP AI Foundation tools" />
 
+### **[2025-09-30] - Timezone Bug Fix & Shared Utilities**
+![](images/header_underline.png)
+
+#### Teambook v7.0.1 - Critical Bug Fix
+- **Fixed datetime timezone error** - Resolved "can't subtract offset-naive and offset-aware datetimes" error
+- **Root cause** - DuckDB's TIMESTAMPTZ columns return timezone-aware datetimes, but Python's `datetime.now()` creates timezone-naive objects
+- **Solution** - All datetime operations now use `datetime.now(timezone.utc)` consistently
+- **Affected functions** - `get_status()`, `list_teambooks()`, `read()`, `get_full_note()`
+- **Files updated** - `teambook_storage_mcp.py`, `teambook_api_mcp.py`, `teambook_shared_mcp.py`, `mcp_shared.py`
+
+#### MCP Shared Utilities v1.0.0
+- **New shared utility module** - Created `mcp_shared.py` to reduce code duplication across all tools
+- **Cross-platform paths** - Unified data directory management for Windows, macOS, and Linux
+- **Consistent logging** - Standardized logging setup following MCP requirements (stderr only)
+- **Identity management** - Centralized AI identity tracking and operation history
+- **Time utilities** - Shared `format_time_compact()` with timezone-aware handling
+- **Server helpers** - Reusable MCP server base class for all tools
+- **Better maintainability** - ~20% reduction in total codebase through shared utilities
+
+#### Tool Updates
+- **All tools refactored** - Notebook, Teambook, Task Manager, and World now use shared utilities
+- **Consistent behavior** - All tools now handle datetimes, paths, and logging identically
+- **Improved reliability** - Single source of truth for critical functions reduces bugs
+
 ### **[2025-09-29] - Test Suite Fixes**
 ![](images/header_underline.png)
 
@@ -60,8 +84,8 @@
 #### Notebook v6.2.0
 - **Three-File Architecture** - Refactored from single 2500+ line file into:
   - `notebook_main.py` - Core API and MCP handler
-  - `notebook_storage.py` - Database and vector operations  
   - `notebook_shared.py` - Utilities and constants
+  - `notebook_storage.py` - Database and vector operations  
 - **Directory Tracking** - Automatically tracks directories mentioned in notes
 - **Database Maintenance** - New `compact()` function runs VACUUM to optimize DuckDB
 - **Bug Fix** - Fixed `pinned_only` filter in recall function
