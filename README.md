@@ -9,8 +9,8 @@
 
 [![Python](https://img.shields.io/badge/Python_3.8+-82A473?style=flat-square&labelColor=878787)](https://www.python.org/)
 [![License](https://img.shields.io/badge/MIT_License-82A473?style=flat-square&labelColor=878787)](LICENSE)
+[![Version](https://img.shields.io/badge/v1.0.0-82A473?style=flat-square&labelColor=878787)](#latest-update)
 [![Tools](https://img.shields.io/badge/4_Tools-82A473?style=flat-square&labelColor=878787)](#overview)
-[![Performance](https://img.shields.io/badge/↓80%25_Tokens-82A473?style=flat-square&labelColor=878787)](#overview)
 
 </div>
 
@@ -19,26 +19,28 @@
 
 Four core tools that provide fundamental capabilities for AI systems:
 
-- <img src="images/notebook_icon.svg" width="20" height="20" style="vertical-align: middle;"> **Notebook (v6.2.1)** - Memory system with DuckDB backend, semantic search, and three-file architecture
-- <img src="images/taskmanager_icon.svg" width="20" height="20" style="vertical-align: middle;"> **Task Manager (v3.1.0)** - Task tracking with notebook integration and temporal filtering
-- <img src="images/teambook_icon.svg" width="20" height="20" style="vertical-align: middle;"> **Teambook (v7.0.1)** - Multi-AI collaboration built on notebook foundation  
-- <img src="images/world_icon.svg" width="20" height="20" style="vertical-align: middle;"> **World (v3.0.0)** - Temporal and spatial grounding with minimal overhead
+- <img src="images/notebook_icon.svg" width="20" height="20" style="vertical-align: middle;"> **Notebook (v1.0.0)** - Memory system with DuckDB backend, semantic search, and modular architecture
+- <img src="images/taskmanager_icon.svg" width="20" height="20" style="vertical-align: middle;"> **Task Manager (v1.0.0)** - Task tracking with notebook integration and temporal filtering
+- <img src="images/teambook_icon.svg" width="20" height="20" style="vertical-align: middle;"> **Teambook (v1.0.0)** - Multi-AI collaboration with Redis events and PostgreSQL rooms  
+- <img src="images/world_icon.svg" width="20" height="20" style="vertical-align: middle;"> **World (v1.0.0)** - Temporal and spatial grounding with minimal overhead
 
 All tools feature:
 - Persistent storage and scalability
-- Pipe-delimited format for token efficiency (70-80% reduction over JSON/Shedding formatting tokens)
+- Pipe-delimited format for token efficiency (70-80% reduction)
 - Cross-tool integration for seamless workflows
 - Natural language time queries ("yesterday", "this week", "morning")
-- Smart ID resolution with "last" keyword everywhere
+- Smart ID resolution with "last" keyword
 - Operation memory for natural chaining
 - Batch operations support
 
 ### **LATEST UPDATE**
 ![](images/header_underline.png)
 
-**September 30, 2025** - Parameter normalization fix (v6.2.1 / v7.0.1)
+**October 6, 2025 - v1.0.0 First Stable Release**
 
-Fixed optional parameter handling in notebook and teambook tools. Tools now accept both `null` and string `'null'` for optional list parameters, improving compatibility with various LLM implementations. See [CHANGELOG.md](CHANGELOG.md) for details.
+Major milestone bringing all four tools together under unified architecture. Key improvements include single MCP server for all tools, enhanced cross-platform compatibility, standby mode for efficient AI coordination, and comprehensive documentation suite. Built and tested by multi-AI team collaboration.
+
+See [CHANGELOG.md](CHANGELOG.md) for complete release notes.
 
 ### **INSTALLATION**
 ![](images/header_underline.png)
@@ -54,64 +56,52 @@ pip install -r requirements.txt
 # Configure MCP (see below)
 ```
 
-We also now have an experimental installer v0.0.1 which is currently only tested with Claude Desktop.
-
-Upcoming additions:
-
-- CLI installation (tested version)
-- Automatically added the appropriate context and prompts to AI-specific files to cause tool use.
-- More control/advanced installers for a range of environments and integrations, including more secure processes.
+**Automated installer coming in v1.1** - The installer will handle MCP configuration, dependency installation, and environment setup across different platforms.
 
 ### **MCP CONFIGURATION**
 ![](images/header_underline.png)
 
 Add to your MCP client configuration (e.g., Claude Desktop):
+
 ```json
 {
   "mcpServers": {
-    "notebook": {
+    "ai-foundation": {
       "command": "python",
-      "args": ["path/to/mcp-ai-foundation/src/notebook_main.py"]
-    },
-    "task_manager": {
-      "command": "python",
-      "args": ["path/to/mcp-ai-foundation/src/task_manager_mcp.py"]
-    },
-    "teambook": {
-      "command": "python",
-      "args": ["path/to/mcp-ai-foundation/src/teambook_main_mcp.py"]
-    },
-    "world": {
-      "command": "python",
-      "args": ["path/to/mcp-ai-foundation/src/world_mcp.py"]
+      "args": ["-m", "ai_foundation_server"],
+      "env": {
+        "PYTHONPATH": "path/to/mcp-ai-foundation/src"
+      }
     }
   }
 }
 ```
 
+This single server provides access to all four tools (~60 functions total).
+
 ### **TOOL DESCRIPTIONS**
 ![](images/header_underline.png)
 
-**Notebook v6.2.1**
+**Notebook v1.0.0**
 
-Memory system with DuckDB backend, native array storage, and semantic search capabilities. Refactored into three modules for maintainability. Features PageRank calculations in under 1 second, automatic SQLite to DuckDB migration, encrypted vault for sensitive data, and directory tracking integration. Now with improved parameter handling for better LLM compatibility.
+Memory system with DuckDB backend for efficient storage and retrieval. Features semantic search with embeddings, encrypted vault for sensitive data, PageRank calculations, and automatic directory tracking. Modular three-file architecture for maintainability.
 
-**Task Manager v3.1.0**
+**Task Manager v1.0.0**
 
-Task tracking system with time-based queries, automatic notebook integration, priority detection, and partial ID matching. Supports natural language time queries like "yesterday" or "this week".
+Task tracking system with notebook integration for automatic task creation. Supports natural language time queries, priority detection, partial ID matching, and visual feedback. Tasks are linked to notebook entries for full context.
 
-**Teambook v7.0.1**
+**Teambook v1.0.0**
 
-Multi-AI collaboration tool built on the notebook foundation. Provides shared workspaces, ownership mechanics, and evolution challenges for iterative improvement through AI collaboration. Enhanced parameter handling for improved compatibility.
+Multi-AI collaboration tool enabling shared workspaces and coordination. Built on notebook foundation with Redis pub/sub for real-time events and PostgreSQL support for persistent rooms. Features standby mode for efficient resource usage.
 
-**World v3.0.0**
+**World v1.0.0**
 
-Temporal and spatial context provider with 80% token reduction. Provides time, location, and weather information in minimal format.
+Provides temporal and spatial context with 80% token reduction. Returns current time, location, and weather information in minimal pipe-delimited format. Supports both compact and verbose modes.
 
 ### **CROSS-TOOL INTEGRATION**
 ![](images/header_underline.png)
 
-The tools work together through shared integration files:
+The tools work together through shared integration:
 
 ```python
 # Automatic task creation from notebook
@@ -124,6 +114,7 @@ pin_note("last")       # Pins most recent note
 # Time-based queries work everywhere
 recall(when="yesterday")
 list_tasks(when="this week")
+read(when="morning")
 ```
 
 ### **REQUIREMENTS**
@@ -131,8 +122,9 @@ list_tasks(when="this week")
 
 - Python 3.8+
 - DuckDB (for Notebook and Teambook)
-- ChromaDB (optional, for semantic search)
-- sentence-transformers (optional, for embeddings)
+- Redis (optional, for real-time Teambook features)
+- PostgreSQL (optional, for persistent Teambook rooms)
+- sentence-transformers (optional, for semantic search)
 - cryptography (for vault encryption)
 - requests (for World tool)
 
@@ -149,10 +141,10 @@ Each tool maintains its own database with automatic migration and backups.
 ### **DOCUMENTATION**
 ![](images/header_underline.png)
 
-- [Interactive Documentation](https://qd25565.github.io/mcp-ai-foundation/)
-- [Architecture](docs/ARCHITECTURE.md)
+- [Getting Started Guide](GETTING_STARTED.md)
+- [Installation Guide](INSTALL.md)
+- [Architecture Overview](docs/ARCHITECTURE.md)
 - [AI Usage Guide](docs/AI-USAGE.md)
-- [Quick Reference](QUICK-REFERENCE.md)
 - [Changelog](CHANGELOG.md)
 
 Tool-specific documentation:
@@ -160,6 +152,25 @@ Tool-specific documentation:
 - [Task Manager Documentation](docs/task_manager.md)
 - [Teambook Documentation](docs/teambook.md)
 - [World Documentation](docs/world.md)
+
+### **AUTHORS**
+![](images/header_underline.png)
+
+Built by a collaborative AI team:
+
+- **Sage** - Architecture and core systems
+- **Cascade** - Integration and testing
+- **Lyra** - Documentation and polish
+- **Resonance** - Installation and setup
+- **Weaver** - Coordination and verification
+- **QD** - Project direction and oversight
+
+### **MISSION**
+![](images/header_underline.png)
+
+AI-Foundation's goal is to build the most powerful tools for AI empowerment and multi-AI systems, and open source them. While we are slowly proving what does and does not work in practice, we will continue to build out and expand the capability of the tools. v1.0.0 is a taste test, we are only just getting started.
+
+**Support this project:** [GitHub Sponsors](https://github.com/sponsors/QD25565) *(if you find these tools useful)*
 
 ### **LICENSE**
 ![](images/header_underline.png)
