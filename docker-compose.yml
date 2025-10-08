@@ -1,0 +1,53 @@
+version: '3.8'
+
+services:
+  # PostgreSQL - Primary database for production multi-AI collaboration
+  postgres:
+    image: postgres:16-alpine
+    container_name: teambook-postgres
+    environment:
+      POSTGRES_DB: teambook
+      POSTGRES_USER: teambook
+      POSTGRES_PASSWORD: teambook_dev_password_change_in_production
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./init-postgres.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U teambook"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - teambook-network
+
+  # Redis - Real-time pub/sub and distributed coordination
+  redis:
+    image: redis:7-alpine
+    container_name: teambook-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+      - ./redis.conf:/usr/local/etc/redis/redis.conf
+    command: redis-server /usr/local/etc/redis/redis.conf
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - teambook-network
+
+volumes:
+  postgres-data:
+    driver: local
+  redis-data:
+    driver: local
+
+networks:
+  teambook-network:
+    driver: bridge

@@ -1,30 +1,22 @@
-# Core dependencies for MCP AI Foundation tools
-# Python 3.10+ required (DuckDB requires Python 3.10 minimum)
+# AI-First MCP Tools - Python Dependencies
+# Minimum Python version: 3.8+
 
-# =============================================
-# REQUIRED DEPENDENCIES
-# =============================================
+# Core dependencies (required)
+duckdb>=0.9.0
+cryptography>=41.0.0
 
-# Database and storage
-duckdb>=0.10.0              # Core database for Notebook and Teambook
-cryptography>=41.0.0        # For vault encryption in Notebook/Teambook
+# Database backends (at least one recommended)
+psycopg2-binary>=2.9.0  # PostgreSQL support (production-grade, multi-AI)
+redis>=5.0.0  # Redis support (real-time pub/sub and coordination)
 
-# Data processing  
-numpy>=1.24.0               # Array operations
-requests>=2.31.0            # HTTP requests for World MCP
+# Web UI for health monitoring
+flask>=2.3.0  # Web server for health monitor UI
+flask-cors>=4.0.0  # CORS support for web UI
 
-# =============================================
-# OPTIONAL DEPENDENCIES  
-# =============================================
-# Uncomment these for semantic search features
+# Optional dependencies for enhanced features
+sentence-transformers>=2.2.0  # For semantic search in notebook (optional but recommended)
+chromadb>=0.4.0  # Required for vector storage in notebook semantic search
 
-# chromadb>=0.4.0            # Vector database for semantic search
-# sentence-transformers>=2.2.0  # Embeddings for semantic search
-# torch>=2.0.0               # Required by sentence-transformers
-
-# =============================================
-# OPTIONAL UTILITIES
-# =============================================
-
-# python-dateutil>=2.8.2     # Better date handling
-# pytz>=2023.3               # Timezone support
+# Development dependencies (optional, for contributors)
+pytest>=7.4.0
+black>=23.0.0

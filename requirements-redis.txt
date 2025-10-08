@@ -1,0 +1,3 @@
+# Redis backend dependencies for Teambook
+
+redis>=5.1.0
